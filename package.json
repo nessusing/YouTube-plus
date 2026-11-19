@@ -1,0 +1,21 @@
+{
+  "name": "yt-plus-plus",
+  "private": true,
+  "version": "0.1.0",
+  "description": "yt++: a YouTube toolkit extension (TL;DR, queue, player)",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "icons": "bash scripts/icons.sh",
+    "postinstall": "node scripts/patch-wxt.mjs && wxt prepare"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1",
+    "wxt": "^0.21.5"
+  }
+}

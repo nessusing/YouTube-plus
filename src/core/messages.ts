@@ -7,7 +7,9 @@ export type Message =
   | { type: 'yt++/log'; entries: LogEntry[] }
   | { type: 'yt++/log-clear' }
   | { type: 'yt++/selfcheck' }
-  | { type: 'yt++/open-options'; hash?: string };
+  | { type: 'yt++/open-options'; hash?: string }
+  | { type: 'yt++/tldr-status' }
+  | { type: 'yt++/tldr-resume' };
 
 export type SelfCheckResponse = { results: CheckResult[] };
 

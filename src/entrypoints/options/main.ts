@@ -250,8 +250,69 @@ async function renderStorage() {
 
 // ---------- feature tabs ----------
 
-const notYet = (s: HTMLElement) => s.append(el('p', { className: 'muted', textContent: '这个功能还没实现。' }));
-notYet(sections.get('tldr')!);
+// ---------- TL;DR tab (design §15) ----------
+
+const tldrTab = sections.get('tldr')!;
+const LANGS: [Settings['tldr']['lang'], string][] = [
+  ['auto', '跟随视频语言'], ['zh', '中文'], ['en', 'English'], ['ja', '日本語'], ['ko', '한국어'], ['es', 'Español'], ['fr', 'Français'], ['de', 'Deutsch'],
+];
+const langSel = el('select');
+for (const [v, label] of LANGS) langSel.append(el('option', { value: v, textContent: label, selected: settings.tldr.lang === v }));
+langSel.addEventListener('change', () => update((s) => { s.tldr.lang = langSel.value as Settings['tldr']['lang']; }));
+
+function numberInput(get: () => number, set: (s: Settings, v: number) => void, min = 0): HTMLInputElement {
+  const input = el('input', { type: 'number', min: String(min), step: '1', value: String(get()), className: 'num' });
+  input.addEventListener('change', () => {
+    const v = Math.floor(Number(input.value));
+    if (!(v >= min)) { input.value = String(get()); return; }
+    void update((s) => set(s, v));
+  });
+  return input;
+}
+
+tldrTab.append(
+  el('h2', { textContent: '输出' }),
+  el('div', { className: 'row' }, el('label', { textContent: '输出语言' }), langSel),
+  checkbox('判断标题和内容是否一致', settings.tldr.titleCheck, (v) => update((s) => { s.tldr.titleCheck = v; })),
+  el('h2', { textContent: '账号' }),
+  el('div', { className: 'row' }, el('label', { textContent: 'Gemini 账号编号 N（gemini.google.com/u/N）' }),
+    numberInput(() => settings.tldr.account, (s, v) => { s.tldr.account = v; })),
+  el('h2', { textContent: '预生成与上限' }),
+  checkbox('预生成（关掉后只在点击图标时生成）', settings.tldr.prefetch, (v) => update((s) => { s.tldr.prefetch = v; })),
+  el('div', { className: 'row' }, el('label', { textContent: '每小时上限' }), numberInput(() => settings.tldr.perHour, (s, v) => { s.tldr.perHour = v; }, 1),
+    el('label', { textContent: '每天上限' }), numberInput(() => settings.tldr.perDay, (s, v) => { s.tldr.perDay = v; }, 1)),
+  el('p', { className: 'muted', textContent: '达到上限后预生成暂停，点击图标仍然可以生成（也计入总数）。' }),
+);
+const tldrStatus = el('p');
+const resumeBtn = el('button', { className: 'act', textContent: '恢复' });
+resumeBtn.addEventListener('click', async () => {
+  await send({ type: 'yt++/tldr-resume' });
+  void renderTldr();
+});
+tldrTab.append(el('h2', { textContent: '状态' }), tldrStatus, el('div', { className: 'row' }, resumeBtn));
+const pre = el('ul');
+for (const [text, href] of [
+  ['登录 gemini.google.com，并且不要屏蔽第三方 cookie', 'https://gemini.google.com/'],
+  ['开启 Gemini 应用活动记录', 'https://myactivity.google.com/product/gemini'],
+  ['在 Gemini 里启用 YouTube 应用', 'https://gemini.google.com/apps'],
+] as const) pre.append(el('li', {}, el('a', { href, target: '_blank', rel: 'noopener', textContent: text })));
+tldrTab.append(el('h2', { textContent: '前提条件' }), pre,
+  el('p', { className: 'muted', textContent: '每次生成会在 Gemini 里建一个普通对话，生成完立即删除；删除失败的会在空闲时重试。' }));
+
+async function renderTldr() {
+  try {
+    const st = (await send({ type: 'yt++/tldr-status' })) as { counters: { hour: number[]; dayCount: number }; breaker: { state: string; until?: number }; queued: number; running?: string };
+    const b = st.breaker;
+    const breaker = b.state === 'quota' ? '额度用完，已暂停（点「恢复」）'
+      : b.state === 'blocked' && (b.until ?? 0) > Date.now() ? `风控暂停，${Math.ceil(((b.until ?? 0) - Date.now()) / 60000)} 分钟后自动恢复`
+      : '正常';
+    tldrStatus.textContent = `最近一小时 ${st.counters.hour.length} / ${settings.tldr.perHour}，今天 ${st.counters.dayCount} / ${settings.tldr.perDay}；排队 ${st.queued}${st.running ? '，正在生成 1 个' : ''}；熔断：${breaker}`;
+    resumeBtn.disabled = b.state === 'closed' || (b.state === 'blocked' && (b.until ?? 0) <= Date.now());
+  } catch (e) {
+    tldrStatus.textContent = `读不到状态：${String(e)}`;
+  }
+}
+setInterval(() => { if (!sections.get('tldr')!.hidden) void renderTldr(); }, 5000);
 
 // ---------- queue tab (design §27) ----------
 
@@ -349,6 +410,7 @@ selectTab(sections.has(initial) ? initial : 'general');
 await loadLog();
 await renderStorage();
 await renderQueue();
+await renderTldr();
 if (logFilter) logBox.scrollIntoView();
 if (initialFromHash === 'install') {
   history.replaceState(null, '', location.pathname);

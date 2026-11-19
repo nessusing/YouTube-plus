@@ -248,6 +248,7 @@ prompt 模板（实现时再细调），要点：
 | 熔断：额度 | 遇到 1037 就暂停全部请求，**直到用户手动点「恢复」** |
 | 熔断：风控 | 遇到 1060、1152、验证码、429 就暂停全部请求（包括手动点击）**30 分钟** |
 | 总开关 | 设置里可以关掉预生成，只保留点击生成 |
+| 未登录 | 遇到 `auth` 错误（拿不到 `SNlM0e`）后，预生成暂停 10 分钟；手动点击不受影响（2026-11-18 加，免得没登录时对每个缩略图都请求一次） |
 | Cookie | 绝不轮换 |
 
 估算：一屏 30 个视频大约 5–8 分钟处理完。
@@ -320,6 +321,8 @@ prompt 模板（实现时再细调），要点：
 2. `GeminiWebClient`、`GeminiWebProvider`、`JobQueue`（优先级、随机间隔、上限、熔断）、`SummaryCache`。
 3. content script：识别缩略图、过滤、注入图标、跟踪可见性、渲染 tooltip。
 4. 设置页和自检。
+
+**第 1 步结果（2026-11-18）**：`StreamGenerate` 仍然可用（一个 18 秒的视频约 14 秒返回 15 帧）；长度前缀包含紧跟其后的换行，按 JS `string.length` 计；最后一帧就是完整回答，模型按要求输出了纯 JSON；`GzXR5e` 删除成功，侧栏里不再出现。请求里不设 `[79]`（模型）也能用。扩展从 service worker 发请求时 Origin 是 `chrome-extension://…`，所以用一条只作用于本扩展、只针对 gemini.google.com 的 declarativeNetRequest 会话规则把 Origin / Referer 改成 gemini.google.com（权限 `declarativeNetRequestWithHostAccess`）。缩略图结构见 `src/features/tldr/selectors.ts`。
 
 **测试**
 - 单元测试（Vitest）：返回帧的切分与解析、`wrb.fr` 提取、错误码映射、模型输出的 JSON 解析、任务队列与熔断的状态机、缓存的 LRU 和 TTL。测试数据用第 1 步录下来的真实响应。

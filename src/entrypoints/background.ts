@@ -6,17 +6,35 @@ import { createLogger, setLogSink } from '@/core/log';
 import { LogStore } from '@/core/log-store';
 import { isMessage, type SelfCheckResponse } from '@/core/messages';
 import { runChecks, type SelfCheck } from '@/core/selfcheck';
-import { getSettings, onSettingsChanged } from '@/core/settings';
+import { getSettings, onSettingsChanged, withDefaults, type Settings } from '@/core/settings';
+import { tldrChecks } from '@/features/tldr/checks';
+import { installHeaderRule } from '@/features/tldr/client';
+import { TldrService } from '@/features/tldr/service';
 
 export default defineBackground(() => {
   const store = new LogStore(async () => (await getSettings()).storage.logMB * 1024 * 1024);
   setLogSink((entries) => store.add(entries));
-  onSettingsChanged(() => void store.trim());
+
+  // Settings cached for synchronous use by the TL;DR service.
+  let settings: Settings = withDefaults(undefined);
+  void getSettings().then((s) => (settings = s));
+  const tldr = new TldrService(() => settings, createLogger('tldr'));
+  onSettingsChanged((s) => {
+    const limitChanged = s.storage.tldrCacheMB !== settings.storage.tldrCacheMB;
+    settings = s;
+    void store.trim();
+    if (limitChanged) void tldr.cache.trim();
+  });
+  installHeaderRule().catch((e) => createLogger('tldr').error('header rule failed', e));
+  browser.runtime.onConnect.addListener((port) => {
+    if (settings.features.tldr) tldr.attach(port);
+  });
   const log = createLogger('core');
 
   // Features append their checks here as they land.
   const checks: SelfCheck[] = [
     ...coreChecks,
+    ...tldrChecks(tldr),
     ...QUEUE_PAGE_CHECKS.map((n) => pageCheck('queue', n)),
     ...PLAYER_PAGE_CHECKS.map((n) => pageCheck('player', n)),
   ];
@@ -24,6 +42,12 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!isMessage(msg)) return;
     switch (msg.type) {
+      case 'yt++/tldr-status':
+        tldr.status().then(sendResponse);
+        return true;
+      case 'yt++/tldr-resume':
+        tldr.resume().then(() => sendResponse({}));
+        return true;
       case 'yt++/open-options':
         void browser.tabs.create({ url: browser.runtime.getURL(`/options.html#${msg.hash ?? ''}`) });
         return;

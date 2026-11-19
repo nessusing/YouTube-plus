@@ -1,0 +1,39 @@
+// TL;DR types (design §9.1).
+
+export type LangSetting = 'auto' | 'zh' | 'en' | 'ja' | 'ko' | 'es' | 'fr' | 'de';
+
+export interface SummaryInput { videoId: string; title: string; lang: LangSetting; titleCheck: boolean }
+
+export interface Summary {
+  points: string[];
+  titleMatch?: { verdict: 'match' | 'partial' | 'mismatch'; reason: string };
+  lang: string;
+  /** model text when JSON parsing failed; shown as markdown */
+  raw?: string;
+}
+
+export type ProviderError =
+  | { code: 'quota' }
+  | { code: 'blocked' }
+  | { code: 'auth' }
+  | { code: 'protocol' }
+  | { code: 'transient' };
+
+export type SummaryResult =
+  | { kind: 'ok'; data: Summary }
+  | { kind: 'unreadable'; reason: string }
+  | { kind: 'error'; error: ProviderError; detail?: string };
+
+export interface SummaryProvider {
+  summarize(input: SummaryInput): Promise<SummaryResult>;
+}
+
+/** What a thumbnail icon shows (design §14.1). */
+export type BadgeState =
+  | { state: 'idle' }
+  | { state: 'queued' }
+  | { state: 'running' }
+  | { state: 'ready'; summary: Summary }
+  | { state: 'unreadable'; reason: string }
+  | { state: 'error'; reason: string }
+  | { state: 'paused'; reason: string; until?: number };

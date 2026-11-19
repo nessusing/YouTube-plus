@@ -23,9 +23,16 @@ export default defineBackground(() => {
   const tldr = new TldrService(() => settings, createLogger('tldr'));
   onSettingsChanged((s) => {
     const limitChanged = s.storage.tldrCacheMB !== settings.storage.tldrCacheMB;
+    const accountChanged = s.tldr.account !== settings.tldr.account;
     settings = s;
     void store.trim();
     if (limitChanged) void tldr.cache.trim();
+    if (accountChanged) tldr.accountChanged();
+  });
+  // Coming back from signing in: check again without waiting for a click (design §15.1).
+  browser.tabs.onUpdated.addListener((_id, info, tab) => {
+    if (info.status !== 'complete' || !settings.features.tldr) return;
+    if (/^https:\/\/(gemini|accounts)\.google\.com\//.test(tab.url ?? '')) tldr.onGeminiPage();
   });
   installHeaderRule().catch((e) => createLogger('tldr').error('header rule failed', e));
   browser.runtime.onConnect.addListener((port) => {
@@ -49,6 +56,12 @@ export default defineBackground(() => {
         return true;
       case 'yt+/tldr-resume':
         tldr.resume().then(() => sendResponse({}));
+        return true;
+      case 'yt+/tldr-signin':
+        tldr.openSignin().then(() => sendResponse({}));
+        return true;
+      case 'yt+/tldr-recheck':
+        tldr.probe().then((gemini) => sendResponse({ gemini }));
         return true;
       case 'yt+/open-options':
         void browser.tabs.create({ url: browser.runtime.getURL(`/options.html#${msg.hash ?? ''}`) });

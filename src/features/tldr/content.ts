@@ -34,6 +34,8 @@ export async function startTldr(): Promise<void> {
 
   const tooltip = new Tooltip({
     regenerate: (videoId) => send({ type: 'regenerate', item: { videoId, title: titles.get(videoId) ?? '' } }),
+    signin: () => send({ type: 'signin' }),
+    recheck: () => send({ type: 'recheck' }),
   });
 
   // YouTube's hover preview player is a separate layer above the thumbnail

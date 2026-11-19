@@ -9,8 +9,8 @@ const CSS = `
   .tip { position: fixed; z-index: 2300; width: min(380px, calc(100vw - 24px)); max-height: min(70vh, 520px); overflow: auto;
     background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 12px;
     box-shadow: 0 8px 28px rgba(0,0,0,.35); font: 14px/1.55 Roboto, "Noto Sans CJK SC", Arial, sans-serif; }
-  .tip.dark { --bg: #212121; --fg: #f1f1f1; --muted: #aaa; --line: #3a3a3a; --btn: rgba(255,255,255,.1); --btnh: rgba(255,255,255,.2); }
-  .tip.light { --bg: #fff; --fg: #0f0f0f; --muted: #606060; --line: #e5e5e5; --btn: rgba(0,0,0,.05); --btnh: rgba(0,0,0,.1); }
+  .tip.dark { --bg: #212121; --fg: #f1f1f1; --muted: #aaa; --line: #3a3a3a; --btn: rgba(255,255,255,.1); --btnh: rgba(255,255,255,.2); --accent: #3ea6ff; --onaccent: #0f0f0f; }
+  .tip.light { --bg: #fff; --fg: #0f0f0f; --muted: #606060; --line: #e5e5e5; --btn: rgba(0,0,0,.05); --btnh: rgba(0,0,0,.1); --accent: #065fd4; --onaccent: #fff; }
   h4 { margin: 0 0 8px; font-size: 13px; font-weight: 500; color: var(--muted); }
   ul { margin: 0; padding-left: 18px; }
   li { margin: 4px 0; }
@@ -25,6 +25,10 @@ const CSS = `
   button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 16px; background: var(--btn); font-size: 13px; }
   button:hover { background: var(--btnh); }
   button:focus-visible { outline: 2px solid #8ab4f8; }
+  button.primary { background: var(--accent); color: var(--onaccent); font-weight: 500; }
+  button.primary:hover { filter: brightness(1.08); }
+  button[disabled] { opacity: .6; cursor: default; }
+  .signin p { margin: 0 0 6px; }
 `;
 
 function isDark(): boolean {
@@ -37,7 +41,7 @@ export class Tooltip {
   private anchor: HTMLElement | undefined;
   videoId: string | undefined;
 
-  constructor(private actions: { regenerate(videoId: string): void }) {
+  constructor(private actions: { regenerate(videoId: string): void; signin(): void; recheck(): void }) {
     document.addEventListener('pointerdown', (e) => {
       if (this.host && !e.composedPath().includes(this.host) && !e.composedPath().some((n) => (n as Element).tagName === 'YTPP-TLDR-ICON')) this.close();
     }, true);
@@ -90,7 +94,26 @@ export class Tooltip {
         return [h('p', 'muted', s.reason)];
       case 'ready':
         return this.renderSummary(videoId, s.summary, h);
+      case 'signin':
+        return this.renderSignin(h);
     }
+  }
+
+  /** Not signed in to Gemini: say why and offer the way out (design §15.1). */
+  private renderSignin(h: (t: string, c?: string, x?: string) => HTMLElement): Node[] {
+    const box = h('div', 'signin');
+    box.append(h('h4', '', t('tip.signinTitle')), h('p', '', t('tip.signin')), h('p', 'muted', t('tip.signinHint')));
+    const row = h('div', 'row');
+    const recheck = h('button', '', t('tip.recheck'));
+    recheck.addEventListener('click', () => {
+      recheck.textContent = t('tip.checking');
+      recheck.setAttribute('disabled', '');
+      this.actions.recheck();
+    });
+    const signin = h('button', 'primary', t('tip.signinBtn'));
+    signin.addEventListener('click', () => this.actions.signin());
+    row.append(recheck, signin);
+    return [box, row];
   }
 
   private renderSummary(videoId: string, sum: Summary, h: (t: string, c?: string, x?: string) => HTMLElement): Node[] {

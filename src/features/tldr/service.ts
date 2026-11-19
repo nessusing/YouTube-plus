@@ -6,13 +6,15 @@ import type { Logger } from '@/core/log';
 import type { Settings } from '@/core/settings';
 import { SummaryCache } from './cache';
 import type { CacheEntry } from './cache-rules';
-import { GeminiWebClient } from './client';
+import { GeminiError, GeminiWebClient } from './client';
 import { BLOCK_MS, breakerOpen, count, demote, freshCounters, nextSpacing, pickBatch, upsert, type Breaker, type Counters, type Job } from './jobs';
 import { PORT_NAME, STATE_KEY, type ToService, type ToTab, type VideoRef } from './messages';
 import { GeminiWebProvider } from './provider';
-import type { BadgeState, SummaryResult } from './types';
+import type { BadgeState, GeminiState, SummaryResult } from './types';
 
-const AUTH_PAUSE_MS = 10 * 60 * 1000;
+/** While signed out, look again this often (sign-in is normally noticed sooner, see onGeminiPage). */
+const SIGNIN_RECHECK_MS = 10 * 60 * 1000;
+const SIGNIN: BadgeState = { state: 'signin' };
 
 interface PersistedState { counters: Counters; breaker: Breaker }
 type Port = Browser.runtime.Port;
@@ -26,8 +28,10 @@ export class TldrService {
   private loaded: Promise<void>;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private nextAllowed = 0;
-  /** After an auth error, prefetch waits this long (clicks still run). */
-  private authPauseUntil = 0;
+  /** Signed in to Gemini? Nothing runs while 'signedOut'. */
+  private gemini: GeminiState = 'unknown';
+  private probing: Promise<GeminiState> | undefined;
+  private probeTimer: ReturnType<typeof setTimeout> | undefined;
   readonly client: GeminiWebClient;
   readonly provider: GeminiWebProvider;
   readonly cache: SummaryCache;
@@ -68,6 +72,11 @@ export class TldrService {
     return undefined;
   }
 
+  /** What a job that cannot run yet shows. */
+  private waitingBadge(): BadgeState {
+    return this.gemini === 'signedOut' ? SIGNIN : this.pausedBadge() ?? { state: 'queued' };
+  }
+
   private fromCache(e: CacheEntry): BadgeState {
     return e.kind === 'ok' ? { state: 'ready', summary: e.data } : { state: 'unreadable', reason: e.reason };
   }
@@ -98,7 +107,7 @@ export class TldrService {
             continue;
           }
           this.jobs = upsert(this.jobs, { videoId: it.videoId, title: it.title, priority: it.visible ? 1 : 0, manual: false }, now);
-          port.postMessage({ type: 'state', videoId: it.videoId, badge: this.pausedBadge() ?? { state: 'queued' } } satisfies ToTab);
+          port.postMessage({ type: 'state', videoId: it.videoId, badge: this.waitingBadge() } satisfies ToTab);
         }
         this.kick();
         return;
@@ -120,8 +129,17 @@ export class TldrService {
         }
         if (this.running.has(m.item.videoId)) return;
         this.jobs = upsert(this.jobs, { ...m.item, priority: 2, manual: true }, now);
-        this.send(m.item.videoId, this.pausedBadge() ?? { state: 'queued' });
+        this.send(m.item.videoId, this.waitingBadge());
         this.kick(true);
+        return;
+      case 'signin':
+        await this.openSignin();
+        return;
+      case 'recheck':
+        if ((await this.probe()) !== 'ok') {
+          // Still signed out: re-send so the tooltip leaves its "checking" state.
+          for (const v of info.videos) if (this.jobs.some((j) => j.videoId === v)) port.postMessage({ type: 'state', videoId: v, badge: SIGNIN } satisfies ToTab);
+        }
         return;
     }
   }
@@ -151,10 +169,11 @@ export class TldrService {
     const wanted = new Set<string>();
     for (const info of this.ports.values()) info.videos.forEach((v) => wanted.add(v));
     this.jobs = this.jobs.filter((j) => wanted.has(j.videoId));
+    if (this.gemini === 'signedOut') return this.scheduleProbe();
     const s = this.settings();
     const batch = pickBatch(this.jobs, {
       counters: this.state.counters,
-      limits: { perHour: s.tldr.perHour, perDay: s.tldr.perDay, prefetch: s.tldr.prefetch && now >= this.authPauseUntil },
+      limits: { perHour: s.tldr.perHour, perDay: s.tldr.perDay, prefetch: s.tldr.prefetch },
       breaker: this.state.breaker,
       foreground: this.foreground(),
       now,
@@ -205,6 +224,7 @@ export class TldrService {
   private async handle(job: VideoRef, r: SummaryResult): Promise<void> {
     const now = Date.now();
     if (r.kind === 'ok') {
+      this.setGemini('ok');
       await this.cache.set(job.videoId, { kind: 'ok', data: r.data, t: now, used: now });
       this.send(job.videoId, { state: 'ready', summary: r.data });
       this.log.debug(`summary ready: ${job.videoId}${r.data.raw ? ' (raw text)' : ''}`);
@@ -217,6 +237,14 @@ export class TldrService {
       return;
     }
     const detail = r.detail ?? r.error.code;
+    if (r.error.code === 'auth') {
+      // Not signed in: park every job until the user signs in (design §15.1).
+      this.log.debug(`auth error for ${job.videoId}: ${detail}`);
+      this.jobs = upsert(this.jobs, { ...job, priority: 0, manual: false }, now);
+      this.setGemini('signedOut');
+      this.send(job.videoId, SIGNIN);
+      return;
+    }
     switch (r.error.code) {
       case 'quota':
         this.state.breaker = { state: 'quota' };
@@ -225,11 +253,6 @@ export class TldrService {
       case 'blocked':
         this.state.breaker = { state: 'blocked', until: now + BLOCK_MS };
         this.log.warn(`blocked; pausing 30 min: ${detail}`);
-        break;
-      case 'auth':
-        // Not signed in: don't keep hitting Gemini for every thumbnail.
-        if (now >= this.authPauseUntil) this.log.warn(`auth error, prefetch paused 10 min: ${detail}`);
-        this.authPauseUntil = now + AUTH_PAUSE_MS;
         break;
       default:
         this.log.warn(`${r.error.code} error for ${job.videoId}: ${detail}`);
@@ -254,9 +277,74 @@ export class TldrService {
     this.kick(true);
   }
 
-  async status(): Promise<{ counters: Counters; breaker: Breaker; queued: number; running: number }> {
+  async status(): Promise<TldrStatus> {
     await this.loaded;
-    return { counters: freshCounters(this.state.counters, Date.now()), breaker: this.state.breaker, queued: this.jobs.length, running: this.running.size };
+    return {
+      counters: freshCounters(this.state.counters, Date.now()), breaker: this.state.breaker, queued: this.jobs.length, running: this.running.size,
+      gemini: this.gemini, account: this.settings().tldr.account,
+    };
+  }
+
+  // ---------- Gemini sign-in (design §15.1) ----------
+
+  /** Check sign-in with one GET of the app page. Concurrent calls share it. */
+  probe(): Promise<GeminiState> {
+    this.probing ??= (async () => {
+      try {
+        await this.client.tokens();
+        this.setGemini('ok');
+      } catch (e) {
+        if (e instanceof GeminiError && e.error.code === 'auth') this.setGemini('signedOut');
+        // Signed in, but the page changed: jobs will report the protocol error.
+        else if (e instanceof GeminiError && e.error.code === 'protocol') this.setGemini('ok');
+        else this.log.warn(`sign-in check failed: ${String(e)}`);
+      }
+      return this.gemini;
+    })().finally(() => { this.probing = undefined; });
+    return this.probing;
+  }
+
+  private setGemini(next: GeminiState): void {
+    const was = this.gemini;
+    this.gemini = next;
+    if (next === was) return;
+    if (next === 'signedOut') {
+      this.log.warn(`not signed in to Gemini (gemini.google.com/u/${this.settings().tldr.account}); waiting for sign-in`);
+      for (const j of this.jobs) this.send(j.videoId, SIGNIN);
+      this.scheduleProbe();
+    } else if (next === 'ok' && was === 'signedOut') {
+      this.log.info('signed in to Gemini; resuming');
+      if (this.probeTimer) clearTimeout(this.probeTimer);
+      this.probeTimer = undefined;
+      for (const j of this.jobs) this.send(j.videoId, this.waitingBadge());
+      this.kick(true);
+    }
+  }
+
+  private scheduleProbe(): void {
+    if (this.probeTimer) return;
+    this.probeTimer = setTimeout(() => {
+      this.probeTimer = undefined;
+      if (this.gemini !== 'signedOut') return;
+      if (this.jobs.length) void this.probe();
+      else this.scheduleProbe();
+    }, SIGNIN_RECHECK_MS);
+  }
+
+  /** Open Gemini in a new tab: it shows the sign-in or first-run screen as needed. */
+  async openSignin(): Promise<void> {
+    await browser.tabs.create({ url: `https://gemini.google.com/u/${this.settings().tldr.account}/app` });
+  }
+
+  /** A Gemini or Google sign-in page finished loading: the user may have just signed in. */
+  onGeminiPage(): void {
+    if (this.gemini !== 'ok') void this.probe();
+  }
+
+  /** The account number changed: what we knew is stale. */
+  accountChanged(): void {
+    this.gemini = 'unknown';
+    void this.probe();
   }
 
   isPaused(): boolean {
@@ -264,9 +352,17 @@ export class TldrService {
   }
 }
 
+export interface TldrStatus {
+  counters: Counters;
+  breaker: Breaker;
+  queued: number;
+  running: number;
+  gemini: GeminiState;
+  account: number;
+}
+
 function errorText(code: string): string {
   switch (code) {
-    case 'auth': return t('tldr.errAuth');
     case 'protocol': return t('tldr.errProtocol');
     default: return t('tldr.errTransient');
   }

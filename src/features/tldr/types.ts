@@ -36,4 +36,9 @@ export type BadgeState =
   | { state: 'ready'; summary: Summary }
   | { state: 'unreadable'; reason: string }
   | { state: 'error'; reason: string }
-  | { state: 'paused'; reason: string; until?: number };
+  | { state: 'paused'; reason: string; until?: number }
+  /** Not signed in to Gemini: the tooltip offers a sign-in button. */
+  | { state: 'signin' };
+
+/** Whether the browser can reach Gemini as a signed-in user. */
+export type GeminiState = 'unknown' | 'ok' | 'signedOut';

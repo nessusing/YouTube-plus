@@ -9,7 +9,9 @@ export type Message =
   | { type: 'yt+/selfcheck' }
   | { type: 'yt+/open-options'; hash?: string }
   | { type: 'yt+/tldr-status' }
-  | { type: 'yt+/tldr-resume' };
+  | { type: 'yt+/tldr-resume' }
+  | { type: 'yt+/tldr-signin' }
+  | { type: 'yt+/tldr-recheck' };
 
 export type SelfCheckResponse = { results: CheckResult[] };
 

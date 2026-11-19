@@ -28,6 +28,8 @@ const CSS = `
   .unreadable { color: #9aa0a6; opacity: .6; cursor: not-allowed; }
   .error { color: #f28b82; }
   .paused { color: #fdd663; cursor: default; }
+  .signin { color: #fdd663; }
+  .bang { position: absolute; right: 1px; bottom: 0; font: 700 11px/1 Roboto, Arial, sans-serif; color: #fdd663; }
   .dot { position: absolute; right: 2px; bottom: 2px; width: 7px; height: 7px; border-radius: 50%; background: #fdd663; }
   .spin { position: absolute; inset: 3px; border: 2px solid rgba(255,255,255,.25); border-top-color: #8ab4f8; border-radius: 50%; animation: r .9s linear infinite; }
   .pause { position: absolute; right: 1px; bottom: 1px; font: 700 9px/1 Roboto, Arial, sans-serif; }
@@ -43,6 +45,7 @@ const LABEL: Record<BadgeState['state'], MsgKey> = {
   unreadable: 'icon.unreadable',
   error: 'icon.error',
   paused: 'icon.paused',
+  signin: 'icon.signin',
 };
 
 export class Icon {
@@ -73,12 +76,13 @@ export class Icon {
     this.state = s;
     const verdict = s.state === 'ready' ? s.summary.titleMatch?.verdict : undefined;
     this.btn.className = verdict ? `${s.state} ${verdict}` : s.state;
-    this.btn.querySelector('.dot, .spin, .pause')?.remove();
-    const extra = s.state === 'queued' ? 'dot' : s.state === 'running' ? 'spin' : s.state === 'paused' ? 'pause' : '';
+    this.btn.querySelector('.dot, .spin, .pause, .bang')?.remove();
+    const extra = s.state === 'queued' ? 'dot' : s.state === 'running' ? 'spin' : s.state === 'paused' ? 'pause' : s.state === 'signin' ? 'bang' : '';
     if (extra) {
       const d = document.createElement('span');
       d.className = extra;
       if (extra === 'pause') d.textContent = 'Ⅱ';
+      if (extra === 'bang') d.textContent = '!';
       this.btn.append(d);
     }
     let label = t(LABEL[s.state]);

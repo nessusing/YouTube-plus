@@ -12,7 +12,11 @@ export type ToService =
   | { type: 'click'; item: VideoRef }
   | { type: 'regenerate'; item: VideoRef }
   | { type: 'foreground'; visible: boolean }
-  | { type: 'ping' };
+  | { type: 'ping' }
+  /** Open Gemini so the user can sign in. */
+  | { type: 'signin' }
+  /** The user says they signed in: check now. */
+  | { type: 'recheck' };
 
 export type ToTab = { type: 'state'; videoId: string; badge: BadgeState };
 

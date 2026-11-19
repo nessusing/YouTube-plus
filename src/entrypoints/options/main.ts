@@ -1,6 +1,7 @@
 import { formatEntry, LOG_KEY, LOG_LEVELS, type LogEntry, type LogFeature } from '@/core/log';
 import type { Message, SelfCheckResponse } from '@/core/messages';
 import type { CheckResult } from '@/core/selfcheck';
+import { MINI_POS_KEY } from '@/features/player/consts';
 import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
 import { FEATURES, getSettings, saveSettings, type FeatureId, type PlayerSettings, type Settings } from '@/core/settings';
 
@@ -256,7 +257,13 @@ player.append(el('h2', { textContent: '子功能' }));
 for (const k of Object.keys(PLAYER_LABEL) as (keyof PlayerSettings)[]) {
   player.append(checkbox(PLAYER_LABEL[k], settings.player[k], (v) => update((s) => { s.player[k] = v; })));
 }
-player.append(el('p', { className: 'muted', textContent: '播放器功能还在开发中，开关暂时不起作用。' }));
+const resetPos = el('button', { className: 'act', textContent: '重置迷你播放器位置' });
+resetPos.addEventListener('click', async () => {
+  await browser.storage.local.remove(MINI_POS_KEY);
+  resetPos.textContent = '已重置（下次出现时用官方默认位置）';
+  setTimeout(() => (resetPos.textContent = '重置迷你播放器位置'), 2000);
+});
+player.append(el('div', { className: 'row' }, resetPos));
 
 // ---------- start ----------
 

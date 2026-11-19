@@ -1,4 +1,6 @@
 import { coreChecks } from '@/core/core-checks';
+import { pageCheck } from '@/core/page-checks';
+import { PLAYER_PAGE_CHECKS } from '@/features/player/consts';
 import { createLogger, setLogSink } from '@/core/log';
 import { LogStore } from '@/core/log-store';
 import { isMessage, type SelfCheckResponse } from '@/core/messages';
@@ -12,7 +14,7 @@ export default defineBackground(() => {
   const log = createLogger('core');
 
   // Features append their checks here as they land.
-  const checks: SelfCheck[] = [...coreChecks];
+  const checks: SelfCheck[] = [...coreChecks, ...PLAYER_PAGE_CHECKS.map((n) => pageCheck('player', n))];
 
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!isMessage(msg)) return;

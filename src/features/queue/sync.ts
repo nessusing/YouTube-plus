@@ -2,6 +2,7 @@
 // tab's official queue (TLPQ) is a working copy. Forward operations, not
 // state; on pull the list wins.
 
+import { t } from '@/core/i18n';
 import type { Logger } from '@/core/log';
 import type { PlayerEvent } from './bridge';
 import {
@@ -29,6 +30,8 @@ export class QueueSync {
   private busy: Promise<unknown> = Promise.resolve();
   private resyncTimer: ReturnType<typeof setTimeout> | undefined;
   private stopped = false;
+  /** The page sent playlist/create since the last createQueue() try (seen by the fetch tap). */
+  private sawCreate = false;
   readonly outbox: Outbox;
 
   constructor(private rpc: Rpc, private log: Logger, private badge: StatusBadge, private listName: () => string) {
@@ -36,7 +39,7 @@ export class QueueSync {
       rpc,
       log,
       (n) => {
-        if (n >= FAILURES_FOR_BADGE) badge.show('队列同步失败');
+        if (n >= FAILURES_FOR_BADGE) badge.show(t('queue.syncFailed'));
       },
       () => {
         badge.hide();
@@ -136,11 +139,9 @@ export class QueueSync {
       await this.saveState();
       if (!items.length) return;
       const ids = items.map((i) => i.videoId);
-      this.filter.expect(opSignature({ kind: 'create', videoIds: ids }), Date.now());
-      await this.rpc.addToQueue(ids, false);
-      this.tlpq = await this.waitForTlpq();
+      this.tlpq = await this.createQueue(ids);
       if (!this.tlpq) {
-        this.log.warn('restore: the page did not create a queue');
+        this.log.warn('restore: the page did not create a queue (3 tries)');
         return;
       }
       this.tlpqItems = await this.rpc.readQueue(this.tlpq);
@@ -155,6 +156,24 @@ export class QueueSync {
     });
   }
 
+  /**
+   * Ask the page to build the official queue. Right after the page loads, YouTube
+   * sometimes ignores the command (seen 2026-11-18), so try again, but only
+   * when the page never sent playlist/create: a slow create must not be doubled.
+   */
+  private async createQueue(ids: string[]): Promise<string | undefined> {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      this.sawCreate = false;
+      this.filter.expect(opSignature({ kind: 'create', videoIds: ids }), Date.now());
+      await this.rpc.addToQueue(ids, false);
+      let tlpq = await this.waitForTlpq();
+      if (!tlpq && this.sawCreate) tlpq = await this.waitForTlpq();
+      if (tlpq || this.sawCreate) return tlpq;
+      this.log.debug(`restore: no queue after try ${attempt}, retrying`);
+    }
+    return undefined;
+  }
+
   private async waitForTlpq(): Promise<string | undefined> {
     for (let i = 0; i < 40; i++) {
       const t = await this.rpc.currentTlpq();
@@ -167,6 +186,7 @@ export class QueueSync {
   // ---------- §24.3 local → list ----------
 
   onTap(endpoint: string, body: unknown): void {
+    if (endpoint === 'playlist/create') this.sawCreate = true;
     if (this.stopped || !this.listId) return;
     const b = body as { playlistId?: unknown };
     if (endpoint === 'browse/edit_playlist' && isTlpq(b.playlistId)) this.tlpq = b.playlistId;

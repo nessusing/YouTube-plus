@@ -1,6 +1,7 @@
 // The summary tooltip (design §14.2): one at a time, next to the thumbnail,
 // flips side when there is no room, closes on outside click or Esc.
 
+import { t } from '@/core/i18n';
 import type { BadgeState, Summary } from './types';
 
 const CSS = `
@@ -13,7 +14,7 @@ const CSS = `
   h4 { margin: 0 0 8px; font-size: 13px; font-weight: 500; color: var(--muted); }
   ul { margin: 0; padding-left: 18px; }
   li { margin: 4px 0; }
-  .match { margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+  .match { margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; }
   .match b { margin-right: 6px; }
   .match.match { background: rgba(30,142,62,.15); }
   .match.partial { background: rgba(249,171,0,.18); }
@@ -25,8 +26,6 @@ const CSS = `
   button:hover { background: var(--btnh); }
   button:focus-visible { outline: 2px solid #8ab4f8; }
 `;
-
-const VERDICT = { match: '标题相符', partial: '部分相符', mismatch: '标题不符' } as const;
 
 function isDark(): boolean {
   return document.documentElement.hasAttribute('dark');
@@ -80,9 +79,9 @@ export class Tooltip {
     switch (s.state) {
       case 'idle':
       case 'queued':
-        return [h('p', 'muted', '排队中，马上生成…')];
+        return [h('p', 'muted', t('tip.queued'))];
       case 'running':
-        return [h('p', 'muted', '生成中…（通常 10–20 秒）')];
+        return [h('p', 'muted', t('tip.running'))];
       case 'error':
         return [h('p', 'muted', s.reason)];
       case 'paused':
@@ -95,31 +94,34 @@ export class Tooltip {
   }
 
   private renderSummary(videoId: string, sum: Summary, h: (t: string, c?: string, x?: string) => HTMLElement): Node[] {
-    const out: Node[] = [h('h4', '', 'TL;DR')];
-    let copyText: string;
+    const out: Node[] = [];
+    let copyText = '';
+    // The title verdict comes first: it is what decides whether to click.
+    if (sum.titleMatch) {
+      const verdict = t(`verdict.${sum.titleMatch.verdict}`);
+      const m = h('div', `match ${sum.titleMatch.verdict}`);
+      m.append(h('b', '', verdict), sum.titleMatch.reason);
+      out.push(m);
+      copyText = `${verdict}${t('sep')}${sum.titleMatch.reason}\n\n`;
+    }
+    out.push(h('h4', '', 'TL;DR'));
     if (sum.points.length) {
       const ul = h('ul');
       for (const p of sum.points) ul.append(h('li', '', p));
       out.push(ul);
-      copyText = sum.points.map((p) => `- ${p}`).join('\n');
+      copyText += sum.points.map((p) => `- ${p}`).join('\n');
     } else {
       out.push(h('pre', '', sum.raw ?? ''));
-      copyText = sum.raw ?? '';
-    }
-    if (sum.titleMatch) {
-      const m = h('div', `match ${sum.titleMatch.verdict}`);
-      m.append(h('b', '', VERDICT[sum.titleMatch.verdict]), sum.titleMatch.reason);
-      out.push(m);
-      copyText += `\n\n${VERDICT[sum.titleMatch.verdict]}：${sum.titleMatch.reason}`;
+      copyText += sum.raw ?? '';
     }
     const row = h('div', 'row');
-    const regen = h('button', '', '重新生成');
+    const regen = h('button', '', t('tip.regenerate'));
     regen.addEventListener('click', () => this.actions.regenerate(videoId));
-    const copy = h('button', '', '复制');
+    const copy = h('button', '', t('tip.copy'));
     copy.addEventListener('click', async () => {
       await navigator.clipboard.writeText(copyText);
-      copy.textContent = '已复制';
-      setTimeout(() => (copy.textContent = '复制'), 1500);
+      copy.textContent = t('tip.copied');
+      setTimeout(() => (copy.textContent = t('tip.copy')), 1500);
     });
     row.append(regen, copy);
     out.push(row);

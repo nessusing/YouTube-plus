@@ -30,7 +30,7 @@ export class LogStore {
       const got = await browser.storage.local.get(LOG_KEY);
       const existing = (got[LOG_KEY] as LogEntry[] | undefined) ?? [];
       await browser.storage.local.set({ [LOG_KEY]: appendCapped(existing, batch, await this.maxBytes()) });
-    }).catch((e) => console.error('[yt++ core] log flush failed', e));
+    }).catch((e) => console.error('[yt+ core] log flush failed', e));
     return this.writing;
   }
 

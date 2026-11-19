@@ -1,8 +1,8 @@
 // TL;DR types (design §9.1).
 
-export type LangSetting = 'auto' | 'zh' | 'en' | 'ja' | 'ko' | 'es' | 'fr' | 'de';
+import type { Lang } from '@/core/settings';
 
-export interface SummaryInput { videoId: string; title: string; lang: LangSetting; titleCheck: boolean }
+export interface SummaryInput { videoId: string; title: string; lang: Lang; titleCheck: boolean }
 
 export interface Summary {
   points: string[];

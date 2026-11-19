@@ -13,9 +13,16 @@ ytd-miniplayer:hover .ytp-player-minimized .ytp-gradient-bottom {
   display: block !important;
   opacity: 1 !important;
 }
+/* The miniplayer's own layer (.ytp-miniplayer-ui, z-index 67, whose scrim
+   pauses on click) covers the bottom bar (59): lift the bar and its popups
+   (gear menu) above it, or every click lands on the scrim. Measured 2026-11-18. */
+ytd-miniplayer:hover .ytp-player-minimized .ytp-chrome-bottom { z-index: 68 !important; }
+ytd-miniplayer .ytp-player-minimized .ytp-popup { z-index: 69 !important; }
 ytd-miniplayer:hover .ytp-player-minimized:not([data-ytpp-keep-mid]) .ytp-miniplayer-controls,
 ytd-miniplayer:hover .ytp-player-minimized .ytp-miniplayer-ui .ytp-time-display,
-ytd-miniplayer:hover .ytp-player-minimized .ytp-miniplayer-ui .ytp-progress-bar-container {
+ytd-miniplayer:hover .ytp-player-minimized .ytp-miniplayer-ui .ytp-progress-bar-container,
+/* Since 2026-11 the thin bar is a direct child of #movie_player, not inside the UI. */
+ytd-miniplayer:hover .ytp-player-minimized > .ytp-progress-bar-container {
   display: none !important;
 }
 `;

@@ -1,6 +1,7 @@
 // The thumbnail icon (design §14.1): inserted into the thumbnail's DOM,
 // absolutely positioned above the duration badge, always shown.
 
+import { t, type MsgKey } from '@/core/i18n';
 import type { BadgeState } from './types';
 
 // A small "summary" glyph: a speech-bubble with three lines.
@@ -17,6 +18,13 @@ const CSS = `
   .idle:hover { opacity: 1; }
   .ready { background: #1a73e8; color: #fff; }
   .ready:hover { background: #1765cc; }
+  /* Title verdict at a glance: green / amber / red (plain blue = no verdict). */
+  .ready.match { background: #1e8e3e; }
+  .ready.match:hover { background: #188038; }
+  .ready.partial { background: #f9ab00; color: #202124; }
+  .ready.partial:hover { background: #f29900; }
+  .ready.mismatch { background: #d93025; }
+  .ready.mismatch:hover { background: #c5221f; }
   .unreadable { color: #9aa0a6; opacity: .6; cursor: not-allowed; }
   .error { color: #f28b82; }
   .paused { color: #fdd663; cursor: default; }
@@ -27,14 +35,14 @@ const CSS = `
   @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
 `;
 
-const LABEL: Record<BadgeState['state'], string> = {
-  idle: 'TL;DR：点击生成',
-  queued: 'TL;DR：排队中，点击优先',
-  running: 'TL;DR：生成中',
-  ready: 'TL;DR：已就绪',
-  unreadable: 'TL;DR：读不到内容',
-  error: 'TL;DR：出错，点击重试',
-  paused: 'TL;DR：已暂停',
+const LABEL: Record<BadgeState['state'], MsgKey> = {
+  idle: 'icon.idle',
+  queued: 'icon.queued',
+  running: 'icon.running',
+  ready: 'icon.ready',
+  unreadable: 'icon.unreadable',
+  error: 'icon.error',
+  paused: 'icon.paused',
 };
 
 export class Icon {
@@ -63,7 +71,8 @@ export class Icon {
 
   set(s: BadgeState): void {
     this.state = s;
-    this.btn.className = s.state;
+    const verdict = s.state === 'ready' ? s.summary.titleMatch?.verdict : undefined;
+    this.btn.className = verdict ? `${s.state} ${verdict}` : s.state;
     this.btn.querySelector('.dot, .spin, .pause')?.remove();
     const extra = s.state === 'queued' ? 'dot' : s.state === 'running' ? 'spin' : s.state === 'paused' ? 'pause' : '';
     if (extra) {
@@ -72,9 +81,10 @@ export class Icon {
       if (extra === 'pause') d.textContent = 'Ⅱ';
       this.btn.append(d);
     }
-    let label = LABEL[s.state];
-    if (s.state === 'unreadable' || s.state === 'error') label += `：${s.reason}`;
-    if (s.state === 'paused') label += `：${s.reason}${s.until ? `（${Math.ceil((s.until - Date.now()) / 60000)} 分钟后恢复）` : ''}`;
+    let label = t(LABEL[s.state]);
+    if (verdict) label += `${t('sep')}${t(`verdict.${verdict}`)}`;
+    if (s.state === 'unreadable' || s.state === 'error') label += `${t('sep')}${s.reason}`;
+    if (s.state === 'paused') label += `${t('sep')}${s.reason}${s.until ? t('icon.resumeIn', { n: Math.ceil((s.until - Date.now()) / 60000) }) : ''}`;
     this.btn.title = label;
     this.btn.setAttribute('aria-label', label);
     this.btn.setAttribute('aria-disabled', String(s.state === 'unreadable' || s.state === 'paused'));

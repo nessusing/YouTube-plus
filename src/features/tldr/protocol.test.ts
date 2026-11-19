@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildInner, buildPrompt, extractTokens, mapErrorCode, parseStream, parseSummary } from './protocol';
+import { buildBatchPrompt, buildInner, buildPrompt, extractTokens, mapErrorCode, parseBatch, parseStream, parseSummary } from './protocol';
 
 /** Build a response shaped like the one recorded on 2026-11-18. */
 function frame(inner: unknown): string {
@@ -49,7 +49,7 @@ describe('request building', () => {
     expect(p).toContain('watch?v=abc');
     expect(p).toContain('Simplified Chinese');
     expect(p).not.toContain('titleMatch');
-    expect(buildPrompt({ videoId: 'abc', title: 't', lang: 'auto', titleCheck: true })).toContain('titleMatch');
+    expect(buildPrompt({ videoId: 'abc', title: 't', lang: 'en', titleCheck: true })).toContain('titleMatch');
   });
   it('extracts tokens from the app HTML', () => {
     expect(extractTokens('x"SNlM0e":"AT1"y"cfb2h":"boq_1"z"FdrFJe":"-42"')).toEqual({ at: 'AT1', bl: 'boq_1', sid: '-42' });
@@ -71,5 +71,35 @@ describe('parseSummary', () => {
   });
   it('keeps unparsable text as raw', () => {
     expect(parseSummary('just prose', 'en')).toEqual({ kind: 'ok', data: { points: [], lang: 'en', raw: 'just prose' } });
+  });
+});
+
+describe('batch', () => {
+  const ids = ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc'];
+  it('lists every video in order and asks for an array', () => {
+    const p = buildBatchPrompt(ids.map((videoId) => ({ videoId, title: `T ${videoId}`, lang: 'zh', titleCheck: true })));
+    expect(p.indexOf('v=aaaaaaaaaaa')).toBeLessThan(p.indexOf('v=bbbbbbbbbbb'));
+    expect(p).toContain('JSON array');
+    expect(p).toContain('"id":"<video id>"');
+    expect(p).toContain('titleMatch');
+  });
+  it('matches answers by id, keeps no_transcript, leaves out what is missing', () => {
+    const text = '```json\n' + JSON.stringify([
+      { id: 'bbbbbbbbbbb', status: 'no_transcript' },
+      { id: 'aaaaaaaaaaa', status: 'ok', lang: 'en', points: ['x'], titleMatch: { verdict: 'match', reason: 'r' } },
+      { id: 'zzzzzzzzzzz', status: 'ok', points: ['stray'] },
+    ]) + '\n```';
+    const m = parseBatch(text, ids, 'en');
+    expect(m.get('aaaaaaaaaaa')).toEqual({ kind: 'ok', data: { points: ['x'], lang: 'en', titleMatch: { verdict: 'match', reason: 'r' } } });
+    expect(m.get('bbbbbbbbbbb')?.kind).toBe('unreadable');
+    expect(m.has('ccccccccccc')).toBe(false);
+    expect(m.size).toBe(2);
+  });
+  it('falls back to position when ids are dropped and the count matches', () => {
+    const m = parseBatch(JSON.stringify(ids.map((_, n) => ({ status: 'ok', points: [`p${n}`] }))), ids, 'en');
+    expect(ids.map((id) => (m.get(id) as { data: { points: string[] } }).data.points[0])).toEqual(['p0', 'p1', 'p2']);
+  });
+  it('returns nothing for text that is not an array', () => {
+    expect(parseBatch('sorry, I cannot', ids, 'en').size).toBe(0);
   });
 });

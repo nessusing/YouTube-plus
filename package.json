@@ -1,8 +1,8 @@
 {
-  "name": "yt-plus-plus",
+  "name": "yt-plus",
   "private": true,
   "version": "0.1.0",
-  "description": "yt++: a YouTube toolkit extension (TL;DR, queue, player)",
+  "description": "yt+: a YouTube toolkit extension (TL;DR, queue, player)",
   "type": "module",
   "scripts": {
     "dev": "wxt",

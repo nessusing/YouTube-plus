@@ -2,7 +2,7 @@
 
 import type { Logger } from '@/core/log';
 import { GeminiError, type GeminiWebClient } from './client';
-import { buildPrompt, parseSummary } from './protocol';
+import { buildBatchPrompt, buildPrompt, parseBatch, parseSummary } from './protocol';
 import type { SummaryInput, SummaryProvider, SummaryResult } from './types';
 
 export const PENDING_DELETES_KEY = 'tldr/pendingDeletes';
@@ -19,7 +19,37 @@ export class GeminiWebProvider implements SummaryProvider {
       return { kind: 'error', error: { code: 'transient' }, detail: String(e) };
     }
     if (parsed.cid) await this.deleteOrQueue(parsed.cid);
-    return parseSummary(parsed.text ?? '', input.lang === 'auto' ? 'und' : input.lang);
+    return parseSummary(parsed.text ?? '', input.lang);
+  }
+
+  /**
+   * Several videos in one request. Returns a result for every input; a video
+   * the model left out gets a transient error (click to retry).
+   */
+  async summarizeMany(inputs: SummaryInput[]): Promise<Map<string, SummaryResult>> {
+    const out = new Map<string, SummaryResult>();
+    if (inputs.length === 1) {
+      out.set(inputs[0]!.videoId, await this.summarize(inputs[0]!));
+      return out;
+    }
+    let parsed;
+    try {
+      parsed = await this.client.generate(buildBatchPrompt(inputs));
+    } catch (e) {
+      const r: SummaryResult = e instanceof GeminiError
+        ? { kind: 'error', error: e.error, detail: e.message }
+        : { kind: 'error', error: { code: 'transient' }, detail: String(e) };
+      for (const i of inputs) out.set(i.videoId, r);
+      return out;
+    }
+    if (parsed.cid) await this.deleteOrQueue(parsed.cid);
+    const got = parseBatch(parsed.text ?? '', inputs.map((i) => i.videoId), inputs[0]!.lang);
+    const missing = inputs.filter((i) => !got.has(i.videoId)).map((i) => i.videoId);
+    if (missing.length) this.log.warn(`batch of ${inputs.length}: no answer for ${missing.join(', ')}`, (parsed.text ?? '').slice(0, 500));
+    for (const i of inputs) {
+      out.set(i.videoId, got.get(i.videoId) ?? { kind: 'error', error: { code: 'transient' }, detail: 'missing from the batch answer' });
+    }
+    return out;
   }
 
   private async deleteOrQueue(cid: string): Promise<void> {

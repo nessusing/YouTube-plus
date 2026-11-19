@@ -5,7 +5,16 @@
 // window with a transform and snaps to a corner on release. We stop those
 // events in the capture phase on the video area and run our own drag. The
 // position comes from a stylesheet (!important beats the official inline
-// right/bottom); size stays inline so the official resizers keep working.
+// right/bottom).
+//
+// Size: YouTube keeps the miniplayer size in internal state (default 400 px
+// wide), writes it inline on every render, and only its own resizers (trusted
+// events) change it. So we never touch the inline sizes: we keep a width
+// offset from YouTube's size to the saved one and draw YouTube's size + offset
+// through CSS variables, recomputed whenever YouTube writes. The official
+// resizers keep working (they move YouTube's size; the offset rides on top).
+// The video itself is resized by player-main.ts (setInternalSize), which acts
+// while html[data-ytpp-mini-sized] is set. Found 2026-11-18.
 
 import { injectStyle, type Toggleable } from '@/core/dom';
 import type { Logger } from '@/core/log';
@@ -23,6 +32,14 @@ html[data-ytpp-mini-placed] ${SEL.miniplayer} {
   right: auto !important;
   bottom: auto !important;
   transform: none !important;
+}
+html[data-ytpp-mini-sized] ${SEL.miniplayer} {
+  width: var(--ytpp-mini-w) !important;
+  height: var(--ytpp-mini-h) !important;
+}
+html[data-ytpp-mini-sized] ${SEL.miniVideoArea} {
+  width: var(--ytpp-mini-cw) !important;
+  height: var(--ytpp-mini-ch) !important;
 }
 html[data-ytpp-mini-dragging] ${SEL.miniplayer} { transition: none !important; }
 html[data-ytpp-mini-dragging], html[data-ytpp-mini-dragging] * { cursor: grabbing !important; user-select: none !important; }
@@ -60,17 +77,51 @@ export function miniDrag(log: Logger): Toggleable & { reset(): Promise<void> } {
     html.style.removeProperty('--ytpp-mini-y');
   };
 
-  const setSize = (el: HTMLElement, w: number, h: number) => {
-    if (Math.round(el.getBoundingClientRect().width) !== w) el.style.width = `${w}px`;
-    if (Math.round(el.getBoundingClientRect().height) !== h) el.style.height = `${h}px`;
+  // ---- size: YouTube's own size + a width offset (see the top comment) ----
+  /** saved width − YouTube's width; 0 = show YouTube's size as is. */
+  let dW = 0;
+  const SIZE_VARS = ['--ytpp-mini-w', '--ytpp-mini-h', '--ytpp-mini-cw', '--ytpp-mini-ch'];
+  const videoArea = () => mini()?.querySelector<HTMLElement>(SEL.miniVideoArea) ?? null;
+  /** The size YouTube wrote inline (its state), not what our CSS shows. */
+  const ytSize = (el: HTMLElement) => ({
+    w: parseFloat(el.style.width) || el.getBoundingClientRect().width,
+    h: parseFloat(el.style.height) || el.getBoundingClientRect().height,
+  });
+  const setVar = (k: string, px: number) => {
+    const v = `${Math.round(px)}px`;
+    if (html.style.getPropertyValue(k) !== v) html.style.setProperty(k, v);
+  };
+  const unsize = () => {
+    html.removeAttribute('data-ytpp-mini-sized');
+    for (const k of SIZE_VARS) html.style.removeProperty(k);
+  };
+
+  /** Recompute the shown size from YouTube's current one; call after every YouTube write. */
+  const applySize = () => {
+    const el = mini();
+    const area = videoArea();
+    if (!el || !area || !dW || !active()) return unsize();
+    const m = ytSize(el);
+    const a = ytSize(area);
+    if (!a.w) return unsize();
+    const cw = a.w + dW;
+    const ch = Math.round((cw * a.h) / a.w);
+    setVar('--ytpp-mini-w', m.w + dW);
+    setVar('--ytpp-mini-h', m.h + (ch - a.h));
+    setVar('--ytpp-mini-cw', cw);
+    setVar('--ytpp-mini-ch', ch);
+    html.setAttribute('data-ytpp-mini-sized', '');
+    watchArea(area);
   };
 
   /** Put the miniplayer where the saved position says, for the current viewport. */
   const restore = () => {
     const el = mini();
     if (!el || !saved || !active()) return;
-    setSize(el, saved.width, saved.height);
-    place(decode(saved, viewport()));
+    // Width only: the height also depends on whether the queue panel is open.
+    dW = Math.round(saved.width - ytSize(el).w);
+    applySize();
+    place(decode({ ...saved, height: rectOf(el).h }, viewport()));
   };
 
   const save = async (r: Rect) => {
@@ -136,12 +187,13 @@ export function miniDrag(log: Logger): Toggleable & { reset(): Promise<void> } {
     resize = { start, west: /West/.test(cls), north: /North/.test(cls) };
   };
 
-  const onResizeMutation = () => {
+  /** YouTube wrote a size (render or official resize): re-add our offset, keep the anchor. */
+  const onSizeMutation = () => {
+    applySize();
     const el = mini();
     if (!resize || !el) return;
-    const w = parseFloat(el.style.width) || resize.start.w;
-    const h = parseFloat(el.style.height) || resize.start.h;
-    place(anchorResize(resize.start, w, h, resize.west, resize.north));
+    const r = rectOf(el);
+    place(anchorResize(resize.start, r.w, r.h, resize.west, resize.north));
   };
 
   const onResizeUp = () => {
@@ -157,7 +209,11 @@ export function miniDrag(log: Logger): Toggleable & { reset(): Promise<void> } {
     if (area !== 'local' || !(MINI_POS_KEY in changes)) return;
     saved = changes[MINI_POS_KEY]!.newValue as SavedPos | undefined;
     if (saved) restore();
-    else unplace();
+    else {
+      dW = 0;
+      unsize();
+      unplace();
+    }
   };
 
   const observe = () => {
@@ -165,14 +221,26 @@ export function miniDrag(log: Logger): Toggleable & { reset(): Promise<void> } {
     if (app && !appObserver) {
       appObserver = new MutationObserver(() => {
         if (active()) requestAnimationFrame(restore);
+        else unsize();
       });
       appObserver.observe(app, { attributes: true, attributeFilter: [SEL.appMiniActiveAttr] });
     }
     const el = mini();
     if (el && !sizeObserver) {
-      sizeObserver = new MutationObserver(onResizeMutation);
+      sizeObserver = new MutationObserver(onSizeMutation);
       sizeObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
     }
+  };
+
+  // The video area is a separate element YouTube may replace: follow it.
+  let areaObserver: MutationObserver | undefined;
+  let watchedArea: HTMLElement | undefined;
+  const watchArea = (area: HTMLElement) => {
+    if (watchedArea === area) return;
+    areaObserver?.disconnect();
+    watchedArea = area;
+    areaObserver = new MutationObserver(onSizeMutation);
+    areaObserver.observe(area, { attributes: true, attributeFilter: ['style'] });
   };
 
   const onNavigate = () => {
@@ -213,7 +281,11 @@ export function miniDrag(log: Logger): Toggleable & { reset(): Promise<void> } {
       browser.storage.onChanged.removeListener(onStorage);
       appObserver?.disconnect();
       sizeObserver?.disconnect();
-      appObserver = sizeObserver = undefined;
+      areaObserver?.disconnect();
+      appObserver = sizeObserver = areaObserver = undefined;
+      watchedArea = undefined;
+      dW = 0;
+      unsize();
       unplace();
     },
     async reset() {

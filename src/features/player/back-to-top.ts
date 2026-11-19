@@ -1,6 +1,7 @@
 // "Back to top" button on every YouTube page except Shorts (design §37).
 // The miniplayer sits above it when they overlap (z-index), by decision.
 
+import { t } from '@/core/i18n';
 import type { Toggleable } from '@/core/dom';
 
 const SHOW_AFTER = 300;
@@ -38,7 +39,7 @@ export function backToTop(): Toggleable {
           button:focus-visible { outline: 2px solid #8ab4f8; outline-offset: 2px; }
           svg { width: 24px; height: 24px; }
         </style>
-        <button type="button" aria-label="回到顶部" title="回到顶部">
+        <button type="button" aria-label="${t('backToTop')}" title="${t('backToTop')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>`;
       btn = root.querySelector('button')!;

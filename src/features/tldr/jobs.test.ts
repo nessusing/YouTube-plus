@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evict, fresh, UNREADABLE_TTL, type CacheEntry } from './cache-rules';
-import { breakerOpen, count, demote, freshCounters, localDay, nextSpacing, pick, upsert, type Counters, type Job } from './jobs';
+import { breakerOpen, count, demote, freshCounters, localDay, nextSpacing, pick, pickBatch, upsert, type Counters, type Job } from './jobs';
 
 const limits = { perHour: 2, perDay: 3, prefetch: true };
 const none: Counters = { hour: [], day: '', dayCount: 0 };
@@ -79,5 +79,23 @@ describe('cache rules', () => {
     expect(evict(entries, one * 3)).toEqual([]);
     expect(evict(entries, one * 2)).toEqual(['b']);
     expect(evict(entries, one)).toEqual(['b', 'c']);
+  });
+});
+
+describe('pickBatch', () => {
+  it('takes jobs in pick order up to the size', () => {
+    expect(pickBatch(jobs(), base, 2).map((j) => j.videoId)).toEqual(['b', 'c']);
+    expect(pickBatch(jobs(), base, 10).map((j) => j.videoId)).toEqual(['b', 'c', 'a']);
+    expect(pickBatch(jobs(), base, 0).map((j) => j.videoId)).toEqual(['b']);
+  });
+  it('puts the clicked job first', () => {
+    const j = upsert(jobs(), { videoId: 'a', title: '', priority: 2, manual: true }, 5);
+    expect(pickBatch(j, base, 3).map((x) => x.videoId)).toEqual(['a', 'b', 'c']);
+  });
+  it('adds only clicked jobs when prefetch is not allowed', () => {
+    let j = upsert(jobs(), { videoId: 'a', title: '', priority: 2, manual: true }, 5);
+    j = upsert(j, { videoId: 'd', title: 'D', priority: 2, manual: true }, 6);
+    expect(pickBatch(j, { ...base, foreground: false }, 5).map((x) => x.videoId)).toEqual(['a', 'd']);
+    expect(pickBatch(jobs(), { ...base, foreground: false }, 5)).toEqual([]);
   });
 });

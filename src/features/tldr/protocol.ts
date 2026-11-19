@@ -2,24 +2,49 @@
 // StreamGenerate still answers; frames are length-prefixed in UTF-16 units
 // (= JS string length); the last frame has the full text; GzXR5e deletes.
 
-import type { LangSetting, ProviderError, Summary, SummaryInput, SummaryResult } from './types';
+import { t } from '@/core/i18n';
+import type { Lang } from '@/core/settings';
+import type { ProviderError, Summary, SummaryInput, SummaryResult } from './types';
 
-const LANG_NAME: Record<Exclude<LangSetting, 'auto'>, string> = {
-  zh: 'Simplified Chinese', en: 'English', ja: 'Japanese', ko: 'Korean', es: 'Spanish', fr: 'French', de: 'German',
-};
+const LANG_NAME: Record<Lang, string> = { zh: 'Simplified Chinese', en: 'English' };
+
+function schemaOf(titleCheck: boolean, id: string): string {
+  return titleCheck
+    ? `{${id}"status":"ok","lang":"<language code>","points":["..."],"titleMatch":{"verdict":"match|partial|mismatch","reason":"..."}}`
+    : `{${id}"status":"ok","lang":"<language code>","points":["..."]}`;
+}
+
+function rules(i: Pick<SummaryInput, 'lang' | 'titleCheck'>): string[] {
+  const lang = LANG_NAME[i.lang];
+  return [
+    `points: 3 to 7 key points depending on the video's length, written in ${lang} whatever language the video is in.`,
+    i.titleCheck ? `titleMatch: does the content deliver what the title promises? Give a one-sentence reason in ${lang}.` : '',
+  ];
+}
 
 export function buildPrompt(i: SummaryInput): string {
-  const schema = i.titleCheck
-    ? '{"status":"ok","lang":"<language code>","points":["..."],"titleMatch":{"verdict":"match|partial|mismatch","reason":"..."}}'
-    : '{"status":"ok","lang":"<language code>","points":["..."]}';
-  const lang = i.lang === 'auto' ? 'in the language spoken in the video' : `in ${LANG_NAME[i.lang]}`;
   return [
     `Read the YouTube video https://www.youtube.com/watch?v=${i.videoId} (title: ${JSON.stringify(i.title)}) with the YouTube app.`,
     'Output ONLY JSON, no code fences, no other text:',
-    schema,
-    `points: 3 to 7 key points depending on the video's length, ${lang}.`,
-    i.titleCheck ? 'titleMatch: does the content deliver what the title promises? Give a one-sentence reason in the same language as the points.' : '',
+    schemaOf(i.titleCheck, ''),
+    ...rules(i),
     'If you cannot read the video content (no transcript, the tool failed, etc.), output ONLY {"status":"no_transcript"}. Never make up content from the title.',
+  ].filter(Boolean).join('\n');
+}
+
+/**
+ * Several videos in one prompt (verified 2026-11-18: 8 videos in ~15 s, in
+ * order, unreadable ones marked individually). All inputs share lang/titleCheck.
+ */
+export function buildBatchPrompt(items: SummaryInput[]): string {
+  const first = items[0]!;
+  return [
+    'Read each of these YouTube videos with the YouTube app:',
+    ...items.map((i, n) => `${n + 1}. https://www.youtube.com/watch?v=${i.videoId} (title: ${JSON.stringify(i.title)})`),
+    'Output ONLY a JSON array, one object per video in the same order, no code fences, no other text:',
+    `[${schemaOf(first.titleCheck, '"id":"<video id>",')}]`,
+    ...rules(first),
+    'If you cannot read a video\'s content (no transcript, the tool failed, etc.), its object is ONLY {"id":"<video id>","status":"no_transcript"}. Never make up content from the title.',
   ].filter(Boolean).join('\n');
 }
 
@@ -113,35 +138,66 @@ export function mapHttpStatus(status: number): ProviderError {
   return { code: 'transient' };
 }
 
+function tryParse(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return undefined;
+  }
+}
+
+function stripFences(text: string): string {
+  return text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+}
+
+/** One parsed object → result, or undefined when it is not a usable summary. */
+function fromObject(j: unknown, fallbackLang: string): SummaryResult | undefined {
+  if (!j || typeof j !== 'object') return undefined;
+  const o = j as Record<string, unknown>;
+  if (o.status === 'no_transcript') return { kind: 'unreadable', reason: t('tldr.unreadable') };
+  if (!Array.isArray(o.points) || !o.points.length) return undefined;
+  const data: Summary = {
+    points: o.points.map(String).filter(Boolean),
+    lang: typeof o.lang === 'string' ? o.lang : fallbackLang,
+  };
+  const tm = o.titleMatch as { verdict?: string; reason?: string } | undefined;
+  if (tm && (tm.verdict === 'match' || tm.verdict === 'partial' || tm.verdict === 'mismatch')) {
+    data.titleMatch = { verdict: tm.verdict, reason: String(tm.reason ?? '') };
+  }
+  return { kind: 'ok', data };
+}
+
 /** Model text → result (design §11 parse order). */
 export function parseSummary(text: string, fallbackLang: string): SummaryResult {
-  const tryParse = (s: string): unknown => {
-    try {
-      return JSON.parse(s);
-    } catch {
-      return undefined;
-    }
-  };
-  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+  const cleaned = stripFences(text);
   let j = tryParse(cleaned);
   if (j === undefined) {
     const m = /\{[\s\S]*\}/.exec(cleaned);
     if (m) j = tryParse(m[0]);
   }
-  if (j && typeof j === 'object') {
-    const o = j as Record<string, unknown>;
-    if (o.status === 'no_transcript') return { kind: 'unreadable', reason: 'Gemini 读不到这个视频的内容（多半是没有字幕）' };
-    if (Array.isArray(o.points) && o.points.length) {
-      const data: Summary = {
-        points: o.points.map(String).filter(Boolean),
-        lang: typeof o.lang === 'string' ? o.lang : fallbackLang,
-      };
-      const tm = o.titleMatch as { verdict?: string; reason?: string } | undefined;
-      if (tm && (tm.verdict === 'match' || tm.verdict === 'partial' || tm.verdict === 'mismatch')) {
-        data.titleMatch = { verdict: tm.verdict, reason: String(tm.reason ?? '') };
-      }
-      return { kind: 'ok', data };
-    }
+  return fromObject(j, fallbackLang) ?? { kind: 'ok', data: { points: [], lang: fallbackLang, raw: text } };
+}
+
+/**
+ * Batch answer → result per video id. Matched by "id", falling back to
+ * position when the model drops ids. Videos it left out are missing from the map.
+ */
+export function parseBatch(text: string, ids: string[], fallbackLang: string): Map<string, SummaryResult> {
+  const out = new Map<string, SummaryResult>();
+  const cleaned = stripFences(text);
+  let j = tryParse(cleaned);
+  if (!Array.isArray(j)) {
+    const m = /\[[\s\S]*\]/.exec(cleaned);
+    j = m ? tryParse(m[0]) : undefined;
   }
-  return { kind: 'ok', data: { points: [], lang: fallbackLang, raw: text } };
+  if (!Array.isArray(j)) return out;
+  const want = new Set(ids);
+  j.forEach((o, n) => {
+    const own = (o as { id?: unknown } | null)?.id;
+    const id = typeof own === 'string' && want.has(own) ? own : own === undefined && j.length === ids.length ? ids[n] : undefined;
+    if (!id || out.has(id)) return;
+    const r = fromObject(o, fallbackLang);
+    if (r) out.set(id, r);
+  });
+  return out;
 }

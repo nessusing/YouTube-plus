@@ -1,5 +1,6 @@
 // Queue feature (design part 3), isolated world side.
 
+import { initLang, t } from '@/core/i18n';
 import { createLogger } from '@/core/log';
 import { servePageChecks } from '@/core/page-checks';
 import { getSettings, onSettingsChanged, type Settings } from '@/core/settings';
@@ -12,6 +13,7 @@ import { statusBadge } from './status-badge';
 import { QueueSync } from './sync';
 
 export async function startQueue(): Promise<void> {
+  await initLang();
   const log = createLogger('queue');
   const bridge = connect();
   const badge = statusBadge();
@@ -50,32 +52,32 @@ export async function startQueue(): Promise<void> {
     [QUEUE_PAGE_CHECKS[0]]: async () => {
       await bridge.ready;
       const h = await bridge.rpc.health();
-      if (!h.app || !h.ytcfg) return { status: 'fail', detail: `找不到 ${!h.app ? 'ytd-app' : 'ytcfg'}` };
+      if (!h.app || !h.ytcfg) return { status: 'fail', detail: t('check.notFound', { x: !h.app ? 'ytd-app' : 'ytcfg' }) };
       const id = await bridge.rpc.identity();
-      if (!id.loggedIn) return { status: 'fail', detail: '没有登录 YouTube' };
+      if (!id.loggedIn) return { status: 'fail', detail: t('check.queue.notLoggedIn') };
       await bridge.rpc.editablePlaylists();
-      return { status: 'pass', detail: id.brand ? '品牌账号（带 X-Goog-PageId）' : undefined };
+      return { status: 'pass', detail: id.brand ? t('check.queue.brand') : undefined };
     },
     [QUEUE_PAGE_CHECKS[1]]: async () => {
       await bridge.ready;
-      if (!(await loggedIn())) return { status: 'skip', detail: '没有登录 YouTube' };
+      if (!(await loggedIn())) return { status: 'skip', detail: t('check.queue.notLoggedIn') };
       const s = new QueueSync(bridge.rpc, log, badge, () => settings.queue.listName);
       const id = await s.ensureList();
       const data = await bridge.rpc.readPlaylist(id);
       return data.editable
-        ? { status: 'pass', detail: `「${settings.queue.listName}」，${data.items.length} 个视频` }
-        : { status: 'fail', detail: `列表 ${id} 读到了，但不能编辑` };
+        ? { status: 'pass', detail: t('check.queue.listOk', { name: settings.queue.listName, n: data.items.length }) }
+        : { status: 'fail', detail: t('check.queue.notEditable', { id }) };
     },
     [QUEUE_PAGE_CHECKS[2]]: async () => {
       const h = await bridge.rpc.health();
-      return h.fetchTap ? { status: 'pass' } : { status: 'fail', detail: 'window.fetch 没有被包住；刷新标签页' };
+      return h.fetchTap ? { status: 'pass' } : { status: 'fail', detail: t('check.queue.noTap') };
     },
   });
 
   // Settings page asks a YouTube tab to restore the last snapshot (§25).
   browser.runtime.onMessage.addListener((msg: unknown, _s, sendResponse) => {
     const m = msg as { type?: string; snapshot?: Snapshot };
-    if (m?.type !== 'yt++/queue-restore-snapshot' || !m.snapshot) return;
+    if (m?.type !== 'yt+/queue-restore-snapshot' || !m.snapshot) return;
     restoreSnapshot(bridge.rpc, log, m.snapshot)
       .then((n) => sendResponse({ ok: true, restored: n }))
       .catch((e) => sendResponse({ ok: false, error: String(e) }));

@@ -3,8 +3,8 @@
 // (§36.4).
 //
 // Findings (2026-11-18): position: sticky on #primary-inner > #player works
-// with no placeholder, since #primary-inner spans the whole left column and no
-// ancestor clips. The theater preference is the `wide` cookie; the size button
+// with no placeholder and no ancestor clips; #primary-inner only spans the
+// whole left column once we give it min-height: 100% (see CSS). The theater preference is the `wide` cookie; the size button
 // flips the layout and the cookie, and writing the cookie back afterwards
 // keeps the preference. The official timestamp click seeks at once and smooth-
 // scrolls to the top ~0.8 s later; a capture-phase click handler that sets
@@ -24,6 +24,13 @@ html[data-ytpp-sticky] ${SEL.watchFlexy}:not([theater]):not([fullscreen]) ${SEL.
   top: var(--ytpp-masthead, 56px);
   z-index: 1000;
   background: var(--yt-spec-base-background, #0f0f0f);
+}
+/* #primary stretches to the page height (the right column is usually longer),
+   but #primary-inner ends with the comments, and sticky can't leave its parent.
+   Stretch it so the player stays up as long as the page scrolls (2026-11-18). */
+html[data-ytpp-sticky] ${SEL.watchFlexy}:not([theater]):not([fullscreen]) #primary-inner {
+  min-height: 100%;
+  box-sizing: border-box;
 }
 `;
 

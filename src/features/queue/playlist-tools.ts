@@ -2,6 +2,7 @@
 // with confirm, 10 s undo, and the most recent snapshot kept for the settings
 // page.
 
+import { t as tr } from '@/core/i18n';
 import type { Logger } from '@/core/log';
 import { chunk, planClear, planUndoMoves, type ListAction, type Snapshot } from './core';
 import { SNAPSHOT_KEY } from './keys';
@@ -86,7 +87,7 @@ export function playlistTools(rpc: Rpc, log: Logger) {
       const scrim = document.createElement('div');
       scrim.className = 'scrim';
       scrim.innerHTML = `<div class="dialog" role="dialog" aria-modal="true"><p></p><div class="row">
-        <button class="btn cancel" type="button">取消</button><button class="btn primary ok" type="button"></button></div></div>`;
+        <button class="btn cancel" type="button">${tr('queue.cancel')}</button><button class="btn primary ok" type="button"></button></div></div>`;
       scrim.querySelector('p')!.textContent = text;
       scrim.querySelector('.ok')!.textContent = ok;
       const done = (v: boolean) => {
@@ -115,11 +116,11 @@ export function playlistTools(rpc: Rpc, log: Logger) {
       const data = await rpc.readPlaylist(listId);
       const { remove, removed } = planClear(data.items, mode);
       if (!remove.length) {
-        toast(mode === 'watched' ? '没有已看完的视频' : '列表是空的', undefined, 4000);
+        toast(tr(mode === 'watched' ? 'queue.noneWatched' : 'queue.empty'), undefined, 4000);
         return;
       }
       const title = data.title || listId;
-      if (!(await confirmDialog(`将从「${title}」删除 ${remove.length} 个视频`, '删除'))) return;
+      if (!(await confirmDialog(tr('queue.confirmRemove', { title, n: remove.length }), tr('queue.delete')))) return;
       let failed = 0;
       for (const part of chunk(remove)) {
         const r = await rpc.editPlaylist(listId, part.map((i) => ({ action: 'ACTION_REMOVE_VIDEO', setVideoId: i.setVideoId })));
@@ -130,10 +131,10 @@ export function playlistTools(rpc: Rpc, log: Logger) {
       await browser.storage.local.set({ [SNAPSHOT_KEY]: snapshot });
       removeRows(new Set(remove.map((i) => i.setVideoId)));
       log.info(`clear (${mode}) on ${listId}: removed ${remove.length - failed}`);
-      toast(`已删除 ${remove.length - failed} 个`, { label: '撤销', run: () => void restoreSnapshot(rpc, log, snapshot).then(() => location.reload()) });
+      toast(tr('queue.deleted', { n: remove.length - failed }), { label: tr('queue.undo'), run: () => void restoreSnapshot(rpc, log, snapshot).then(() => location.reload()) });
     } catch (e) {
       log.error('clear failed', e);
-      toast('操作失败，详情见 yt++ 日志', undefined, 6000);
+      toast(tr('queue.failed'), undefined, 6000);
     } finally {
       busy = false;
     }
@@ -158,8 +159,8 @@ export function playlistTools(rpc: Rpc, log: Logger) {
       });
       menu.append(b);
     };
-    item('清空全部', () => void clear('all'));
-    item('移除已看完', () => void clear('watched'));
+    item(tr('queue.clearAll'), () => void clear('all'));
+    item(tr('queue.removeWatched'), () => void clear('watched'));
     ui().append(menu);
     const off = (e: Event) => {
       if (!e.composedPath().includes(menu) && !e.composedPath().includes(anchor)) {
@@ -198,8 +199,8 @@ export function playlistTools(rpc: Rpc, log: Logger) {
     const btn = document.createElement('button');
     btn.className = 'btn more';
     btn.type = 'button';
-    btn.title = 'yt++：清空 / 移除已看完';
-    btn.setAttribute('aria-label', 'yt++ 列表操作');
+    btn.title = tr('queue.toolsTitle');
+    btn.setAttribute('aria-label', tr('queue.toolsLabel'));
     btn.setAttribute('aria-haspopup', 'menu');
     btn.textContent = '⋯';
     btn.addEventListener('click', () => openMenu(btn));

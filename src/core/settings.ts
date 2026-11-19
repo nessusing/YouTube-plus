@@ -2,6 +2,14 @@
 // settings join this object as each feature lands.
 
 export type FeatureId = 'tldr' | 'queue' | 'player';
+
+/** UI language; TL;DR output follows it too (see core/i18n.ts). */
+export type Lang = 'en' | 'zh';
+
+export function detectLang(): Lang {
+  const l = typeof navigator !== 'undefined' ? navigator.language : 'en';
+  return /^zh\b/i.test(l) ? 'zh' : 'en';
+}
 export const FEATURES: FeatureId[] = ['tldr', 'queue', 'player'];
 
 export interface PlayerSettings {
@@ -18,14 +26,14 @@ export interface StorageLimits {
 }
 
 export interface TldrSettings {
-  /** output language; 'auto' = the video's spoken language (design §8 Q4) */
-  lang: 'auto' | 'zh' | 'en' | 'ja' | 'ko' | 'es' | 'fr' | 'de';
   titleCheck: boolean;
   /** Google account number N in gemini.google.com/u/N (§8 Q9) */
   account: number;
   prefetch: boolean;
   perHour: number;
   perDay: number;
+  /** Videos per Gemini request (1 = one at a time). */
+  batchSize: number;
 }
 
 export interface QueueSettings {
@@ -34,6 +42,7 @@ export interface QueueSettings {
 }
 
 export interface Settings {
+  lang: Lang;
   features: Record<FeatureId, boolean>;
   player: PlayerSettings;
   queue: QueueSettings;
@@ -42,10 +51,11 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  lang: 'en',
   features: { tldr: true, queue: true, player: true },
   player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true },
-  queue: { listName: 'yt++' },
-  tldr: { lang: 'auto', titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200 },
+  queue: { listName: 'yt+' },
+  tldr: { titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200, batchSize: 5 },
   storage: { logMB: 2, tldrCacheMB: 5 },
 };
 
@@ -57,6 +67,7 @@ type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]>
 export function withDefaults(stored: DeepPartial<Settings> | undefined): Settings {
   const s = stored ?? {};
   return {
+    lang: s.lang === 'en' || s.lang === 'zh' ? s.lang : detectLang(),
     features: { ...DEFAULT_SETTINGS.features, ...s.features },
     player: { ...DEFAULT_SETTINGS.player, ...s.player },
     queue: { ...DEFAULT_SETTINGS.queue, ...s.queue },

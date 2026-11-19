@@ -73,6 +73,21 @@ export function pick(jobs: Job[], o: { counters: Counters; limits: Limits; break
   return sorted[0];
 }
 
+/**
+ * Up to `size` jobs for one request (§12 batching): the job pick() chooses,
+ * then more in pick order. Manual jobs may always join; prefetch jobs only
+ * when prefetch is allowed right now (the batch is one request against the caps).
+ */
+export function pickBatch(jobs: Job[], o: Parameters<typeof pick>[1], size: number): Job[] {
+  const first = pick(jobs, o);
+  if (!first) return [];
+  const prefetchOk = o.limits.prefetch && o.foreground && underCaps(o.counters, o.limits);
+  const rest = [...jobs]
+    .filter((j) => j !== first && (j.manual || prefetchOk))
+    .sort((a, b) => b.priority - a.priority || Number(b.manual) - Number(a.manual) || a.added - b.added);
+  return [first, ...rest].slice(0, Math.max(1, size));
+}
+
 export function nextSpacing(rand = Math.random()): number {
   return SPACING_MIN_MS + Math.floor(rand * (SPACING_MAX_MS - SPACING_MIN_MS));
 }

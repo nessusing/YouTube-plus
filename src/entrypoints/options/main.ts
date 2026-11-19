@@ -1,3 +1,4 @@
+import { getLang, initLang, LANG_NAMES, setLang, t, type Lang, type MsgKey } from '@/core/i18n';
 import { formatEntry, LOG_KEY, LOG_LEVELS, type LogEntry, type LogFeature } from '@/core/log';
 import type { Message, SelfCheckResponse } from '@/core/messages';
 import type { CheckResult } from '@/core/selfcheck';
@@ -7,13 +8,12 @@ import { OUTBOX_KEY, SNAPSHOT_KEY, STATE_KEY } from '@/features/queue/keys';
 import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
 import { FEATURES, getSettings, saveSettings, type FeatureId, type PlayerSettings, type Settings } from '@/core/settings';
 
-const FEATURE_LABEL: Record<FeatureId, string> = { tldr: 'TL;DR', queue: '队列', player: '播放器' };
-const PLAYER_LABEL: Record<keyof PlayerSettings, string> = {
-  miniControls: '迷你播放器控件（音量、进度条）',
-  freeDrag: '迷你播放器自由拖动，记住位置和大小',
-  stickyPlayer: '观看页往下滚时播放器置顶',
-  backToTop: '「回到顶部」按钮',
-};
+// Build the page in the chosen language; rebuild (reload) when it changes.
+await initLang(() => location.reload());
+document.documentElement.lang = getLang() === 'zh' ? 'zh-CN' : 'en';
+document.title = t('opt.title');
+
+const PLAYER_KEYS: (keyof PlayerSettings)[] = ['miniControls', 'freeDrag', 'stickyPlayer', 'backToTop'];
 
 const send = <T>(m: Message) => browser.runtime.sendMessage(m) as Promise<T>;
 
@@ -37,10 +37,10 @@ function checkbox(label: string, checked: boolean, onChange: (v: boolean) => voi
 // ---------- tabs ----------
 
 const tabs = [
-  { id: 'general', label: '通用' },
-  { id: 'tldr', label: 'TL;DR' },
-  { id: 'queue', label: '队列' },
-  { id: 'player', label: '播放器' },
+  { id: 'general', label: t('opt.tab.general') },
+  { id: 'tldr', label: t('feature.tldr') },
+  { id: 'queue', label: t('feature.queue') },
+  { id: 'player', label: t('feature.player') },
 ] as const;
 
 const nav = document.getElementById('tabs')!;
@@ -54,14 +54,14 @@ function selectTab(id: string) {
   try { localStorage.setItem('tab', id); } catch { /* ignore */ }
 }
 
-for (const t of tabs) {
-  const b = el('button', { textContent: t.label });
+for (const tab of tabs) {
+  const b = el('button', { textContent: tab.label });
   b.setAttribute('role', 'tab');
-  b.addEventListener('click', () => selectTab(t.id));
-  buttons.set(t.id, b);
+  b.addEventListener('click', () => selectTab(tab.id));
+  buttons.set(tab.id, b);
   nav.append(b);
   const s = el('section');
-  sections.set(t.id, s);
+  sections.set(tab.id, s);
   panels.append(s);
 }
 
@@ -74,17 +74,30 @@ const update = async (mut: (s: Settings) => void) => {
 };
 
 const general = sections.get('general')!;
-general.append(el('h2', { textContent: '功能开关' }));
+const langSel = el('select');
+for (const l of Object.keys(LANG_NAMES) as Lang[]) langSel.append(el('option', { value: l, textContent: LANG_NAMES[l], selected: settings.lang === l }));
+langSel.addEventListener('change', async () => {
+  // Don't setLang() here: initLang's listener would then see no change and skip
+  // the rebuild. Reload ourselves once the new value is saved.
+  await update((s) => { s.lang = langSel.value as Lang; });
+  location.reload();
+});
+general.append(
+  el('h2', { textContent: t('opt.language') }),
+  el('div', { className: 'row' }, langSel),
+  el('p', { className: 'muted', textContent: t('opt.languageHint') }),
+);
+general.append(el('h2', { textContent: t('opt.features') }));
 for (const f of FEATURES) {
-  general.append(checkbox(FEATURE_LABEL[f], settings.features[f], (v) => update((s) => { s.features[f] = v; })));
+  general.append(checkbox(t(`feature.${f}` as MsgKey), settings.features[f], (v) => update((s) => { s.features[f] = v; })));
 }
 
 // ---------- self-check ----------
 
-general.append(el('h2', { textContent: '自检' }));
-const checkBtn = el('button', { className: 'act', textContent: '自检' });
+general.append(el('h2', { textContent: t('opt.selfcheck') }));
+const checkBtn = el('button', { className: 'act', textContent: t('opt.selfcheck') });
 const checkList = el('ul', { className: 'checks' });
-const STATUS_LABEL = { pass: '通过', fail: '失败', skip: '跳过' } as const;
+const STATUS_LABEL = { pass: t('opt.status.pass'), fail: t('opt.status.fail'), skip: t('opt.status.skip') } as const;
 
 function renderChecks(results: CheckResult[]) {
   checkList.replaceChildren(
@@ -102,12 +115,12 @@ function renderChecks(results: CheckResult[]) {
 
 async function runSelfCheck() {
   checkBtn.disabled = true;
-  checkList.replaceChildren(el('li', { className: 'muted', textContent: '运行中…' }));
+  checkList.replaceChildren(el('li', { className: 'muted', textContent: t('opt.running') }));
   try {
-    const { results } = await send<SelfCheckResponse>({ type: 'yt++/selfcheck' });
+    const { results } = await send<SelfCheckResponse>({ type: 'yt+/selfcheck' });
     renderChecks(results);
   } catch (e) {
-    checkList.replaceChildren(el('li', { className: 'fail', textContent: `自检没能运行：${String(e)}` }));
+    checkList.replaceChildren(el('li', { className: 'fail', textContent: t('opt.selfcheckFailed', { e: String(e) }) }));
   } finally {
     checkBtn.disabled = false;
   }
@@ -117,16 +130,16 @@ general.append(el('div', { className: 'row' }, checkBtn), checkList);
 
 // ---------- log ----------
 
-general.append(el('h2', { textContent: '日志' }));
+general.append(el('h2', { textContent: t('opt.log') }));
 const featureSel = el('select');
-featureSel.append(el('option', { value: '', textContent: '全部功能' }));
+featureSel.append(el('option', { value: '', textContent: t('opt.allFeatures') }));
 for (const f of ['core', ...FEATURES] as LogFeature[]) featureSel.append(el('option', { value: f, textContent: f }));
 const levelSel = el('select');
-levelSel.append(el('option', { value: '', textContent: '全部级别' }));
+levelSel.append(el('option', { value: '', textContent: t('opt.allLevels') }));
 for (const l of LOG_LEVELS) levelSel.append(el('option', { value: l, textContent: `≥ ${l}` }));
-const copyBtn = el('button', { className: 'act', textContent: '复制全部' });
-const exportBtn = el('button', { className: 'act', textContent: '导出 .txt' });
-const clearBtn = el('button', { className: 'act', textContent: '清空' });
+const copyBtn = el('button', { className: 'act', textContent: t('opt.copyAll') });
+const exportBtn = el('button', { className: 'act', textContent: t('opt.export') });
+const clearBtn = el('button', { className: 'act', textContent: t('opt.clear') });
 const countSpan = el('span', { className: 'muted' });
 const logBox = el('div', { id: 'log' });
 general.append(el('div', { className: 'row' }, featureSel, levelSel, copyBtn, exportBtn, clearBtn, countSpan), logBox);
@@ -145,7 +158,7 @@ function renderLog() {
   const frag = document.createDocumentFragment();
   for (const e of shown) frag.append(el('div', { className: e.level, textContent: formatEntry(e) }));
   logBox.replaceChildren(frag);
-  countSpan.textContent = `${shown.length} / ${allEntries.length} 行`;
+  countSpan.textContent = t('opt.lines', { a: shown.length, b: allEntries.length });
   if (atBottom) logBox.scrollTop = logBox.scrollHeight;
 }
 
@@ -158,17 +171,17 @@ async function loadLog() {
 const text = () => filtered().map(formatEntry).join('\n');
 copyBtn.addEventListener('click', async () => {
   await navigator.clipboard.writeText(text());
-  copyBtn.textContent = '已复制';
-  setTimeout(() => (copyBtn.textContent = '复制全部'), 1500);
+  copyBtn.textContent = t('opt.copied');
+  setTimeout(() => (copyBtn.textContent = t('opt.copyAll')), 1500);
 });
 exportBtn.addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([text()], { type: 'text/plain' }));
-  const a = el('a', { href: url, download: `yt++-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt` });
+  const a = el('a', { href: url, download: `yt+-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt` });
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 clearBtn.addEventListener('click', async () => {
-  await send({ type: 'yt++/log-clear' });
+  await send({ type: 'yt+/log-clear' });
 });
 featureSel.addEventListener('change', renderLog);
 levelSel.addEventListener('change', renderLog);
@@ -185,7 +198,7 @@ function scheduleStorageRender() {
 
 // ---------- storage (design §4.1) ----------
 
-general.append(el('h2', { textContent: '存储' }));
+general.append(el('h2', { textContent: t('opt.storage') }));
 const totalLine = el('p', { className: 'muted' });
 const storageTable = el('table', { className: 'storage' });
 general.append(totalLine, storageTable);
@@ -208,29 +221,29 @@ const STORAGE_ROWS: {
   clear?: () => Promise<unknown>;
 }[] = [
   {
-    cat: 'log', label: '日志', unit: '行',
+    cat: 'log', label: t('opt.storage.log'), unit: t('opt.unit.lines'),
     limit: () => limitInput(() => settings.storage.logMB, (s, v) => { s.storage.logMB = v; }),
-    clear: () => send({ type: 'yt++/log-clear' }),
+    clear: () => send({ type: 'yt+/log-clear' }),
   },
   {
-    cat: 'tldrCache', label: 'TL;DR 缓存', unit: '条',
+    cat: 'tldrCache', label: t('opt.storage.tldr'), unit: t('opt.unit.entries'),
     limit: () => limitInput(() => settings.storage.tldrCacheMB, (s, v) => { s.storage.tldrCacheMB = v; }),
     clear: () => clearCategory('tldrCache'),
   },
-  { cat: 'queueSnapshot', label: '队列清空快照', clear: () => clearCategory('queueSnapshot') },
-  { cat: 'other', label: '其他' },
+  { cat: 'queueSnapshot', label: t('opt.storage.snapshot'), clear: () => clearCategory('queueSnapshot') },
+  { cat: 'other', label: t('opt.storage.other') },
 ];
 
-storageTable.append(el('tr', {}, ...['类别', '占用', '上限', ''].map((t) => el('th', { textContent: t }))));
+storageTable.append(el('tr', {}, ...[t('opt.storage.cat'), t('opt.storage.used'), t('opt.storage.limit'), ''].map((x) => el('th', { textContent: x }))));
 const usageCells = new Map<StorageCategory, HTMLTableCellElement>();
 for (const r of STORAGE_ROWS) {
   const usage = el('td');
   usageCells.set(r.cat, usage);
   const clearCell = el('td');
   if (r.clear) {
-    const b = el('button', { className: 'act', textContent: '清空' });
+    const b = el('button', { className: 'act', textContent: t('opt.clear') });
     b.addEventListener('click', async () => {
-      if (!confirm(`清空${r.label}？`)) return;
+      if (!confirm(t('opt.storage.confirmClear', { x: r.label }))) return;
       await r.clear!();
       setTimeout(renderStorage, 300);
     });
@@ -241,10 +254,10 @@ for (const r of STORAGE_ROWS) {
 
 async function renderStorage() {
   const u = await getStorageUsage();
-  totalLine.textContent = `总用量 ${formatBytes(u.total)}（已申请 unlimitedStorage，用量由下面的上限控制）`;
+  totalLine.textContent = t('opt.storage.total', { x: formatBytes(u.total) });
   for (const r of STORAGE_ROWS) {
     const c = u.byCategory[r.cat];
-    usageCells.get(r.cat)!.textContent = formatBytes(c.bytes) + (r.unit && c.count !== undefined ? `，${c.count} ${r.unit}` : '');
+    usageCells.get(r.cat)!.textContent = formatBytes(c.bytes) + (r.unit && c.count !== undefined ? `${t('opt.storage.sep')}${c.count} ${r.unit}` : '');
   }
 }
 
@@ -253,63 +266,63 @@ async function renderStorage() {
 // ---------- TL;DR tab (design §15) ----------
 
 const tldrTab = sections.get('tldr')!;
-const LANGS: [Settings['tldr']['lang'], string][] = [
-  ['auto', '跟随视频语言'], ['zh', '中文'], ['en', 'English'], ['ja', '日本語'], ['ko', '한국어'], ['es', 'Español'], ['fr', 'Français'], ['de', 'Deutsch'],
-];
-const langSel = el('select');
-for (const [v, label] of LANGS) langSel.append(el('option', { value: v, textContent: label, selected: settings.tldr.lang === v }));
-langSel.addEventListener('change', () => update((s) => { s.tldr.lang = langSel.value as Settings['tldr']['lang']; }));
 
-function numberInput(get: () => number, set: (s: Settings, v: number) => void, min = 0): HTMLInputElement {
+function numberInput(get: () => number, set: (s: Settings, v: number) => void, min = 0, max = Infinity): HTMLInputElement {
   const input = el('input', { type: 'number', min: String(min), step: '1', value: String(get()), className: 'num' });
+  if (max !== Infinity) input.max = String(max);
   input.addEventListener('change', () => {
     const v = Math.floor(Number(input.value));
-    if (!(v >= min)) { input.value = String(get()); return; }
+    if (!(v >= min && v <= max)) { input.value = String(get()); return; }
     void update((s) => set(s, v));
   });
   return input;
 }
 
 tldrTab.append(
-  el('h2', { textContent: '输出' }),
-  el('div', { className: 'row' }, el('label', { textContent: '输出语言' }), langSel),
-  checkbox('判断标题和内容是否一致', settings.tldr.titleCheck, (v) => update((s) => { s.tldr.titleCheck = v; })),
-  el('h2', { textContent: '账号' }),
-  el('div', { className: 'row' }, el('label', { textContent: 'Gemini 账号编号 N（gemini.google.com/u/N）' }),
+  el('h2', { textContent: t('opt.tldr.output') }),
+  el('p', { className: 'muted', textContent: t('opt.languageHint') }),
+  checkbox(t('opt.tldr.titleCheck'), settings.tldr.titleCheck, (v) => update((s) => { s.tldr.titleCheck = v; })),
+  el('h2', { textContent: t('opt.tldr.account') }),
+  el('div', { className: 'row' }, el('label', { textContent: t('opt.tldr.accountN') }),
     numberInput(() => settings.tldr.account, (s, v) => { s.tldr.account = v; })),
-  el('h2', { textContent: '预生成与上限' }),
-  checkbox('预生成（关掉后只在点击图标时生成）', settings.tldr.prefetch, (v) => update((s) => { s.tldr.prefetch = v; })),
-  el('div', { className: 'row' }, el('label', { textContent: '每小时上限' }), numberInput(() => settings.tldr.perHour, (s, v) => { s.tldr.perHour = v; }, 1),
-    el('label', { textContent: '每天上限' }), numberInput(() => settings.tldr.perDay, (s, v) => { s.tldr.perDay = v; }, 1)),
-  el('p', { className: 'muted', textContent: '达到上限后预生成暂停，点击图标仍然可以生成（也计入总数）。' }),
+  el('h2', { textContent: t('opt.tldr.limits') }),
+  checkbox(t('opt.tldr.prefetch'), settings.tldr.prefetch, (v) => update((s) => { s.tldr.prefetch = v; })),
+  el('div', { className: 'row' }, el('label', { textContent: t('opt.tldr.perHour') }), numberInput(() => settings.tldr.perHour, (s, v) => { s.tldr.perHour = v; }, 1),
+    el('label', { textContent: t('opt.tldr.perDay') }), numberInput(() => settings.tldr.perDay, (s, v) => { s.tldr.perDay = v; }, 1)),
+  el('p', { className: 'muted', textContent: t('opt.tldr.limitsHint') }),
+  el('div', { className: 'row' }, el('label', { textContent: t('opt.tldr.batchSize') }), numberInput(() => settings.tldr.batchSize, (s, v) => { s.tldr.batchSize = v; }, 1, 10)),
+  el('p', { className: 'muted', textContent: t('opt.tldr.batchHint') }),
 );
 const tldrStatus = el('p');
-const resumeBtn = el('button', { className: 'act', textContent: '恢复' });
+const resumeBtn = el('button', { className: 'act', textContent: t('opt.resume') });
 resumeBtn.addEventListener('click', async () => {
-  await send({ type: 'yt++/tldr-resume' });
+  await send({ type: 'yt+/tldr-resume' });
   void renderTldr();
 });
-tldrTab.append(el('h2', { textContent: '状态' }), tldrStatus, el('div', { className: 'row' }, resumeBtn));
+tldrTab.append(el('h2', { textContent: t('opt.tldr.status') }), tldrStatus, el('div', { className: 'row' }, resumeBtn));
 const pre = el('ul');
 for (const [text, href] of [
-  ['登录 gemini.google.com，并且不要屏蔽第三方 cookie', 'https://gemini.google.com/'],
-  ['开启 Gemini 应用活动记录', 'https://myactivity.google.com/product/gemini'],
-  ['在 Gemini 里启用 YouTube 应用', 'https://gemini.google.com/apps'],
+  [t('opt.tldr.pre1'), 'https://gemini.google.com/'],
+  [t('opt.tldr.pre2'), 'https://myactivity.google.com/product/gemini'],
+  [t('opt.tldr.pre3'), 'https://gemini.google.com/apps'],
 ] as const) pre.append(el('li', {}, el('a', { href, target: '_blank', rel: 'noopener', textContent: text })));
-tldrTab.append(el('h2', { textContent: '前提条件' }), pre,
-  el('p', { className: 'muted', textContent: '每次生成会在 Gemini 里建一个普通对话，生成完立即删除；删除失败的会在空闲时重试。' }));
+tldrTab.append(el('h2', { textContent: t('opt.tldr.prereq') }), pre,
+  el('p', { className: 'muted', textContent: t('opt.tldr.prereqHint') }));
 
 async function renderTldr() {
   try {
-    const st = (await send({ type: 'yt++/tldr-status' })) as { counters: { hour: number[]; dayCount: number }; breaker: { state: string; until?: number }; queued: number; running?: string };
+    const st = (await send({ type: 'yt+/tldr-status' })) as { counters: { hour: number[]; dayCount: number }; breaker: { state: string; until?: number }; queued: number; running: number };
     const b = st.breaker;
-    const breaker = b.state === 'quota' ? '额度用完，已暂停（点「恢复」）'
-      : b.state === 'blocked' && (b.until ?? 0) > Date.now() ? `风控暂停，${Math.ceil(((b.until ?? 0) - Date.now()) / 60000)} 分钟后自动恢复`
-      : '正常';
-    tldrStatus.textContent = `最近一小时 ${st.counters.hour.length} / ${settings.tldr.perHour}，今天 ${st.counters.dayCount} / ${settings.tldr.perDay}；排队 ${st.queued}${st.running ? '，正在生成 1 个' : ''}；熔断：${breaker}`;
+    const breaker = b.state === 'quota' ? t('opt.tldr.brQuota')
+      : b.state === 'blocked' && (b.until ?? 0) > Date.now() ? t('opt.tldr.brBlocked', { n: Math.ceil(((b.until ?? 0) - Date.now()) / 60000) })
+      : t('opt.tldr.brOk');
+    tldrStatus.textContent = t('opt.tldr.statusLine', {
+      h: st.counters.hour.length, hMax: settings.tldr.perHour, d: st.counters.dayCount, dMax: settings.tldr.perDay,
+      q: st.queued, r: st.running ? t('opt.tldr.runningN', { n: st.running }) : '', b: breaker,
+    });
     resumeBtn.disabled = b.state === 'closed' || (b.state === 'blocked' && (b.until ?? 0) <= Date.now());
   } catch (e) {
-    tldrStatus.textContent = `读不到状态：${String(e)}`;
+    tldrStatus.textContent = t('opt.tldr.statusFail', { e: String(e) });
   }
 }
 setInterval(() => { if (!sections.get('tldr')!.hidden) void renderTldr(); }, 5000);
@@ -317,26 +330,26 @@ setInterval(() => { if (!sections.get('tldr')!.hidden) void renderTldr(); }, 500
 // ---------- queue tab (design §27) ----------
 
 const queue = sections.get('queue')!;
-queue.append(el('h2', { textContent: '队列用的列表' }));
+queue.append(el('h2', { textContent: t('opt.queue.list') }));
 const nameInput = el('input', { type: 'text', value: settings.queue.listName, className: 'text' });
-const nameSave = el('button', { className: 'act', textContent: '保存' });
+const nameSave = el('button', { className: 'act', textContent: t('opt.save') });
 nameSave.addEventListener('click', async () => {
   const v = nameInput.value.trim();
   if (!v || v === settings.queue.listName) return;
   await update((s) => { s.queue.listName = v; });
-  nameSave.textContent = '已保存';
-  setTimeout(() => (nameSave.textContent = '保存'), 1500);
+  nameSave.textContent = t('opt.saved');
+  setTimeout(() => (nameSave.textContent = t('opt.save')), 1500);
 });
 queue.append(
-  el('div', { className: 'row' }, el('label', { textContent: '列表名字' }), nameInput, nameSave),
-  el('p', { className: 'muted', textContent: '同名列表已存在就直接用；没有就建一个私密列表。改名字等于换一个列表，原来的列表不动。' }),
+  el('div', { className: 'row' }, el('label', { textContent: t('opt.queue.name') }), nameInput, nameSave),
+  el('p', { className: 'muted', textContent: t('opt.queue.nameHint') }),
 );
 const listLine = el('p');
 const outboxLine = el('p');
 queue.append(listLine, outboxLine);
-queue.append(el('h2', { textContent: '最近一次清空' }));
+queue.append(el('h2', { textContent: t('opt.queue.lastClear') }));
 const snapLine = el('p', { className: 'muted' });
-const restoreBtn = el('button', { className: 'act', textContent: '恢复' });
+const restoreBtn = el('button', { className: 'act', textContent: t('opt.resume') });
 const restoreMsg = el('span', { className: 'muted' });
 queue.append(snapLine, el('div', { className: 'row' }, restoreBtn, restoreMsg));
 
@@ -346,17 +359,17 @@ async function renderQueue() {
   listLine.replaceChildren();
   if (state?.listId) {
     const a = el('a', { href: `https://www.youtube.com/playlist?list=${encodeURIComponent(state.listId)}`, target: '_blank', rel: 'noopener', textContent: state.listName ?? state.listId });
-    listLine.append('当前列表：', a, `，${state.count ?? 0} 个视频（${new Date(state.updatedAt ?? 0).toLocaleString()} 读取）`);
+    listLine.append(t('opt.queue.current'), a, t('opt.queue.currentTail', { n: state.count ?? 0, t: new Date(state.updatedAt ?? 0).toLocaleString() }));
   } else {
-    listLine.append(el('span', { className: 'muted', textContent: '还没有连上列表：打开一个 YouTube 标签页后会自动查找或创建。' }));
+    listLine.append(el('span', { className: 'muted', textContent: t('opt.queue.notConnected') }));
   }
   const outbox = (local[OUTBOX_KEY] as unknown[] | undefined) ?? [];
-  outboxLine.textContent = `待发送的操作：${outbox.length}`;
+  outboxLine.textContent = t('opt.queue.outbox', { n: outbox.length });
   const snap = local[SNAPSHOT_KEY] as Snapshot | undefined;
   restoreBtn.disabled = !snap;
   snapLine.textContent = snap
-    ? `${new Date(snap.time).toLocaleString()} 从「${snap.listName}」${snap.mode === 'all' ? '清空全部' : '移除已看完'}，共 ${snap.removed.length} 个视频。`
-    : '还没有清空过。';
+    ? t('opt.queue.snap', { t: new Date(snap.time).toLocaleString(), name: snap.listName, mode: t(snap.mode === 'all' ? 'queue.clearAll' : 'queue.removeWatched'), n: snap.removed.length })
+    : t('opt.queue.never');
 }
 
 restoreBtn.addEventListener('click', async () => {
@@ -365,16 +378,16 @@ restoreBtn.addEventListener('click', async () => {
   const tabs = await browser.tabs.query({ url: 'https://www.youtube.com/*' });
   const tab = tabs.find((t) => t.active) ?? tabs[0];
   if (!tab?.id) {
-    restoreMsg.textContent = '需要先打开一个 YouTube 标签页';
+    restoreMsg.textContent = t('opt.queue.needTab');
     return;
   }
   restoreBtn.disabled = true;
-  restoreMsg.textContent = '恢复中…';
+  restoreMsg.textContent = t('opt.queue.restoring');
   try {
-    const r = (await browser.tabs.sendMessage(tab.id, { type: 'yt++/queue-restore-snapshot', snapshot: snap }, { frameId: 0 })) as { ok: boolean; restored?: number; error?: string };
-    restoreMsg.textContent = r.ok ? `已恢复 ${r.restored} 个视频` : `失败：${r.error}`;
+    const r = (await browser.tabs.sendMessage(tab.id, { type: 'yt+/queue-restore-snapshot', snapshot: snap }, { frameId: 0 })) as { ok: boolean; restored?: number; error?: string };
+    restoreMsg.textContent = r.ok ? t('opt.queue.restored', { n: r.restored ?? 0 }) : t('opt.queue.restoreFail', { e: r.error ?? '' });
   } catch {
-    restoreMsg.textContent = '那个 YouTube 标签页里没有 yt++ 的脚本，刷新它再试';
+    restoreMsg.textContent = t('opt.queue.noScript');
   } finally {
     restoreBtn.disabled = false;
   }
@@ -384,15 +397,15 @@ browser.storage.onChanged.addListener((changes, area) => {
 });
 
 const player = sections.get('player')!;
-player.append(el('h2', { textContent: '子功能' }));
-for (const k of Object.keys(PLAYER_LABEL) as (keyof PlayerSettings)[]) {
-  player.append(checkbox(PLAYER_LABEL[k], settings.player[k], (v) => update((s) => { s.player[k] = v; })));
+player.append(el('h2', { textContent: t('opt.player.sub') }));
+for (const k of PLAYER_KEYS) {
+  player.append(checkbox(t(`opt.player.${k}`), settings.player[k], (v) => update((s) => { s.player[k] = v; })));
 }
-const resetPos = el('button', { className: 'act', textContent: '重置迷你播放器位置' });
+const resetPos = el('button', { className: 'act', textContent: t('opt.player.resetPos') });
 resetPos.addEventListener('click', async () => {
   await browser.storage.local.remove(MINI_POS_KEY);
-  resetPos.textContent = '已重置（下次出现时用官方默认位置）';
-  setTimeout(() => (resetPos.textContent = '重置迷你播放器位置'), 2000);
+  resetPos.textContent = t('opt.player.resetDone');
+  setTimeout(() => (resetPos.textContent = t('opt.player.resetPos')), 2000);
 });
 player.append(el('div', { className: 'row' }, resetPos));
 

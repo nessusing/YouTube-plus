@@ -1,6 +1,7 @@
 // TL;DR in YouTube tabs (design §9 content script): scan thumbnails, add
 // icons, track visibility and foreground, talk to the service worker.
 
+import { initLang } from '@/core/i18n';
 import { createLogger } from '@/core/log';
 import { getSettings, onSettingsChanged } from '@/core/settings';
 import { Icon } from './icon';
@@ -49,7 +50,8 @@ export async function startTldr(): Promise<void> {
     if (!r.width) return;
     const icon = new Icon(real.videoId, () => onIconClick(real));
     icon.set(real.state);
-    icon.host.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;right:auto;bottom:auto;z-index:2200;`;
+    // Above the preview (z-index auto) but below the masthead (2020) and the miniplayer (2030).
+    icon.host.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;right:auto;bottom:auto;z-index:2010;`;
     document.documentElement.append(icon.host);
     floater = { icon, for: real };
   };
@@ -59,7 +61,10 @@ export async function startTldr(): Promise<void> {
     if (!pending) requestAnimationFrame(() => {
       const ev = pending!;
       pending = undefined;
-      if (floater && ev.composedPath().includes(floater.icon.host)) return;
+      const path = ev.composedPath();
+      if (floater && path.includes(floater.icon.host)) return;
+      // A thumbnail under the miniplayer or the masthead is not being hovered.
+      if (path.some((n) => n instanceof Element && (n.tagName === 'YTD-MINIPLAYER' || n.id === 'masthead-container'))) return hideFloater();
       for (const icon of icons.values()) {
         const r = icon.host.parentElement?.getBoundingClientRect();
         if (r && ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) return showFloater(icon);
@@ -177,6 +182,13 @@ export async function startTldr(): Promise<void> {
     port = undefined;
   };
 
+  // New language: summaries differ, so ask the service for every video again.
+  await initLang(() => {
+    if (!enabled) return;
+    states.clear();
+    tooltip.close();
+    announce([], true);
+  });
   onSettingsChanged((s) => {
     if (s.features.tldr === enabled) return;
     enabled = s.features.tldr;

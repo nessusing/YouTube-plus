@@ -1,4 +1,5 @@
 import { coreChecks } from '@/core/core-checks';
+import { initLang } from '@/core/i18n';
 import { pageCheck } from '@/core/page-checks';
 import { PLAYER_PAGE_CHECKS } from '@/features/player/consts';
 import { QUEUE_PAGE_CHECKS } from '@/features/queue/consts';
@@ -14,6 +15,7 @@ import { TldrService } from '@/features/tldr/service';
 export default defineBackground(() => {
   const store = new LogStore(async () => (await getSettings()).storage.logMB * 1024 * 1024);
   setLogSink((entries) => store.add(entries));
+  void initLang();
 
   // Settings cached for synchronous use by the TL;DR service.
   let settings: Settings = withDefaults(undefined);
@@ -42,22 +44,22 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!isMessage(msg)) return;
     switch (msg.type) {
-      case 'yt++/tldr-status':
+      case 'yt+/tldr-status':
         tldr.status().then(sendResponse);
         return true;
-      case 'yt++/tldr-resume':
+      case 'yt+/tldr-resume':
         tldr.resume().then(() => sendResponse({}));
         return true;
-      case 'yt++/open-options':
+      case 'yt+/open-options':
         void browser.tabs.create({ url: browser.runtime.getURL(`/options.html#${msg.hash ?? ''}`) });
         return;
-      case 'yt++/log':
+      case 'yt+/log':
         store.add(msg.entries);
         return;
-      case 'yt++/log-clear':
+      case 'yt+/log-clear':
         store.clear().then(() => sendResponse({}));
         return true;
-      case 'yt++/selfcheck':
+      case 'yt+/selfcheck':
         getSettings()
           .then((s) => runChecks(checks, (f) => f === 'core' || s.features[f], log))
           .then((results) => sendResponse({ results } satisfies SelfCheckResponse));

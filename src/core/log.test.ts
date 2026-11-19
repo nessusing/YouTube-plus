@@ -4,24 +4,24 @@ import { appendCapped, entrySize, formatEntry, stringifyArg, type LogEntry } fro
 const e = (i: number, msg = `m${i}`): LogEntry => ({ t: i, feature: 'core', level: 'info', msg });
 
 describe('appendCapped', () => {
-  it('keeps everything under the caps', () => {
-    expect(appendCapped([e(1)], [e(2)], 10, 1e6).map((x) => x.t)).toEqual([1, 2]);
+  it('keeps everything under the cap', () => {
+    expect(appendCapped([e(1)], [e(2)], 1e6).map((x) => x.t)).toEqual([1, 2]);
   });
 
-  it('drops the oldest past the line cap', () => {
-    const out = appendCapped([e(1), e(2), e(3)], [e(4), e(5)], 3, 1e6);
-    expect(out.map((x) => x.t)).toEqual([3, 4, 5]);
+  it('trims existing entries when the cap shrinks', () => {
+    const out = appendCapped([e(1), e(2), e(3)], [], entrySize(e(1)) * 2);
+    expect(out.map((x) => x.t)).toEqual([2, 3]);
   });
 
   it('drops the oldest past the byte cap', () => {
     const big = 'x'.repeat(100);
     const cap = entrySize(e(0, big)) * 2;
-    const out = appendCapped([e(1, big), e(2, big)], [e(3, big)], 100, cap);
+    const out = appendCapped([e(1, big), e(2, big)], [e(3, big)], cap);
     expect(out.map((x) => x.t)).toEqual([2, 3]);
   });
 
   it('can drop a single entry larger than the byte cap', () => {
-    expect(appendCapped([], [e(1, 'x'.repeat(1000))], 100, 10)).toEqual([]);
+    expect(appendCapped([], [e(1, 'x'.repeat(1000))], 10)).toEqual([]);
   });
 });
 

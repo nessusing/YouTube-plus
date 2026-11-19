@@ -16,25 +16,19 @@ export interface LogEntry {
 }
 
 export const LOG_KEY = 'log';
-export const MAX_LINES = 5000;
-export const MAX_BYTES = 2 * 1024 * 1024;
 
 /** Rough serialized size of one entry; good enough for the 2 MB cap. */
 export function entrySize(e: LogEntry): number {
-  return e.msg.length + e.feature.length + e.level.length + 40;
+  // {"t":1763000000000,"feature":"","level":"","msg":""} is about 55 chars of overhead.
+  return e.msg.length + e.feature.length + e.level.length + 60;
 }
 
-/** Append and drop the oldest entries until both caps hold. Pure. */
-export function appendCapped(
-  existing: LogEntry[],
-  incoming: LogEntry[],
-  maxLines = MAX_LINES,
-  maxBytes = MAX_BYTES,
-): LogEntry[] {
+/** Append and drop the oldest entries until the byte cap holds. Pure. */
+export function appendCapped(existing: LogEntry[], incoming: LogEntry[], maxBytes: number): LogEntry[] {
   const all = existing.concat(incoming);
-  let start = Math.max(0, all.length - maxLines);
+  let start = 0;
   let bytes = 0;
-  for (let i = start; i < all.length; i++) bytes += entrySize(all[i]!);
+  for (const e of all) bytes += entrySize(e);
   while (start < all.length && bytes > maxBytes) bytes -= entrySize(all[start++]!);
   return start === 0 ? all : all.slice(start);
 }

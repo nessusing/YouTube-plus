@@ -3,11 +3,12 @@ import { createLogger, setLogSink } from '@/core/log';
 import { LogStore } from '@/core/log-store';
 import { isMessage, type SelfCheckResponse } from '@/core/messages';
 import { runChecks, type SelfCheck } from '@/core/selfcheck';
-import { getSettings } from '@/core/settings';
+import { getSettings, onSettingsChanged } from '@/core/settings';
 
 export default defineBackground(() => {
-  const store = new LogStore();
+  const store = new LogStore(async () => (await getSettings()).storage.logMB * 1024 * 1024);
   setLogSink((entries) => store.add(entries));
+  onSettingsChanged(() => void store.trim());
   const log = createLogger('core');
 
   // Features append their checks here as they land.

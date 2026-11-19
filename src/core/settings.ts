@@ -11,14 +11,22 @@ export interface PlayerSettings {
   backToTop: boolean;
 }
 
+/** Caps on what we keep in storage.local (design §4.1). */
+export interface StorageLimits {
+  logMB: number;
+  tldrCacheMB: number;
+}
+
 export interface Settings {
   features: Record<FeatureId, boolean>;
   player: PlayerSettings;
+  storage: StorageLimits;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   features: { tldr: true, queue: true, player: true },
   player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true },
+  storage: { logMB: 2, tldrCacheMB: 5 },
 };
 
 const KEY = 'settings';
@@ -31,6 +39,7 @@ export function withDefaults(stored: DeepPartial<Settings> | undefined): Setting
   return {
     features: { ...DEFAULT_SETTINGS.features, ...s.features },
     player: { ...DEFAULT_SETTINGS.player, ...s.player },
+    storage: { ...DEFAULT_SETTINGS.storage, ...s.storage },
   };
 }
 

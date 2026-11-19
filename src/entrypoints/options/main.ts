@@ -1,6 +1,7 @@
 import { formatEntry, LOG_KEY, LOG_LEVELS, type LogEntry, type LogFeature } from '@/core/log';
 import type { Message, SelfCheckResponse } from '@/core/messages';
 import type { CheckResult } from '@/core/selfcheck';
+import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
 import { FEATURES, getSettings, saveSettings, type FeatureId, type PlayerSettings, type Settings } from '@/core/settings';
 
 const FEATURE_LABEL: Record<FeatureId, string> = { tldr: 'TL;DR', queue: '队列', player: '播放器' };
@@ -169,8 +170,80 @@ clearBtn.addEventListener('click', async () => {
 featureSel.addEventListener('change', renderLog);
 levelSel.addEventListener('change', renderLog);
 browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && LOG_KEY in changes) void loadLog();
+  if (area !== 'local') return;
+  if (LOG_KEY in changes) void loadLog();
+  scheduleStorageRender();
 });
+
+let storageTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleStorageRender() {
+  storageTimer ??= setTimeout(() => { storageTimer = undefined; void renderStorage(); }, 500);
+}
+
+// ---------- storage (design §4.1) ----------
+
+general.append(el('h2', { textContent: '存储' }));
+const totalLine = el('p', { className: 'muted' });
+const storageTable = el('table', { className: 'storage' });
+general.append(totalLine, storageTable);
+
+function limitInput(get: () => number, set: (s: Settings, v: number) => void): HTMLElement {
+  const input = el('input', { type: 'number', min: '0.1', step: '0.5', value: String(get()) });
+  input.addEventListener('change', () => {
+    const v = Number(input.value);
+    if (!(v > 0)) { input.value = String(get()); return; }
+    void update((s) => set(s, v)).then(() => setTimeout(renderStorage, 1500));
+  });
+  return el('span', {}, input, ' MB');
+}
+
+const STORAGE_ROWS: {
+  cat: StorageCategory;
+  label: string;
+  unit?: string;
+  limit?: () => HTMLElement;
+  clear?: () => Promise<unknown>;
+}[] = [
+  {
+    cat: 'log', label: '日志', unit: '行',
+    limit: () => limitInput(() => settings.storage.logMB, (s, v) => { s.storage.logMB = v; }),
+    clear: () => send({ type: 'yt++/log-clear' }),
+  },
+  {
+    cat: 'tldrCache', label: 'TL;DR 缓存', unit: '条',
+    limit: () => limitInput(() => settings.storage.tldrCacheMB, (s, v) => { s.storage.tldrCacheMB = v; }),
+    clear: () => clearCategory('tldrCache'),
+  },
+  { cat: 'queueSnapshot', label: '队列清空快照', clear: () => clearCategory('queueSnapshot') },
+  { cat: 'other', label: '其他' },
+];
+
+storageTable.append(el('tr', {}, ...['类别', '占用', '上限', ''].map((t) => el('th', { textContent: t }))));
+const usageCells = new Map<StorageCategory, HTMLTableCellElement>();
+for (const r of STORAGE_ROWS) {
+  const usage = el('td');
+  usageCells.set(r.cat, usage);
+  const clearCell = el('td');
+  if (r.clear) {
+    const b = el('button', { className: 'act', textContent: '清空' });
+    b.addEventListener('click', async () => {
+      if (!confirm(`清空${r.label}？`)) return;
+      await r.clear!();
+      setTimeout(renderStorage, 300);
+    });
+    clearCell.append(b);
+  }
+  storageTable.append(el('tr', {}, el('td', { textContent: r.label }), usage, el('td', {}, r.limit?.() ?? '—'), clearCell));
+}
+
+async function renderStorage() {
+  const u = await getStorageUsage();
+  totalLine.textContent = `总用量 ${formatBytes(u.total)}（已申请 unlimitedStorage，用量由下面的上限控制）`;
+  for (const r of STORAGE_ROWS) {
+    const c = u.byCategory[r.cat];
+    usageCells.get(r.cat)!.textContent = formatBytes(c.bytes) + (r.unit && c.count !== undefined ? `，${c.count} ${r.unit}` : '');
+  }
+}
 
 // ---------- feature tabs ----------
 
@@ -194,6 +267,7 @@ if (initialFromHash === 'install') initial = 'general';
 else if (sections.has(initialFromHash)) initial = initialFromHash;
 selectTab(sections.has(initial) ? initial : 'general');
 await loadLog();
+await renderStorage();
 if (initialFromHash === 'install') {
   history.replaceState(null, '', location.pathname);
   void runSelfCheck();

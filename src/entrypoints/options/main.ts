@@ -2,6 +2,8 @@ import { formatEntry, LOG_KEY, LOG_LEVELS, type LogEntry, type LogFeature } from
 import type { Message, SelfCheckResponse } from '@/core/messages';
 import type { CheckResult } from '@/core/selfcheck';
 import { MINI_POS_KEY } from '@/features/player/consts';
+import type { Snapshot } from '@/features/queue/core';
+import { OUTBOX_KEY, SNAPSHOT_KEY, STATE_KEY } from '@/features/queue/keys';
 import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
 import { FEATURES, getSettings, saveSettings, type FeatureId, type PlayerSettings, type Settings } from '@/core/settings';
 
@@ -250,7 +252,75 @@ async function renderStorage() {
 
 const notYet = (s: HTMLElement) => s.append(el('p', { className: 'muted', textContent: '这个功能还没实现。' }));
 notYet(sections.get('tldr')!);
-notYet(sections.get('queue')!);
+
+// ---------- queue tab (design §27) ----------
+
+const queue = sections.get('queue')!;
+queue.append(el('h2', { textContent: '队列用的列表' }));
+const nameInput = el('input', { type: 'text', value: settings.queue.listName, className: 'text' });
+const nameSave = el('button', { className: 'act', textContent: '保存' });
+nameSave.addEventListener('click', async () => {
+  const v = nameInput.value.trim();
+  if (!v || v === settings.queue.listName) return;
+  await update((s) => { s.queue.listName = v; });
+  nameSave.textContent = '已保存';
+  setTimeout(() => (nameSave.textContent = '保存'), 1500);
+});
+queue.append(
+  el('div', { className: 'row' }, el('label', { textContent: '列表名字' }), nameInput, nameSave),
+  el('p', { className: 'muted', textContent: '同名列表已存在就直接用；没有就建一个私密列表。改名字等于换一个列表，原来的列表不动。' }),
+);
+const listLine = el('p');
+const outboxLine = el('p');
+queue.append(listLine, outboxLine);
+queue.append(el('h2', { textContent: '最近一次清空' }));
+const snapLine = el('p', { className: 'muted' });
+const restoreBtn = el('button', { className: 'act', textContent: '恢复' });
+const restoreMsg = el('span', { className: 'muted' });
+queue.append(snapLine, el('div', { className: 'row' }, restoreBtn, restoreMsg));
+
+async function renderQueue() {
+  const local = await browser.storage.local.get([STATE_KEY, OUTBOX_KEY, SNAPSHOT_KEY]);
+  const state = local[STATE_KEY] as { listId?: string; listName?: string; count?: number; updatedAt?: number } | undefined;
+  listLine.replaceChildren();
+  if (state?.listId) {
+    const a = el('a', { href: `https://www.youtube.com/playlist?list=${encodeURIComponent(state.listId)}`, target: '_blank', rel: 'noopener', textContent: state.listName ?? state.listId });
+    listLine.append('当前列表：', a, `，${state.count ?? 0} 个视频（${new Date(state.updatedAt ?? 0).toLocaleString()} 读取）`);
+  } else {
+    listLine.append(el('span', { className: 'muted', textContent: '还没有连上列表：打开一个 YouTube 标签页后会自动查找或创建。' }));
+  }
+  const outbox = (local[OUTBOX_KEY] as unknown[] | undefined) ?? [];
+  outboxLine.textContent = `待发送的操作：${outbox.length}`;
+  const snap = local[SNAPSHOT_KEY] as Snapshot | undefined;
+  restoreBtn.disabled = !snap;
+  snapLine.textContent = snap
+    ? `${new Date(snap.time).toLocaleString()} 从「${snap.listName}」${snap.mode === 'all' ? '清空全部' : '移除已看完'}，共 ${snap.removed.length} 个视频。`
+    : '还没有清空过。';
+}
+
+restoreBtn.addEventListener('click', async () => {
+  const snap = (await browser.storage.local.get(SNAPSHOT_KEY))[SNAPSHOT_KEY] as Snapshot | undefined;
+  if (!snap) return;
+  const tabs = await browser.tabs.query({ url: 'https://www.youtube.com/*' });
+  const tab = tabs.find((t) => t.active) ?? tabs[0];
+  if (!tab?.id) {
+    restoreMsg.textContent = '需要先打开一个 YouTube 标签页';
+    return;
+  }
+  restoreBtn.disabled = true;
+  restoreMsg.textContent = '恢复中…';
+  try {
+    const r = (await browser.tabs.sendMessage(tab.id, { type: 'yt++/queue-restore-snapshot', snapshot: snap }, { frameId: 0 })) as { ok: boolean; restored?: number; error?: string };
+    restoreMsg.textContent = r.ok ? `已恢复 ${r.restored} 个视频` : `失败：${r.error}`;
+  } catch {
+    restoreMsg.textContent = '那个 YouTube 标签页里没有 yt++ 的脚本，刷新它再试';
+  } finally {
+    restoreBtn.disabled = false;
+  }
+});
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (STATE_KEY in changes || OUTBOX_KEY in changes || SNAPSHOT_KEY in changes)) void renderQueue();
+});
 
 const player = sections.get('player')!;
 player.append(el('h2', { textContent: '子功能' }));
@@ -267,7 +337,10 @@ player.append(el('div', { className: 'row' }, resetPos));
 
 // ---------- start ----------
 
-const initialFromHash = location.hash.slice(1);
+const hashParams = new URLSearchParams(location.hash.slice(1));
+const logFilter = hashParams.get('log');
+if (logFilter) featureSel.value = logFilter;
+const initialFromHash = logFilter ? 'general' : location.hash.slice(1);
 let initial: string = 'general';
 try { initial = localStorage.getItem('tab') ?? 'general'; } catch { /* ignore */ }
 if (initialFromHash === 'install') initial = 'general';
@@ -275,6 +348,8 @@ else if (sections.has(initialFromHash)) initial = initialFromHash;
 selectTab(sections.has(initial) ? initial : 'general');
 await loadLog();
 await renderStorage();
+await renderQueue();
+if (logFilter) logBox.scrollIntoView();
 if (initialFromHash === 'install') {
   history.replaceState(null, '', location.pathname);
   void runSelfCheck();

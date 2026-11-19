@@ -1,6 +1,7 @@
 import { coreChecks } from '@/core/core-checks';
 import { pageCheck } from '@/core/page-checks';
 import { PLAYER_PAGE_CHECKS } from '@/features/player/consts';
+import { QUEUE_PAGE_CHECKS } from '@/features/queue/consts';
 import { createLogger, setLogSink } from '@/core/log';
 import { LogStore } from '@/core/log-store';
 import { isMessage, type SelfCheckResponse } from '@/core/messages';
@@ -14,11 +15,18 @@ export default defineBackground(() => {
   const log = createLogger('core');
 
   // Features append their checks here as they land.
-  const checks: SelfCheck[] = [...coreChecks, ...PLAYER_PAGE_CHECKS.map((n) => pageCheck('player', n))];
+  const checks: SelfCheck[] = [
+    ...coreChecks,
+    ...QUEUE_PAGE_CHECKS.map((n) => pageCheck('queue', n)),
+    ...PLAYER_PAGE_CHECKS.map((n) => pageCheck('player', n)),
+  ];
 
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!isMessage(msg)) return;
     switch (msg.type) {
+      case 'yt++/open-options':
+        void browser.tabs.create({ url: browser.runtime.getURL(`/options.html#${msg.hash ?? ''}`) });
+        return;
       case 'yt++/log':
         store.add(msg.entries);
         return;

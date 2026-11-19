@@ -1,0 +1,152 @@
+// InnerTube calls made from the page (MAIN world), authenticated like the page
+// itself (design §28.1). Missing X-Goog-PageId does not fail: it silently acts
+// as the primary account, so always send it for brand accounts.
+
+import type { ListAction, ListItem, TlpqItem } from './core';
+
+declare const ytcfg: { get(key: string): unknown };
+
+const ORIGIN = 'https://www.youtube.com';
+/** Marks our own requests so the fetch tap ignores them. */
+export const OWN_HEADER = 'x-ytpp-own';
+
+function cookie(name: string): string | undefined {
+  return document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1);
+}
+
+async function sha1(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export class InnerTubeError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+export async function call<T = Record<string, unknown>>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+  const p3 = cookie('__Secure-3PAPISID');
+  const sap = cookie('SAPISID') ?? p3;
+  if (!sap || !p3) throw new InnerTubeError(401, 'not signed in (no SAPISID cookie)');
+  const ts = Math.floor(Date.now() / 1000);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `SAPISIDHASH ${ts}_${await sha1(`${ts} ${sap} ${ORIGIN}`)} SAPISID3PHASH ${ts}_${await sha1(`${ts} ${p3} ${ORIGIN}`)}`,
+    'X-Origin': ORIGIN,
+    'X-Goog-AuthUser': String(ytcfg.get('SESSION_INDEX') ?? 0),
+    'X-Youtube-Client-Name': '1',
+    'X-Youtube-Client-Version': String(ytcfg.get('INNERTUBE_CLIENT_VERSION') ?? ''),
+    [OWN_HEADER]: '1',
+  };
+  const pageId = ytcfg.get('DELEGATED_SESSION_ID');
+  if (pageId) headers['X-Goog-PageId'] = String(pageId);
+  const res = await fetch(`/youtubei/v1/${endpoint}?prettyPrint=false`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify({ context: ytcfg.get('INNERTUBE_CONTEXT'), ...body }),
+  });
+  let json: Record<string, unknown> = {};
+  try {
+    json = await res.json();
+  } catch {
+    // keep {}
+  }
+  if (!res.ok) {
+    const msg = (json.error as { message?: string } | undefined)?.message ?? res.statusText;
+    throw new InnerTubeError(res.status, `${endpoint}: ${res.status} ${msg}`);
+  }
+  return json as T;
+}
+
+function walk(o: unknown, key: string, out: unknown[] = []): unknown[] {
+  if (o && typeof o === 'object') {
+    const r = o as Record<string, unknown>;
+    if (key in r) out.push(r[key]);
+    for (const v of Object.values(r)) walk(v, key, out);
+  }
+  return out;
+}
+
+function text(t: unknown): string {
+  const x = t as { simpleText?: string; runs?: { text: string }[] } | undefined;
+  return x?.simpleText ?? x?.runs?.map((r) => r.text).join('') ?? '';
+}
+
+export interface PlaylistRef { id: string; title: string; privacy: string }
+
+/** All playlists this channel can edit (incl. Watch Later). */
+export async function editablePlaylists(): Promise<PlaylistRef[]> {
+  const j = await call('playlist/get_add_to_playlist', { videoIds: ['jNQXAC9IVRw'] });
+  return (walk(j, 'playlistAddToOptionRenderer') as Record<string, unknown>[]).map((o) => ({
+    id: String(o.playlistId),
+    title: text(o.title),
+    privacy: String(o.privacy ?? ''),
+  }));
+}
+
+export async function createPrivatePlaylist(title: string): Promise<string> {
+  const j = await call<{ playlistId?: string }>('playlist/create', { title, privacyStatus: 'PRIVATE', videoIds: [] });
+  if (!j.playlistId) throw new InnerTubeError(500, 'playlist/create returned no playlistId');
+  return j.playlistId;
+}
+
+export interface PlaylistData { exists: boolean; editable: boolean; title: string; items: ListItem[] }
+
+function listItems(j: unknown): ListItem[] {
+  return (walk(j, 'playlistVideoRenderer') as Record<string, unknown>[])
+    .filter((v) => typeof v.videoId === 'string' && typeof v.setVideoId === 'string')
+    .map((v) => {
+      const pct = walk(v.thumbnailOverlays, 'percentDurationWatched')[0];
+      return { videoId: v.videoId as string, setVideoId: v.setVideoId as string, percent: typeof pct === 'number' ? pct : undefined };
+    });
+}
+
+function continuation(j: unknown): string | undefined {
+  const c = walk(j, 'continuationCommand')[0] as { token?: string } | undefined;
+  return c?.token;
+}
+
+/** Read a whole playlist, following continuations (~100 per page). */
+export async function readPlaylist(id: string): Promise<PlaylistData> {
+  const first = await call('browse', { browseId: `VL${id}` });
+  const alerts = walk(first, 'alertRenderer') as { type?: string }[];
+  const editableFlag = walk(first, 'isEditable')[0];
+  const header = walk(first, 'playlistHeaderRenderer')[0] as Record<string, unknown> | undefined;
+  if (alerts.some((a) => a.type === 'ERROR') && !header) return { exists: false, editable: false, title: '', items: [] };
+  const items = listItems(first);
+  let token = continuation(first);
+  for (let i = 0; token && i < 100; i++) {
+    const next = await call('browse', { continuation: token });
+    items.push(...listItems(next));
+    token = continuation(next);
+  }
+  return { exists: true, editable: editableFlag === true, title: text(header?.title), items };
+}
+
+export interface EditResult { ok: boolean; status: number; error?: string; added: string[] }
+
+export async function editPlaylist(id: string, actions: ListAction[]): Promise<EditResult> {
+  try {
+    const j = await call('browse/edit_playlist', { playlistId: id, actions });
+    const added = (walk(j, 'playlistEditVideoAddedResultData') as { setVideoId?: string }[]).map((r) => r.setVideoId ?? '').filter(Boolean);
+    return { ok: true, status: 200, added };
+  } catch (e) {
+    if (e instanceof InnerTubeError) return { ok: false, status: e.status, error: e.message, added: [] };
+    return { ok: false, status: 0, error: String(e), added: [] };
+  }
+}
+
+/** The official queue of this tab (TLPQ), read from the server. */
+export async function readQueue(tlpq: string): Promise<TlpqItem[]> {
+  const j = await call('next', { playlistId: tlpq });
+  return (walk(j, 'playlistPanelVideoRenderer') as Record<string, unknown>[])
+    .filter((v) => typeof v.videoId === 'string' && typeof v.playlistSetVideoId === 'string')
+    .map((v) => ({ videoId: v.videoId as string, setVideoId: v.playlistSetVideoId as string }));
+}
+
+/** Which channel these calls act as; for the self-check. */
+export function identity(): { loggedIn: boolean; brand: boolean } {
+  return { loggedIn: ytcfg.get('LOGGED_IN') === true, brand: !!ytcfg.get('DELEGATED_SESSION_ID') };
+}

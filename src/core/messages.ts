@@ -6,7 +6,8 @@ import type { CheckResult } from './selfcheck';
 export type Message =
   | { type: 'yt++/log'; entries: LogEntry[] }
   | { type: 'yt++/log-clear' }
-  | { type: 'yt++/selfcheck' };
+  | { type: 'yt++/selfcheck' }
+  | { type: 'yt++/open-options'; hash?: string };
 
 export type SelfCheckResponse = { results: CheckResult[] };
 

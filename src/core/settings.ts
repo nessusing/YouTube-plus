@@ -17,15 +17,22 @@ export interface StorageLimits {
   tldrCacheMB: number;
 }
 
+export interface QueueSettings {
+  /** Name of the private playlist that stores the queue (design §24.1). */
+  listName: string;
+}
+
 export interface Settings {
   features: Record<FeatureId, boolean>;
   player: PlayerSettings;
+  queue: QueueSettings;
   storage: StorageLimits;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   features: { tldr: true, queue: true, player: true },
   player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true },
+  queue: { listName: 'yt++' },
   storage: { logMB: 2, tldrCacheMB: 5 },
 };
 
@@ -39,6 +46,7 @@ export function withDefaults(stored: DeepPartial<Settings> | undefined): Setting
   return {
     features: { ...DEFAULT_SETTINGS.features, ...s.features },
     player: { ...DEFAULT_SETTINGS.player, ...s.player },
+    queue: { ...DEFAULT_SETTINGS.queue, ...s.queue },
     storage: { ...DEFAULT_SETTINGS.storage, ...s.storage },
   };
 }

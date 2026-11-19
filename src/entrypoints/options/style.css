@@ -95,3 +95,5 @@ table.storage { border-collapse: collapse; margin-top: 4px; }
 table.storage th, table.storage td { text-align: left; padding: 6px 16px 6px 0; border-bottom: 1px solid var(--line); }
 table.storage th { color: var(--muted); font-weight: 500; }
 table.storage input { width: 5em; font: inherit; padding: 2px 6px; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; }
+input.text { font: inherit; padding: 4px 8px; min-width: 16em; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; }
+a { color: var(--accent); }

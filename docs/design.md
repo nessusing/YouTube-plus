@@ -499,6 +499,19 @@ prompt 模板（实现时再细调），要点：
 7. 从 isolated world 派发的 `CustomEvent`，页面能不能读到 `detail`。这决定了 `yt-action` 是不是一定要从 MAIN world 派发。
 8. TLPQ 在服务器上能存多久（会影响刷新过的标签页）。
 
+### 28.1 实测结果（2026-11-18，品牌账号）
+
+1. `openMiniplayer: false` 可以：派发 `yt-add-to-playlist-command` 后建出 TLPQ（26 个字符，存在 sessionStorage `…::TLPQplaylist`，值就是裸的 ID 字符串），迷你播放器不出现，也不播放。
+2. 会。在迷你播放器的队列面板里：删除 → `browse/edit_playlist`，`ACTION_REMOVE_VIDEO` + TLPQ 里的 `setVideoId`，而且**发两次**（第二次多一个 `params: "CAE%3D"`），要去重；拖动排序 → `ACTION_MOVE_VIDEO_AFTER`，移到最前面时没有 `movedSetVideoIdPredecessor`；加入 → `ACTION_ADD_VIDEO` + `addedVideoId`。还没有队列时加入 → `playlist/create`，`{title:"Queue", videoIds, params:"CAQ%3D"}`。**请求体是 gzip 压缩的**（`Request` 对象，`Content-Encoding: gzip`），`FetchTap` 要先解压。
+3. 在观看页上第一次加入队列时，面板上会把当前视频显示成第一项，但它只在本地：`playlist/create` 和服务器上的 TLPQ 里都只有你加的视频。所以队列 Q19 在请求层面不用特殊处理。
+4. 引用已经不存在的 `setVideoId`：删除返回 400「Precondition check failed」，移动返回 400，列表都不变。所以 outbox 遇到 400 就丢掉这个操作并写日志，不重试；一批里有一个失效会整批失败，所以失败后逐个重发。
+5. 直接用接口改 TLPQ，服务器上变了，**面板不刷新**。但：通过 `yt-action` 加入视频会让页面重新读取 `next`，面板整个按服务器刷新；把 `playlistEditEndpoint`（删除）用 `yt-service-request` 派发到面板里那一项上，面板会跟着删掉；移动没有走界面的办法。实现：拉取覆盖时，删除走 `yt-service-request`，加入走 `yt-action`，移动直接调接口（面板要等下一次刷新才显示新顺序，已知限制）。
+6. 「我的播放列表」用 `playlist/get_add_to_playlist`（参数随便给一个 `videoIds`），返回的 `playlistAddToOptionRenderer` 就是你能编辑的全部列表（含 Watch Later），有 `playlistId`、`title`、`privacy`。读列表 `browse` `VL<id>` 返回 `playlistVideoRenderer`（`videoId`、16 位的 `setVideoId`），`playlistVideoListRenderer.isEditable` 表示能不能编辑；观看进度在 `thumbnailOverlays[].thumbnailOverlayResumePlaybackRenderer.percentDurationWatched`。读 TLPQ 用 `next`，`playlistPanelVideoRenderer` 带 `videoId` 和 `playlistSetVideoId`。
+7. 不需要了：写操作都在 MAIN world 里做。
+8. 没测（要等很久）。刷新过的标签页如果读不到 TLPQ，就当作没有队列，重新恢复。
+
+**认证（重要）**：`document.cookie` 里看不到 `SAPISID`，只有 `__Secure-3PAPISID`；页面发的是 `Authorization: SAPISIDHASH <ts>_<sha1> SAPISID3PHASH <ts>_<sha1>`，两个哈希都用 `"<ts> <cookie> https://www.youtube.com"` 算（没有 `SAPISID` 就用 `__Secure-3PAPISID` 的值），另加 `X-Goog-AuthUser`、`X-Origin`、`X-Youtube-Client-Name/Version`，品牌账号必须带 `X-Goog-PageId`（`ytcfg` 的 `DELEGATED_SESSION_ID`）。**少了 `X-Goog-PageId` 不会报错，而是悄悄地按主账号执行**，所以自检要确认读到的是当前频道的数据。
+
 ## 29. 开发顺序与测试
 
 1. **最小验证**：逐条跑通 §28，把真实的请求和返回录下来作为测试数据。

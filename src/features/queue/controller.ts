@@ -50,6 +50,11 @@ export class QueueController {
   /** Edits seen lately, applied on top of any snapshot until reads surely show them. */
   private overlay: { expect: Expect; until: number } | undefined;
   private syncGen = 0;
+  private onVisible = () => {
+    if (document.visibilityState !== 'visible') return;
+    if (this.modeToast) this.showModeToast(this.modeToast);
+    if (this.decision === 'take' && Date.now() - this.lastRead > RECHECK_MS) void this.recheck();
+  };
 
   constructor(
     private rpc: Rpc,
@@ -58,11 +63,16 @@ export class QueueController {
     private tools: Toggleable,
     private button: PlayButton,
   ) {
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'visible') return;
-      if (this.modeToast) this.showModeToast(this.modeToast);
-      if (this.decision === 'take' && Date.now() - this.lastRead > RECHECK_MS) void this.recheck();
-    });
+    document.addEventListener('visibilitychange', this.onVisible);
+  }
+
+  /** Stop listening to the page and to settings. */
+  dispose(): void {
+    document.removeEventListener('visibilitychange', this.onVisible);
+    this.unsubProfile?.();
+    this.unsubProfile = undefined;
+    if (this.edits) clearTimeout(this.edits.timer);
+    this.edits = undefined;
   }
 
   get listId(): string | undefined {

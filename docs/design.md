@@ -112,7 +112,7 @@ YouTube+ 是一个 YouTube 工具合集扩展。目前有三个功能：
 | Q13/Q20 | 对话处理 | **临时对话用不了 YouTube 应用（用户已实测）**。所以用普通对话，生成完立即删除 |
 | Q14 | 自检 | 设置页有「自检」按钮；首次安装时自动打开设置页并运行一次 |
 | Q15/Q22 | 读不到内容 | 图标变灰、不可点击，悬停提示原因；不做降级总结 |
-| Q16 | 协议 | 用 `StreamGenerate`（旧接口）；不发送模型 header，用账号默认模型；token 每次实时从页面抓取 |
+| Q16 | 协议 | 用 `StreamGenerate`（旧接口）；不发送模型 header，用账号默认模型；token 每次实时从页面抓取（计划改为缓存，见 §10.7） |
 | Q17/Q19/Q25 | 预生成与限流 | 整页预生成，但严格节流，见 §12 |
 | Q18 | 输出格式 | 要求模型严格输出 JSON；解析失败时把原文当 markdown 显示 |
 | Q11/Q21/Q22 | UI | 图标在缩略图右下角、时长标签正上方，常驻显示；点击图标打开 tooltip，见 §14 |
@@ -224,6 +224,25 @@ body: at=<SNlM0e>&f.req=JSON.stringify([null, JSON.stringify(inner)])
 - 它基本靠字幕工作，没有字幕的视频会读取失败。
 - 只能在普通对话里用（用户已实测临时对话不行）。
 
+### 10.7 现状评估（2026-11-20）
+
+**结论：短期内继续用 `StreamGenerate`，暂不迁 `processSession`。**
+- 2026-11-18 实测旧接口还能用（§17）。
+- §19 列的参考实现全是基于 `StreamGenerate` 的；`processSession` 得从零逆向，没有可参考的实现。
+- 协议全关在 `GeminiWebClient` 里。接口一变，自检会报 `protocol` 错误，到时只改这一个模块。
+
+**缺后备。** `StreamGenerate` 一下线，TL;DR 就整个失效。逆向 `processSession` 也只是换一个随时可能再变的内部接口。更稳的后备是官方 Gemini API Provider（§18）：
+- 接口有文档；用 AI Studio 的免费 key，可以直接把 YouTube URL 交给模型。
+- 没有封号风险，不需要 YouTube 应用和活动记录，也不用删对话。
+- `SummaryProvider` 接口已经留好，加一个实现就行。
+- 代价：用户要自己填 key，不再是零配置，但仍然免费。
+
+**凭证抓取太勤（计划改，2026-11-20 决定先不做）。**
+- 这里说的「token」是 §10.1 从 `/u/N/app` 页面里取出的凭证 `SNlM0e` / `cfb2h` / `FdrFJe`，不是模型的 token 用量。所以它浪费的是 HTTP 请求，不是 Gemini 额度。额度要靠减少 prompt 次数来省，这一点已经靠批量请求在做。
+- 现状：`generate()` 和 `deleteConversation()` 各自先 GET 一次完整的 `/app` 页面（`src/features/tldr/client.ts`）。每批任务 4 个请求：2 次抓页面、1 次生成、1 次删除。多出来的抓页面增加延迟，也让流量更不像正常用户，提高被风控的风险。
+- 改法：把 `at` / `bl` / `sid` 缓存几分钟，按账号编号 N 分开存，改 N 时清掉。请求返回 400 / 405（xsrf 错、`bl` 过期）时清缓存、重新抓一次、重试一次；还失败就按现有的错误映射处理。这样大部分批次只剩生成和删除 2 个请求。§8 Q16 的「token 每次实时抓取」随之改掉。自检和「我已登录」的检测（§15.1）照旧实时抓，不走缓存。
+- **跟 `processSession` 基本独立。** 缓存管的是凭证从哪来、什么时候刷新，`generate()` 调哪个接口都不影响它。删对话用的 `batchexecute`（`GzXR5e`）跟生成接口无关，迁移后也照样需要这组凭证。没验证的一点：`processSession` 是否还用同样这三个字段。同一网页里的其他内部接口都用 `at` / `bl` / `f.sid`，大概率不变；就算变了，也只改 `extractTokens` 里取哪几个字段，缓存和失败后刷新的逻辑不用动。
+
 ## 11. Prompt 与输出格式
 
 prompt 模板（实现时再细调），要点：
@@ -322,7 +341,7 @@ prompt 模板（实现时再细调），要点：
 
 | 风险 | 影响 | 应对 |
 |---|---|---|
-| `StreamGenerate` 被下线（网页版自 2026-10 中旬起已改用 `processSession`） | 整个功能失效 | 协议全部封装在 `GeminiWebClient` 里；自检能给出明确报错；必要时逆向新协议，或者加官方 API Provider |
+| `StreamGenerate` 被下线（网页版自 2026-10 中旬起已改用 `processSession`） | 整个功能失效 | 协议全部封装在 `GeminiWebClient` 里；自检能给出明确报错；必要时逆向新协议，或者加官方 API Provider；倾向先做官方 API Provider 当后备，见 §10.7 |
 | 账号被风控或封禁 | 用户已接受 | 串行、随机间隔、设上限、熔断、不轮换 cookie；在用户真实的浏览器、IP、TLS 指纹下低频使用 |
 | 免费额度（5 小时滑动窗口加每周上限，数字没有公开） | 预生成把额度耗光 | 设上限；遇到 1037 熔断；只在前台运行 |
 | 删除对话前，对话会短暂出现在活动记录里 | 隐私方面的小问题 | 生成完立即删除；失败的删除会重试 |
@@ -345,8 +364,9 @@ prompt 模板（实现时再细调），要点：
 
 ## 18. 以后再做
 
+- 凭证缓存（§10.7），独立于协议迁移，可以先做。
+- 官方 Gemini API Provider（免费的 AI Studio key，可以直接把 YouTube URL 交给模型）。倾向在 `processSession` 迁移之前做，当 `StreamGenerate` 下线时的后备（§10.7）。
 - `processSession` 新协议的迁移。
-- 官方 Gemini API Provider（免费的 AI Studio key，可以直接把 YouTube URL 交给模型）。
 - 「自抓字幕」Provider（需要 PO token 或其他 innertube 客户端），抓到后贴进 prompt，就可以用临时对话。
 - 根据实际使用情况调整 §12 的参数。
 

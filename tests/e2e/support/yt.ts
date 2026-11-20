@@ -94,6 +94,8 @@ export class TestLists {
     const id = await rpc<string>(this.helper, 'createPrivatePlaylist', title);
     this.mine.add(id);
     if (videoIds.length) await this.edit(this.helper, id, videoIds.map((v) => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: v })));
+    // A new list's entries take a few seconds to show in reads (findings A4).
+    await expect.poll(async () => (await this.read(id)).items.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(videoIds.length);
     return id;
   }
 

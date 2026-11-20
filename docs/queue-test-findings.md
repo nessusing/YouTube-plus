@@ -70,4 +70,21 @@ L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测�
 
 ## L4（真实 YouTube，`tests/e2e/`）
 
-（待补）
+### F7　读列表时把列表下面的「推荐视频」也算进去了（严重）
+
+- **场景**：任何一个比较短的列表（实测 2 条）。
+- **预期**：`readPlaylist()` 只返回列表里的条目。
+- **实际**：返回 7 条，2 条真的，加 5 条推荐视频。顶栏按钮显示 7。
+- **原因**：小列表的 `browse` 返回里，`sectionListRenderer.contents[0]` 是列表本身（`playlistVideoListRenderer`），`contents[1]` 是一个 `continuationItemRenderer`，它加载的是列表下面的「推荐视频」区。推荐视频也是 `playlistVideoRenderer`，而且带 `setVideoId`。`readPlaylist()` 用 `walk()` 找到第一个 `continuationCommand` 就跟着翻页，于是把推荐视频当成了条目。2026-11-20 实测。
+- **影响**：
+  - 数字错；
+  - 最后一条看完后，「下一条」是推荐视频：扩展会跳过去播，再试图删掉它；
+  - 「已在列表中」、`meetsExpect` 重试、清空和撤销的计划都会被带偏。
+- **测试**：`tests/e2e/specs/smoke.spec.ts`（数字应为 2）
+- **建议**：bug，要先修，否则大部分 L4 结果都没有意义。只跟随 `playlistVideoListRenderer` 自己的 continuation（列表超过 100 条时，它在 `playlistVideoListRenderer.contents` 的最后一项），以及 continuation 返回里接在列表后面的那一段；推荐区一概不跟。
+
+### A4（实测）　新建列表加入视频后，立刻读是空的
+
+- 新建的私密列表加入 2 个视频后，立刻 `browse` 读到 0 条，约 3 秒后才读到。这跟 §21.4「加入是立刻可见的」不一致，至少对刚建的列表是这样。还不确定已有的列表是不是也这样，后面的 L4 测试会顺带观察。
+- 影响：`onAdd()` 加入后数字靠 overlay 先加上，读到的旧数据不会把数字改回去，所以问题不大；但 §24.8「加入立刻可见」这句要改。
+- 测试辅助代码里，建列表后会等到读得到再开始测。

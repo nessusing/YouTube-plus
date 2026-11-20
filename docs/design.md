@@ -1,6 +1,6 @@
 # YouTube+ 设计文档
 
-> 状态：三个功能都已实现（2026-11-18），待在真实浏览器里手测；实测结果见 §17、§28.1、§38.1
+> 状态：三个功能都已实现（2026-11-18），待在真实浏览器里手测；实测结果见 §17、§21、§38.1。队列在 2026-11-20 重新设计（第三部分），代码还没改
 > 日期：2026-11-14（同日加入队列功能和播放器功能）；2026-11-18 复查并加入存储用量管理
 > 范围：个人自用的 Chrome 扩展（MV3），YouTube 工具合集
 
@@ -9,7 +9,7 @@
 YouTube+ 是一个 YouTube 工具合集扩展。目前有三个功能：
 
 - **TL;DR**（第二部分）：点缩略图上的图标，就能看到 Gemini 生成的视频要点，不用点开视频。
-- **队列**（第三部分）：用官方的「加入队列」和迷你播放器播放，用你自己的一个私密播放列表长期保存队列。关掉标签页、开新标签页、换设备，队列都还在。另外给你自己的所有播放列表加上「清空全部」和「移除已看完」。
+- **队列**（第三部分）：在 YouTube 自带的队列和一个播放列表之间二选一。选播放列表时，「加入队列」会变成「加入 <列表名>」，关掉标签页、换设备都还在，看完的自动删掉。另外给你自己的所有播放列表加上「清空全部」和「移除已看完」。
 - **播放器**（第四部分）：迷你播放器补上音量和进度条，可以拖到任意位置并记住；观看页往下滚时播放器置顶；所有页面加一个「回到顶部」按钮。
 
 几个功能共用的部分（原则、设置页、日志、自检）见第一部分。
@@ -42,6 +42,8 @@ YouTube+ 是一个 YouTube 工具合集扩展。目前有三个功能：
 - **存储**：见 §4.1。
 - **诊断**：「自检」按钮（§5）、日志（§4）。
 
+设置页顶部（所有标签共用）显示 YouTube 和 Gemini 的登录状态，没登录的提醒去登录，依赖它的功能灰掉（§27）。
+
 首次安装时自动打开设置页的「诊断」标签，并运行一次全部自检。需要 YouTube 标签页的自检项（队列、播放器）在没有打开的 YouTube 标签页时标为「跳过」，并提示先打开一个再重跑。
 
 ## 4. 日志
@@ -63,8 +65,8 @@ YouTube+ 是一个 YouTube 工具合集扩展。目前有三个功能：
 |---|---|---|---|
 | 日志（§4） | 占用大小、行数 | 默认 2 MB，满了丢最老的 | 清空 |
 | TL;DR 缓存（§13） | 占用大小、条数 | 默认 5 MB，满了按 LRU 淘汰 | 清空 |
-| 队列清空快照（§25） | 占用大小 | 只存最近一次，无需上限 | 清空 |
-| 其他（outbox、熔断状态、迷你播放器位置等） | 占用大小 | — | — |
+| 队列清空快照（§25） | 占用大小 | 每个身份只存最近一次，无需上限 | 清空 |
+| 其他（队列设置、熔断状态、迷你播放器位置等） | 占用大小 | — | — |
 
 最上面显示总用量（`getBytesInUse`）。上限调小后立刻按新上限裁剪。
 
@@ -365,189 +367,243 @@ prompt 模板（实现时再细调），要点：
 
 # 第三部分　队列
 
+> 2026-11-20 重新设计。原方案是官方队列（TLPQ）和私密播放列表双向同步，实测下来 bug 一直修不完，用户也搞不清两者的关系，所以整套同步作废。现在改成让用户在两种模式里选一种，扩展只管选中的那一种。原方案见 git 历史（`77c5d00` 及之前）。
+
 ## 20. 一句话描述
 
-播放用官方的「加入队列」和迷你播放器，长期保存用你自己的一个私密播放列表（默认叫 `YouTube+`）。扩展在两者之间双向同步，所以关掉标签页、开新标签页、换一台设备，队列都还在。另外，给你自己的所有播放列表加上「清空全部」和「移除已看完」。
+在设置里二选一：**用 YouTube 自带的队列**（扩展完全不管），或者**用一个播放列表当队列**。选了播放列表，页面上所有的「加入队列」都会变成「加入 <列表名>」，视频存进你账号里的那个列表，关掉页面、换设备都不会丢；顶栏有一个按钮可以一键播放这个列表，看完的视频自动从列表里删掉。另外，给你自己的所有播放列表加上「清空全部」和「移除已看完」，两种模式下都能用。
 
-## 21. 背景：官方队列与 TLPQ（调研，2026-11-14 在浏览器里实测）
+## 21. 背景（调研，2026-11-14 / 11-18 / 11-20 在浏览器里实测）
+
+### 21.1 官方队列（TLPQ）
 
 - **官方队列是服务器上的一个临时播放列表**，ID 以 `TLPQ` 开头，共 26 个字符，标题是「Queue」。第一次「加入队列」时页面调用 `playlist/create` 建出来；之后再加视频，就是对它调用 `browse/edit_playlist`。
-- 它的 ID 只存在当前标签页的 sessionStorage 里：`yt-queue<账号>::TLPQplaylist`，另有 `::TLPQindex`（当前播放到第几个）和 `::TLPQtimestamp`。所以**刷新后队列还在，新标签页里没有**（用户实测与此一致）。它在服务器上能存多久，目前不知道。
-- 它不会出现在你的「播放列表」里，手机上看不到，yt-dlp 也读不到。所以它只能当作每个标签页的**工作副本**。
-- Watch Later 和普通播放列表都长期存在你的账号里。官方 Data API 不适合用：从 2016 年起读不到 Watch Later；`playlistItems.insert` 每次花 50 单位，默认每天只有 10,000 单位；上架还需要通过 Google 的敏感权限审核。在页面里调内部接口没有这些限制。
-- **往官方队列里加任意视频**：在 `ytd-app` 上派发 `yt-action` 事件，`actionName: 'yt-add-to-playlist-command'`，`args: [command, ytdApp]`。`command` 是 `addToPlaylistCommand`，其中 `listType: 'PLAYLIST_EDIT_LIST_TYPE_QUEUE'`、`videoIds: [...]`、`openMiniplayer`，以及一个用于「还没有队列时」建队列的 `onCreateListCommand`（`playlist/create`，`params: 'CAQ%3D'`）。官方菜单里的「加入队列」带的也是同一个命令。参考 Trinovantes 的 `addVideosToQueue.ts`。
-- **读队列**：内部接口 `next`，参数 `playlistId: <TLPQ>`，从 `contents.twoColumnWatchNextResults.playlist.playlist.contents[].playlistPanelVideoRenderer.videoId` 读。
-- **写播放列表**：`browse/edit_playlist`，请求体是 `{context, playlistId, actions: [...]}`，**一个请求可以带多个操作**（参考实现每批 100 个）。
-  - 加入：`{action: 'ACTION_ADD_VIDEO', addedVideoId, dedupeOption: 'DEDUPE_OPTION_SKIP'}`
-  - 删除：`{action: 'ACTION_REMOVE_VIDEO', setVideoId}`，或者按视频 ID 删除：`ACTION_REMOVE_VIDEO_BY_VIDEO_ID`
-  - 移动：`{action: 'ACTION_MOVE_VIDEO_AFTER', setVideoId, movedSetVideoIdPredecessor}`
-- **读播放列表**：`browse`，参数 `browseId: 'VL<列表 ID>'`，每一条是 `playlistVideoRenderer`，带 `videoId` 和 `setVideoId`。分页用 `continuationItemRenderer` 里的 token，大约每页 100 条。Watch Later 的 ID 是 `WL`，读写方式相同。
-- **认证**：在页面里 `POST /youtubei/v1/<endpoint>`，`credentials: 'include'`；请求头有 `Authorization: SAPISIDHASH <ts>_<sha1("<ts> <SAPISID> https://www.youtube.com")>`、`X-Origin`、`X-Goog-AuthUser`（来自 `ytcfg` 的 `SESSION_INDEX`），品牌账号还要加 `X-Goog-PageId`；`context` 来自 `ytcfg.get('INNERTUBE_CONTEXT')`。实测返回 200。另一种做法是派发 `yt-action` 的 `yt-service-request`，让页面自己处理认证。
-- **`setVideoId`** 是列表里每一条的唯一编号（每加入一次就是一个新编号），跟视频 ID 不是一回事。官方修改播放列表也只发操作、按 `setVideoId` 定位，而且不实时推送：两个标签页同时改同一个列表时，旧标签页对已经删掉的条目再做操作，引用的编号已经不存在，不会让那个条目复活。
+- 它的 ID 只存在当前标签页的 sessionStorage 里（`yt-queue<账号>::TLPQplaylist`），所以**刷新后队列还在，新标签页里没有**。它不会出现在你的「播放列表」里，手机上看不到。这就是两种模式的根本区别。
+
+### 21.2 「加入队列」是怎么触发的（2026-11-20 实测）
+
+- 所有测过的入口都派发 `yt-action` 事件，`actionName: 'yt-add-to-playlist-command'`，`args[0]` 里是 `addToPlaylistCommand`，`listType: 'PLAYLIST_EDIT_LIST_TYPE_QUEUE'`，带 `videoId`、`videoIds`、`openMiniplayer: true`、`onCreateListCommand`（`playlist/create`）。在菜单数据里它包在 `signalServiceEndpoint{signal:'CLIENT_SIGNAL', actions:[{addToPlaylistCommand}]}` 里。
+- **事件不是在 `ytd-app` 上派发的**，而是从被点的那个元素冒泡上去。所以要在 `document` 上用 capture 阶段监听。
+
+  | 入口 | 菜单组件 |
+  |---|---|
+  | 首页缩略图 ⋯ | 新版 `yt-list-item-view-model` |
+  | 观看页侧栏 ⋯ | 新版 `yt-list-item-view-model` |
+  | Shorts 架子 ⋯ | 新版 `yt-list-item-view-model` |
+  | 搜索结果 ⋯ | 旧版 Polymer `ytd-menu-service-item-renderer`；**会派发两次**（第二次从 `ytd-menu-renderer` 重发），但只发一个请求 |
+  | 播放列表页每一行 ⋯ | 旧版 Polymer `ytd-menu-service-item-renderer` |
+  | 缩略图悬停按钮 | `ytd-thumbnail-overlay-toggle-button-renderer`，`untoggledIcon.iconType: 'ADD_TO_QUEUE_TAIL'`，文字在 `untoggledTooltip` |
+
+- **capture 监听里 `stopImmediatePropagation()` 能完全拦下**：没有队列时不会建 TLPQ、不弹迷你播放器；已有队列时队列不变、没有提示；搜索结果的两次派发，拦第一次就够了。菜单照常关闭。悬停按钮因为不好重现没直接测，走的是同一个事件。
+- **不经过这个事件的路径**：标签页里已有官方队列、迷你播放器开着时，直接点缩略图或标题，页面会直接对 TLPQ 发 `edit_playlist`（提示「已加入队列」）。播放列表模式下扩展不让 TLPQ 建出来，所以这种情况只出现在中途切换模式的标签页里（§24.6）。
+- 播放列表观看页右侧面板的 ⋯ 里没有「加入队列」。
+
+### 21.3 改菜单文字（2026-11-20 实测）
+
+- **识别这一项不看文字**：图标是 `ADD_TO_QUEUE_TAIL`（`iconType` 或 `imageName`），命令里有 `addToPlaylistCommand.listType === 'PLAYLIST_EDIT_LIST_TYPE_QUEUE'`。
+- **新版菜单**（`yt-list-item-view-model`）：文字在 `button[role=menuitem]` 里的 `span.ytListItemViewModelTitle`。元素上没有 `.data`，数据在祖先的 sheet 上：`ytSheetViewModel.componentProps.data().content.listViewModel.listItems[i].listItemViewModel`（`title.content`、`leadingImage.sources[0].clientResource.imageName`、`rendererContext.commandContext.onTap.innertubeCommand`）。直接改 `textContent` 能留住，点击照常。**弹出菜单的 DOM 在不同菜单、不同页面之间是复用的**，只有标题值变了才重新渲染，所以每次打开菜单都要重新改，关掉播放列表模式时要改回去。
+- **旧版菜单**（`ytd-menu-service-item-renderer`）：数据在 `el.data`（`text.runs`、`icon.iconType`、`serviceEndpoint`），文字在 `yt-formatted-string.title`。**不能改 `textContent`**，再打开时 Polymer 会在旁边再加一段，变成「加入 YouTube+加入队列」。要设 `ytFormattedString.text = {runs:[{text}]}`，可以来回切换。
+- 悬停按钮的文字是 `data.untoggledTooltip`（tooltip 和 aria-label），没实测改写。
+
+### 21.4 播放列表的读写和播放（2026-11-18 / 11-20 实测）
+
+- **列出能编辑的列表**：`playlist/get_add_to_playlist`（参数随便给一个 `videoIds`），返回的 `playlistAddToOptionRenderer` 就是当前频道能编辑的全部列表，含「稍后观看」（ID 是 `WL`），带 `playlistId`、`title`、`privacy`。
+- **读列表**：`browse`，`browseId: 'VL<列表 ID>'`，每一条是 `playlistVideoRenderer`（`videoId`、16 位的 `setVideoId`）；分页用 `continuationItemRenderer` 的 token，每页约 100 条。`playlistVideoListRenderer.isEditable` 表示能不能编辑；观看进度在 `thumbnailOverlays[].thumbnailOverlayResumePlaybackRenderer.percentDurationWatched`。
+- **写列表**：`browse/edit_playlist`，`{context, playlistId, actions: [...]}`，一个请求可以带多个操作（每批 100 个）：`ACTION_ADD_VIDEO`（`addedVideoId`，`dedupeOption: 'DEDUPE_OPTION_SKIP'`）、`ACTION_REMOVE_VIDEO`（`setVideoId`）、`ACTION_REMOVE_VIDEO_BY_VIDEO_ID`、`ACTION_MOVE_VIDEO_AFTER`（`setVideoId`、`movedSetVideoIdPredecessor`）。引用已经不存在的 `setVideoId` 返回 400「Precondition check failed」，列表不变。
+- **新建列表**：`playlist/create`。**新列表的 ID 可能很短**（实测 13 个字符：`PL` 加 11 位），不要按长度校验列表 ID。
+- **正在播放列表时往里加视频**：在同一个标签页里加，页面会发 `edit_playlist` → 派发 `yt-refresh-playlist-command` → 重新请求 `next`，右侧面板和 `player.getPlaylist()` 实时变长，当前播放不受影响。从别的标签页加，要等下一次 `next`（切到下一个视频或刷新）才显示。
+- **正在播放列表时删除（会出错）**：
+  - 在另一个标签页删掉下一条：这个标签页不刷新，当前视频播完后照旧播已经删掉的那条，然后面板才按服务器重新同步，选中状态和 `getPlaylistIndex()` 都不对。
+  - 在面板里删掉正在播的这一条：播放不中断，但播放器的位置指到了它后面那条，面板里还留着一行隐藏的重复项；**播完后直接停在结束画面，不播下一条**。
+  - 结论：扩展删了正在播的列表里的东西以后，不能再指望官方的自动播放，要自己切下一条（§24.4）。
+
+### 21.5 认证和身份
+
+- **认证**：在页面里 `POST /youtubei/v1/<endpoint>`，`credentials: 'include'`。`document.cookie` 里看不到 `SAPISID`，只有 `__Secure-3PAPISID`；请求头是 `Authorization: SAPISIDHASH <ts>_<sha1> SAPISID3PHASH <ts>_<sha1>`，两个哈希都用 `"<ts> <cookie> https://www.youtube.com"` 算，另加 `X-Goog-AuthUser`（`ytcfg` 的 `SESSION_INDEX`）、`X-Origin`、`X-Youtube-Client-Name/Version`。品牌频道必须带 `X-Goog-PageId`（`DELEGATED_SESSION_ID`）。**少了 `X-Goog-PageId` 不会报错，而是悄悄地按主频道执行**。
+- **`ytcfg` 里的身份字段**：
+
+  | 字段 | 形状 |
+  |---|---|
+  | `LOGGED_IN` | 布尔 |
+  | `SESSION_INDEX` | 1 位数字的字符串 |
+  | `DELEGATED_SESSION_ID` | 21 位数字的字符串（频道） |
+  | `USER_SESSION_ID` | 21 位数字的字符串（Google 账号） |
+  | `DATASYNC_ID` | `"<DELEGATED_SESSION_ID>\|\|<USER_SESSION_ID>"` |
+  | `USER_ACCOUNT_NAME` | 短字符串（显示名） |
+
+  没有 `CHANNEL_ID`、`LOGGED_IN_CHANNEL_ID`；「你的频道」链接用的是 `/@handle`。
 
 ## 22. 关键决定一览
 
+本节的「队列 Qn」是 2026-11-20 重新设计讨论时的问题编号（跟原方案的编号无关）。
+
 | 队列 # | 主题 | 决定 |
 |---|---|---|
-| Q8/Q12 | 定位 | 合并进 YouTube+，作为一个可以单独开关的功能 |
-| Q1 | 接口 | 用你自己的登录态调页面内部接口；不用 OAuth，不用 Data API，没有配额问题 |
-| Q2 | 存储 | 一个私密播放列表是唯一的长期存储；每个标签页的 TLPQ 只是工作副本 |
-| Q4/Q17/Q21 | 用哪个列表 | 设置里填列表**名字**，默认 `YouTube+`。同名列表已存在就直接用，不管是不是扩展建的；不存在就建一个私密列表 |
-| Q2/Q9 | 同步方式 | 双向。**同步操作，不同步状态**；拉取时以播放列表为准，覆盖本地 |
-| Q6 | 恢复 | 每个新标签页都自动恢复队列，**不自动播放**，要你自己点 |
-| Q3 | 什么时候离开列表 | 在队列里删掉 → 列表里也删；看完 → 自动从列表删除 |
-| Q11/Q18 | 怎么算看完 | 本标签页：播到结尾，或者剩不到 10 秒时切走。其他设备：恢复或拉取时，进度条 ≥ 90% |
-| Q19 | 官方自动塞进队列的视频 | 在观看页上加入队列时，如果官方把当前视频自动放进队列，这个视频**不写进列表** |
-| Q10/Q14 | 播放规则 | 单个视频放完接着放什么、哪些视频能进队列，都照官方的，扩展不干预 |
-| Q7/Q16 | 清空 | 你自己的所有播放列表：「清空全部」和「移除已看完」。先确认，10 秒内可以撤销，最近一次清掉的内容一直保留到下一次清空 |
-| Q13 | 失败 | 失败的操作存起来重试；连续失败时页面角落提示；写日志 |
-| Q5 | 跟 tesla-video-streamer 打通 | 先不做 |
-| Q20 | 测试 | 核心逻辑写单元测试，页面部分用手测清单，再加一项自检 |
+| Q1 | 自带队列模式 | 扩展完全不管，就是原生行为 |
+| Q2/Q7 | 播放列表模式怎么加视频 | **接管**所有「加入队列」入口，文字一起改成「加入 <列表名>」；加入后提示「已加入 · 查看」。没走 `yt-action` 的入口保持原样，不硬改 |
+| Q8 | 加入后播什么 | 只是存进列表，不改变「下一个播放什么」，除非你正在播这个列表。顶栏有「播放 <列表名>」按钮，从头连续播放 |
+| Q9/Q18/Q28 | 看完删除 | 「播放完后从列表中删除」，默认勾选。只在播放这个列表时才算；由扩展负责切到下一条再删，不依赖官方自动播放 |
+| Q19/Q25 | 播放入口 | 顶栏头像左边一个小按钮，显示视频数。迷你播放器下面的列表面板用官方自带的 |
+| Q6/Q10/Q15 | 用哪个列表 | 设置页下拉框选：当前频道能编辑的列表（含「稍后观看」）加一项「新建…」。保存**列表 ID** |
+| Q16 | 新建 | 默认名 `YouTube+`，可以改，私密，不检查重名 |
+| Q14 | 没选列表 / 列表被删了 | 清空选择，不猜；不接管，第一次点「加入队列」时提示「还没有选择播放列表 · 去设置」 |
+| Q17/Q23 | 多账号 / 多频道 | 按右上角当前的身份（频道）分开存队列设置，切换后原来的保留、不带到新身份里。当前身份不能编辑选中的列表时不接管、不清空选择 |
+| Q22 | 哪些设置按频道分开 | 只有队列：模式、列表 ID、看完删除、清空快照。其他设置全局 |
+| Q24 | 设置页为谁设置 | 以最近获得焦点的 YouTube 标签页的身份为准，显示「正在设置：<头像 + 名字>」 |
+| Q12/Q13/Q21/Q26 | 登录 | 设置页顶部统一显示 YouTube 和 Gemini 的登录状态（可以是不同账号）。没登录时依赖它的功能灰掉并说明原因，不需要登录的功能照常。播放列表模式下没登录就退回原生行为 |
+| Q4 | 同步 | **整套删掉** |
+| Q11 | 切换模式 | 不迁移数据 |
+| Q29 | 中途切换的标签页 | 不处理，提示「刷新页面后生效」 |
+| — | 清空全部 / 移除已看完 | 保留（§25），两种模式都能用 |
 
 ## 23. 架构
 
 ```
 ┌──────────────────── YouTube 标签页（可能有多个）────────────────────┐
 │ MAIN world 脚本（和页面同一个 JS 环境）                              │
-│  ├─ InnerTubeClient 用页面的 ytcfg 和 cookie 调 next / browse /      │
-│  │                  browse/edit_playlist / playlist/create           │
-│  ├─ QueueDriver     派发 yt-action 往 TLPQ 里加视频；读 TLPQ          │
-│  ├─ FetchTap        包住 window.fetch，只看不改：页面发往 TLPQ 的     │
-│  │                  edit_playlist / playlist/create = 你对队列的操作  │
-│  └─ PlayerWatch     监听 <video> 的 timeupdate / ended，判断看完      │
+│  ├─ InnerTubeClient 用页面的 ytcfg 和 cookie 调 browse /             │
+│  │                  browse/edit_playlist / playlist/create /         │
+│  │                  playlist/get_add_to_playlist                     │
+│  ├─ QueueTakeover   document 上 capture 监听 yt-action，拦下 QUEUE   │
+│  │                  类型的 yt-add-to-playlist-command，转交给         │
+│  │                  isolated 一侧；菜单打开时改写文字                 │
+│  ├─ Identity        读 ytcfg 的 LOGGED_IN / DATASYNC_ID / 名字头像    │
+│  └─ PlayerWatch     播放列表时监听 ended / 剩 10 秒切走，判断看完     │
 │            ▲ window.postMessage（带每次加载随机生成的 nonce）          │
 │            ▼                                                         │
 │ isolated content script                                              │
-│  ├─ QueueSync       同步核心，纯逻辑：操作翻译、待发送队列（outbox）、│
-│  │                  拉取后的覆盖计划、看完规则                        │
-│  ├─ PlaylistTools   播放列表页的「⋯」菜单、确认框、撤销提示           │
-│  └─ StatusBadge     同步失败时页面角落的小提示                        │
+│  ├─ QueueMode       按当前身份读设置，决定接不接管；加入、提示        │
+│  ├─ PlayButton      顶栏「播放 <列表名>」按钮                         │
+│  ├─ WatchedRemover  看完 → 切下一条 → 删掉刚看完的                    │
+│  └─ PlaylistTools   播放列表页的「⋯」菜单、确认框、撤销提示（§25）    │
 └──────────────┬───────────────────────────────────────────────────────┘
-               │ chrome.storage（outbox、列表 ID、清空快照）；日志发给 service worker
+               │ chrome.storage（按身份存的队列设置、清空快照）；日志发给 service worker
 ┌──────────────▼──────── service worker ──────────┐
-│ Log（§4）、Settings                              │
+│ Log（§4）、Settings、最近获得焦点的 YouTube 标签页 │
 └──────────────────────────────────────────────────┘
 ```
 
-- MAIN world 脚本以 `run_at: 'document_start'` 注入，保证 `FetchTap` 在页面自己的脚本之前包住 `fetch`，不漏掉早期请求。
-- **为什么要有 MAIN world 脚本**：派发 `yt-action` 要用页面里的 `ytd-app` 对象；包住 `fetch` 只能在页面的 JS 环境里做；读 `SAPISID` 和 `ytcfg` 也在页面里。WXT 支持 `world: 'MAIN'` 的 content script。
-- **为什么读写都在页面里做，不放在 service worker**：认证要的东西（cookie、`ytcfg`）在页面里，而且同源请求最像用户自己的操作。
-- `QueueSync` 不碰 DOM，也不直接 `fetch`。它依赖的接口从外面注入，方便用假的 YouTube 接口做单元测试。
+- 写操作都在 MAIN world 里做：认证要的 cookie 和 `ytcfg` 在页面里，同源请求也最像用户自己的操作。
+- 设置页要读列表、新建列表、读身份时，通过 service worker 转给最近获得焦点的 YouTube 标签页去做（跟现在的自检一样）。
+- 纯逻辑（按身份取设置、判断接不接管、看完后的下一条、清空和撤销的计划）不碰 DOM、不直接 `fetch`，依赖从外面注入，方便单元测试。
 - 所有 DOM 选择器和 InnerTube 字段路径各集中在一个文件里，YouTube 改版时只改那一处（跟 §14.3 一样）。
 
-## 24. 同步
+## 24. 播放列表模式
 
-### 24.1 找到队列用的列表
-- 设置里的列表名字，默认 `YouTube+`。
-- 查找方法：列出你的所有播放列表（用哪个内部接口要实测，见 §28），**第一个**标题完全相同的就用它；一个都没有，就用 `playlist/create` 建一个同名的**私密**列表。
-- 找到的列表 ID 跟名字一起存在 `chrome.storage.sync` 里。名字改了，或者用这个 ID 读不到列表了（比如被你在别处删掉），就重新按名字查找。
-- 在设置里改名字就等于换一个列表，原来的列表不动。
+### 24.1 什么时候接管
 
-### 24.2 新标签页恢复队列
-1. 分页读完整个列表。
-2. 进度条 ≥ 90% 的条目（在其他设备上看完的）先从列表里批量删掉。
-3. 如果这个标签页还没有 TLPQ（sessionStorage 里没有），就把剩下的视频按顺序加入官方队列，`openMiniplayer: false`，**不自动播放**。如果已经有（比如刷新过的标签页），就按 §24.4 拉取并覆盖。
-4. 记下 TLPQ 里每一条和列表里每一条（`setVideoId`）的对应关系。
+全部满足才接管，否则「加入队列」保持原生行为：
 
-列表是空的就什么都不做。
+1. 队列功能开着，当前身份选的是播放列表模式；
+2. YouTube 已登录（`LOGGED_IN`）；
+3. 当前身份选了列表；
+4. 这个列表当前身份能编辑。
 
-### 24.3 本地 → 列表（转发操作）
-- **捕获**：`FetchTap` 看页面发往当前 TLPQ 的 `edit_playlist` 和 `playlist/create` 请求，这些就是你在队列里做的事，包括在任何页面点「加入队列」。扩展自己发的请求带标记，不会被当成你的操作。
-- **翻译**：
+不满足 3 时，第一次点「加入队列」弹提示「还没有选择播放列表 · 去设置」（这一次不拦，照原生加进官方队列）。不满足 4 时提示「当前账号不能编辑 <列表名>」，**不清空**选择，切回原来的身份就恢复。
 
-  | 你在队列里做的 | 发给列表的 |
-  |---|---|
-  | 加入 X | `ACTION_ADD_VIDEO` X，重复的跳过 |
-  | 删除某一条 | 按对应的 `setVideoId` 删除列表里那一条 |
-  | 拖动排序 | `ACTION_MOVE_VIDEO_AFTER`，用列表里的 `setVideoId` |
-  | 看完某一条（§24.5） | 删除列表里那一条 |
-  | 官方自动塞进去的当前视频（队列 Q19） | 不发 |
+### 24.2 加入
 
-- 要操作的条目在列表里已经不存在了（另一个标签页或手机上已经删掉），就丢掉这个操作并写一条日志，跟官方的处理方式一样。
-- 发送失败的操作留在 outbox（`chrome.storage.local`）里，按 5 秒、30 秒、2 分钟……逐步拉长间隔重试。标签页关掉时没发出去的，下次任何一个 YouTube 标签页打开时接着发。
+- QueueTakeover 在 `document` 上 capture 监听 `yt-action`：`actionName === 'yt-add-to-playlist-command'` 且 `listType === 'PLAYLIST_EDIT_LIST_TYPE_QUEUE'` 时 `stopImmediatePropagation()`，把 `videoIds` 交给 QueueMode。
+- QueueMode 对列表发 `ACTION_ADD_VIDEO`（`DEDUPE_OPTION_SKIP`），成功后底部提示「已加入 <列表名> · 查看」，「查看」打开列表页。已经在列表里的提示「已在 <列表名> 中」。
+- 如果当前正在播放这个列表，加完后在页面上派发 `yt-refresh-playlist-command`，让右侧面板跟着刷新（§21.4）。
+- 发送失败：提示「加入失败」，写日志，不重试、不排队（没有 outbox 了）。返回结果说明列表不存在时，按 §24.5 处理。
 
-### 24.4 列表 → 本地（拉取并覆盖）
-- **时机**：标签页从后台切回前台（`visibilitychange` 变成 `visible`）时，跟上次拉取至少间隔 10 秒。不做定时轮询。
-- **先发再拉**：outbox 发完之后才拉取，免得旧数据覆盖掉自己还没发出去的操作。
-- **覆盖**：算出要让 TLPQ 跟列表一致需要哪些增、删、移操作，对 TLPQ 执行（带扩展标记，不会被转发回列表）。**正在播放的那一条不动。**
-- 拉取时同样应用「其他设备看完」的规则。
+### 24.3 改文字
 
-### 24.5 看完
-- **本标签页**：当前播放的是队列里的视频，并且触发了 `ended`，或者在剩不到 10 秒时切到别的视频、关掉标签页，就算看完。关标签页时来不及发出的删除操作会留在 outbox 里（§24.3）。
-- **其他设备**：恢复或拉取时读每一条的观看进度（具体字段要实测，见 §28），≥ 90% 就算看完。
+- 菜单每次打开时，找到 §21.3 说的那一项，改成「加入 <列表名>」；新版菜单改 `textContent`，旧版菜单设 `ytFormattedString.text`。悬停按钮改 `untoggledTooltip`（实现时再确认）。
+- 不接管时（§24.1 不满足、或关掉了播放列表模式）把文字改回原样。因为菜单 DOM 是复用的，不改回去会一直显示旧文字。
+
+### 24.4 播放和看完删除
+
+- **播放按钮**：顶栏头像左边，「▶ <列表名> · N」。点了打开 `watch?v=<第一条>&list=<ID>`。列表是空的时按钮变灰。
+- **看完**：只在播放这个列表时才算（URL 里 `list` 是选中的列表 ID）。视频触发 `ended`，或者剩不到 10 秒时切到别的视频、关掉标签页，就算看完。单独打开同一个视频看完不算。
+- **勾选「播放完后删除」时**：看完后由扩展算出列表里的下一条，跳到 `watch?v=<下一条>&list=<ID>`，然后再删掉刚看完的那一条（按 `setVideoId`）。每次跳转页面都会重新请求 `next`，别的标签页、手机上的改动也顺带同步过来。剩不到 10 秒切走、关标签页的情况只删，不跳。最后一条看完后列表空了，就停在结束画面。
+- **不勾选时**：完全交给官方自动播放，扩展不插手。
+
+### 24.5 选列表、新建、列表被删
+
+- 设置页的下拉框列出当前身份 `playlist/get_add_to_playlist` 返回的全部列表（含「稍后观看」），最后一项是「新建…」。
+- 选「新建…」出现输入框，默认 `YouTube+`，可以改；建出来是私密列表，不检查重名，建好后自动选中。
+- 保存的是列表 ID。读列表或加入时发现这个 ID 已经不存在（被你在别处删了），就清空这个身份的选择，按 §24.1 第 3 条处理。
+
+### 24.6 切换模式
+
+- 不迁移任何数据：官方队列里的视频不搬进列表，列表也不动。
+- 已经打开的标签页：从自带队列切到播放列表时，这个标签页里已有的官方队列保持原样，点缩略图仍可能加进官方队列（§21.2 那个绕过事件的路径）。在这个标签页弹一次提示「已切换到播放列表模式，刷新页面后生效」。反过来切也一样提示。
+
+### 24.7 身份
+
+- 用 `DATASYNC_ID` 区分身份：不管是另一个 Google 账号，还是同一账号下的另一个频道，都算不同的身份。存储时只存它的哈希。
+- 按身份存的只有：模式、列表 ID 和列表名（显示用）、看完删除、清空快照。
+- 页面上身份变了（切换账号后页面会整页重新加载），重新读这个身份的设置。
 
 ## 25. 清空全部与移除已看完
 
-- **范围**：你自己的任何播放列表页（怎么判断列表是不是你的，要实测，见 §28）。
-- **入口**：列表头部，跟「全部播放」「随机播放」并排的「⋯」菜单，里面有「清空全部」和「移除已看完」（「已看完」的标准跟 §24.5 一样，进度条 ≥ 90%）。
+- **范围**：你自己的任何播放列表页（`playlistVideoListRenderer.isEditable`）。两种模式下都能用。
+- **入口**：列表头部，跟「全部播放」「随机播放」并排的「⋯」菜单，里面有「清空全部」和「移除已看完」（「已看完」指进度条 ≥ 90%）。
 - **流程**：读出所有条目 → 弹出确认框：「将从『<列表名>』删除 N 个视频」→ 每批最多 100 个 `ACTION_REMOVE_VIDEO` → 刷新页面上的列表 → 底部提示「已删除 N 个 · 撤销」，显示 10 秒。
 - **撤销**：按原来的顺序加回去。「移除已看完」删掉的条目，加回后用 `ACTION_MOVE_VIDEO_AFTER` 放回原来的位置。
-- **最近一次快照**：`{列表 ID、列表名、时间、删掉的视频 ID 和原来的位置}`，存在 `chrome.storage.local`，下一次清空时覆盖。设置页的队列标签里可以一键恢复。
-- 如果清的是队列用的列表，已经打开的标签页会在下次拉取时跟着变（§24.4）。
+- **最近一次快照**：`{列表 ID、列表名、时间、删掉的视频 ID 和原来的位置}`，存在 `chrome.storage.local`，**按身份存**，下一次清空时覆盖。设置页的队列标签里可以一键恢复（恢复到当前身份的快照）。
 
 ## 26. 失败处理
 
-- 发送失败的操作重试（§24.3）。连续失败 3 次，页面角落显示一个小提示「队列同步失败」，点开就打开设置页的日志，自动筛选 `queue`。
-- 官方队列照常能用：扩展不阻止页面的任何操作；`FetchTap` 只看不改，自己出的异常一律捕获并写进日志。
-- 内部接口返回的结构对不上（YouTube 改版）时，记为协议错误，暂停同步，并显示提示。
+- 加入、删除失败：提示并写日志，不重试。扩展不阻止页面的任何其他操作；自己出的异常一律捕获并写进日志。
+- 接管时如果识别不到菜单项或命令结构对不上（YouTube 改版），这一次不拦，照原生处理，写一条 warn 日志。宁可退回原生，也不能让「加入队列」点了没反应。
+- 内部接口返回的结构对不上时，记为协议错误，暂停接管，并在设置页显示。
 
 ## 27. 设置与自检
 
-**设置项**（设置页的队列标签）：
-- 列表名字（默认 `YouTube+`）
-- 当前对应的列表：链接和条目数
-- outbox 里待发送的操作数
-- 最近一次清空的内容，以及「恢复」按钮
+**设置页顶部（所有标签共用）**：登录状态，两行：
+- YouTube：「已登录 <名字>」或「未登录 · 去登录」
+- Gemini：「已登录」或「未登录 · 去登录」
+
+两个可以是不同的 Google 账号。没登录时，依赖它的功能区灰掉，并写明原因（TL;DR 写「需要登录 Gemini」，队列的播放列表模式写「需要登录 YouTube」）。不需要登录的功能（播放器）照常可用。
+
+**队列标签**：
+- 顶部：「正在设置：<头像 + 名字>」，以最近获得焦点的 YouTube 标签页为准。没有打开的 YouTube 标签页时显示「请先打开一个 YouTube 页面」和「打开 YouTube」按钮，打开后自动刷新。
+- 模式，二选一（默认自带队列）：
+
+  > **◉ 使用 YouTube 自带的队列**
+  > 点「加入队列」后视频在迷你播放器里排队，当前视频放完自动播下一个。**队列只存在于当前标签页**：关掉标签页、换个标签页或换台设备，队列就没了。YouTube+ 不会改动它。
+  >
+  > **◉ 使用播放列表（推荐）**
+  > 「加入队列」会变成「加入 <列表名>」，视频存进你账号里的一个播放列表。**关掉页面、换设备都不会丢**，手机上也能看到。加入后不会马上排在下一个播放；点顶栏的「播放 <列表名>」才会连续播放。勾选「播放完后删除」时，由 YouTube+ 负责切到下一条。
+  > 列表：[下拉框 ▾]　☑ 播放完后从列表中删除
+
+- 最近一次清空的内容，以及「恢复」按钮。
 
 **自检**（需要一个打开着的 YouTube 标签页；没有的话提示先打开一个）：
-1. 按名字找到列表（或者能建出来），并读一次条目。
-2. 页面上能拿到 `ytd-app` 和 `ytcfg`，认证请求返回 200。
-3. `FetchTap` 已经装上。
+1. 页面上能拿到 `ytd-app` 和 `ytcfg`，已登录，`playlist/get_add_to_playlist` 返回 200，并且读到的是当前频道的数据。
+2. 播放列表模式下：选中的列表存在、能编辑，读一次条目数。
+3. QueueTakeover 的 capture 监听已经装上。
 
 ## 28. 写代码前要实测的
 
-1. `openMiniplayer: false` 能不能做到恢复队列、但不弹出迷你播放器也不播放。
-2. 在迷你播放器里删除或拖动时，页面会不会对 TLPQ 发 `edit_playlist` 请求。如果不会，捕获方式改成定期读 TLPQ，跟上次的结果比较。
-3. 在观看页上加入队列时，官方是不是真的会把当前视频塞进队列第一项；如果会，在请求上怎么区分它和你主动加的视频。
-4. 两个标签页同时改同一个列表时，服务器是不是真的会忽略已经不存在的 `setVideoId`。
-5. 对 TLPQ 直接执行增、删、移以后，迷你播放器的界面会不会跟着刷新。如果不会，改成用新列表重建队列。
-6. 列出「我的播放列表」用哪个内部接口；怎么判断一个播放列表是不是自己的、能不能编辑；`playlistVideoRenderer` 上表示观看进度的字段是什么。
-7. 从 isolated world 派发的 `CustomEvent`，页面能不能读到 `detail`。这决定了 `yt-action` 是不是一定要从 MAIN world 派发。
-8. TLPQ 在服务器上能存多久（会影响刷新过的标签页）。
+1. 悬停按钮：拦截是否生效、`untoggledTooltip` 能不能改写。
+2. 扩展自己跳到下一条（`watch?v=&list=`）时，用 SPA 导航（派发 `yt-navigate` 或点面板里那一项）还是整页跳转；要保证 `next` 被重新请求、面板选中状态正确。
+3. 从页面上读当前身份的头像和名字（给设置页的「正在设置」用）。
+4. 在设置页判断 Gemini 是否登录，用 TL;DR 现有的检查能不能直接复用。
 
-### 28.1 实测结果（2026-11-18，品牌账号）
-
-1. `openMiniplayer: false` 可以：派发 `yt-add-to-playlist-command` 后建出 TLPQ（26 个字符，存在 sessionStorage `…::TLPQplaylist`，值就是裸的 ID 字符串），迷你播放器不出现，也不播放。
-2. 会。在迷你播放器的队列面板里：删除 → `browse/edit_playlist`，`ACTION_REMOVE_VIDEO` + TLPQ 里的 `setVideoId`，而且**发两次**（第二次多一个 `params: "CAE%3D"`），要去重；拖动排序 → `ACTION_MOVE_VIDEO_AFTER`，移到最前面时没有 `movedSetVideoIdPredecessor`；加入 → `ACTION_ADD_VIDEO` + `addedVideoId`。还没有队列时加入 → `playlist/create`，`{title:"Queue", videoIds, params:"CAQ%3D"}`。**请求体是 gzip 压缩的**（`Request` 对象，`Content-Encoding: gzip`），`FetchTap` 要先解压。
-3. 在观看页上第一次加入队列时，面板上会把当前视频显示成第一项，但它只在本地：`playlist/create` 和服务器上的 TLPQ 里都只有你加的视频。所以队列 Q19 在请求层面不用特殊处理。
-4. 引用已经不存在的 `setVideoId`：删除返回 400「Precondition check failed」，移动返回 400，列表都不变。所以 outbox 遇到 400 就丢掉这个操作并写日志，不重试；一批里有一个失效会整批失败，所以失败后逐个重发。
-5. 直接用接口改 TLPQ，服务器上变了，**面板不刷新**。但：通过 `yt-action` 加入视频会让页面重新读取 `next`，面板整个按服务器刷新；把 `playlistEditEndpoint`（删除）用 `yt-service-request` 派发到面板里那一项上，面板会跟着删掉；移动没有走界面的办法。实现：拉取覆盖时，删除走 `yt-service-request`，加入走 `yt-action`，移动直接调接口（面板要等下一次刷新才显示新顺序，已知限制）。
-6. 「我的播放列表」用 `playlist/get_add_to_playlist`（参数随便给一个 `videoIds`），返回的 `playlistAddToOptionRenderer` 就是你能编辑的全部列表（含 Watch Later），有 `playlistId`、`title`、`privacy`。读列表 `browse` `VL<id>` 返回 `playlistVideoRenderer`（`videoId`、16 位的 `setVideoId`），`playlistVideoListRenderer.isEditable` 表示能不能编辑；观看进度在 `thumbnailOverlays[].thumbnailOverlayResumePlaybackRenderer.percentDurationWatched`。读 TLPQ 用 `next`，`playlistPanelVideoRenderer` 带 `videoId` 和 `playlistSetVideoId`。
-7. 不需要了：写操作都在 MAIN world 里做。
-8. 没测（要等很久）。刷新过的标签页如果读不到 TLPQ，就当作没有队列，重新恢复。
-
-**认证（重要）**：`document.cookie` 里看不到 `SAPISID`，只有 `__Secure-3PAPISID`；页面发的是 `Authorization: SAPISIDHASH <ts>_<sha1> SAPISID3PHASH <ts>_<sha1>`，两个哈希都用 `"<ts> <cookie> https://www.youtube.com"` 算（没有 `SAPISID` 就用 `__Secure-3PAPISID` 的值），另加 `X-Goog-AuthUser`、`X-Origin`、`X-Youtube-Client-Name/Version`，品牌账号必须带 `X-Goog-PageId`（`ytcfg` 的 `DELEGATED_SESSION_ID`）。**少了 `X-Goog-PageId` 不会报错，而是悄悄地按主账号执行**，所以自检要确认读到的是当前频道的数据。
+前三轮实测（2026-11-14、11-18、11-20）的结果已经写进 §21。
 
 ## 29. 开发顺序与测试
 
-1. **最小验证**：逐条跑通 §28，把真实的请求和返回录下来作为测试数据。
-2. 共用部分：设置页框架、功能开关、日志（按 §1 的总体顺序，开始做队列时已经有了，跳过）。
-3. `InnerTubeClient` 和按名字查找列表。
-4. `QueueSync` 核心逻辑和它的单元测试。
-5. 接入页面：恢复队列、`FetchTap`、`PlayerWatch`、切回前台时拉取。
-6. 清空全部、移除已看完、撤销。
-7. 设置页的队列标签、自检、失败提示。
+1. **删掉同步**：`sync.ts`、`outbox.ts`、`core.ts` 里 TLPQ 的翻译和覆盖逻辑、FetchTap 对 TLPQ 的抓取、对应的自检项和设置项（列表名字输入框、outbox 计数）、存储里的 outbox、列表 ID 和映射。§25 的代码保留。
+2. 身份：`DATASYNC_ID` 哈希，按身份存取队列设置；把旧的全局设置迁成「没选列表」（旧的按名字找到的 ID 不沿用，§24.5）。
+3. 设置页：顶部登录状态、「正在设置」、模式单选和说明、下拉框和新建。
+4. QueueTakeover 和改文字。
+5. 顶栏播放按钮、看完后切下一条并删除。
+6. 自检、失败提示。
 
 **测试**
-- 单元测试（Vitest），针对 `QueueSync`：操作翻译；忽略扩展自己发的请求和官方自动塞进去的视频；outbox 的重试和间隔；丢弃已经失效的操作；拉取后的覆盖计划（列表 → TLPQ 的增删移）；看完规则；清空和撤销的计划（按 100 个分批、放回原位置）。用第 1 步录下来的真实响应做假接口。
-- 手测清单：两个标签页同时开着；在手机上改了列表；刷新；开新标签页；看完和剩 10 秒切走；关掉标签页时还有操作没发完；断网或接口报错；清空和撤销；在设置里改列表名字。
+- 单元测试（Vitest）：按身份取设置；§24.1 的接管判断；识别「加入队列」命令（用实测录下来的新旧两种菜单数据）；看完后的下一条（中间、最后一条、列表在别处被改过）；清空和撤销的计划（按 100 个分批、放回原位置）。
+- 手测清单：各个入口的接管和文字（首页、搜索、观看页侧栏、Shorts、播放列表页、悬停按钮）；关掉播放列表模式后文字恢复；正在播放列表时加入；看完删除并切下一条、最后一条、剩 10 秒切走；列表在别处被删；切换频道和 Google 账号；没登录；中途切换模式；清空和撤销。
 - 不做 E2E。
 
 ## 30. 以后再做
 
-- 跟 tesla-video-streamer 打通：加一个「送到车上」按钮，或者桌面和车共用一个列表。tesla SPEC 里 Phase 10 的待定问题 1（车上删除时要不要同步删播放列表）也可以用这里在页面里写列表的方法来解决。
-- 用 Watch Later 当队列的列表。
-- 打开着的多个标签页之间实时同步（目前只在切回前台时拉取）。
+- 跟 tesla-video-streamer 打通：加一个「送到车上」按钮，或者桌面和车共用一个列表。
+- 播放列表模式下的「插到下一个播放」（需要扩展自己维护播放顺序，先不做）。
 
 ## 31. 参考来源
 
@@ -555,9 +611,6 @@ prompt 模板（实现时再细调），要点：
 - YouTube.js `PlaylistManager.ts`：https://github.com/LuanRT/YouTube.js/blob/main/src/core/managers/PlaylistManager.ts
 - ytmusicapi `playlists.py`：https://github.com/sigma67/ytmusicapi/blob/main/ytmusicapi/mixins/playlists.py
 - PlaylistPlus（批量删除、分页）：https://greasyfork.org/scripts/574930-playlistplus/code
-- 靠点界面来清空的脚本（作为对照）：https://gist.github.com/astamicu/eb351ce10451f1a51b71a1287d36880f
-- Data API 读不到 Watch Later（2016-09-15）：https://developers.google.com/youtube/v3/revision_history
-- Data API 配额：https://developers.google.com/youtube/v3/determine_quota_cost
 - 官方「加入队列」介绍：https://www.howtogeek.com/447419/how-to-use-youtube%E2%80%99s-queue-feature/
 - 官方迷你播放器：https://support.google.com/youtube/answer/9162927
 

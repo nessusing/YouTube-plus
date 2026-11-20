@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anchorResize, decode, encode, nearestCorner, snap, type Rect } from './geometry';
+import { anchorResize, decode, encode, nearestCorner, snap, type Rect } from '@/features/player/geometry';
 
 const vp = { w: 1000, h: 800, top: 56 };
 const r = (x: number, y: number, w = 400, h = 376): Rect => ({ x, y, w, h });

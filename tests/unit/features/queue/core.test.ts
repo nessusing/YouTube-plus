@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   chunk, decideTakeover, DEFAULT_PROFILE, isQueueCommand, countWith, isWatchedHere, listSignature, panelSnapshot, meetsExpect, mergeExpect, nextAfter, nextRows, notInList, panelView, parseEdit, parseQueueAction, queueView, planClear,
   planUndoMoves, profileWithDefaults, type ListItem, type TakeoverInput,
-} from './core';
+} from '@/features/queue/core';
 
 const L = (v: string, s: string, percent?: number): ListItem => ({ videoId: v, setVideoId: s, percent });
 

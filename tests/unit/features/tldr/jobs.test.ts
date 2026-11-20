@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { evict, fresh, UNREADABLE_TTL, type CacheEntry } from './cache-rules';
-import { breakerOpen, count, demote, freshCounters, localDay, nextSpacing, pick, pickBatch, upsert, type Counters, type Job } from './jobs';
+import { evict, fresh, UNREADABLE_TTL, type CacheEntry } from '@/features/tldr/cache-rules';
+import { breakerOpen, count, demote, freshCounters, localDay, nextSpacing, pick, pickBatch, upsert, type Counters, type Job } from '@/features/tldr/jobs';
 
 const limits = { perHour: 2, perDay: 3, prefetch: true };
 const none: Counters = { hour: [], day: '', dayCount: 0 };

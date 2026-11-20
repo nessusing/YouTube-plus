@@ -9,7 +9,7 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --config tests/vitest.config.ts",
     "icons": "bash scripts/icons.sh",
     "postinstall": "node scripts/patch-wxt.mjs && wxt prepare"
   },

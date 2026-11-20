@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryOf, formatBytes, groupKeys } from './storage-usage';
+import { categoryOf, formatBytes, groupKeys } from '@/core/storage-usage';
 
 describe('storage categories', () => {
   it('assigns keys to categories', () => {

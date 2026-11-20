@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildBatchPrompt, buildInner, buildPrompt, extractTokens, mapErrorCode, parseBatch, parseStream, parseSummary } from './protocol';
+import { buildBatchPrompt, buildInner, buildPrompt, extractTokens, mapErrorCode, parseBatch, parseStream, parseSummary } from '@/features/tldr/protocol';
 
 /** Build a response shaped like the one recorded on 2026-11-18. */
 function frame(inner: unknown): string {

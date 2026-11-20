@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseT, SUPPRESS_MS, TheaterMachine } from './theater';
+import { parseT, SUPPRESS_MS, TheaterMachine } from '@/features/player/theater';
 
 describe('TheaterMachine', () => {
   it('switches to normal on the first scroll down and back at the top', () => {

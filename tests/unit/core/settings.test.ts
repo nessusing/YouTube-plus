@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, withDefaults } from './settings';
+import { DEFAULT_SETTINGS, withDefaults } from '@/core/settings';
 
 describe('withDefaults', () => {
   it('returns defaults for nothing stored', () => {

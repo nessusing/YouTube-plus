@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { setLang, t } from './i18n';
-import { withDefaults } from './settings';
+import { setLang, t } from '@/core/i18n';
+import { withDefaults } from '@/core/settings';
 
 describe('t', () => {
   it('follows the current language and fills in variables', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendCapped, entrySize, formatEntry, stringifyArg, type LogEntry } from './log';
+import { appendCapped, entrySize, formatEntry, stringifyArg, type LogEntry } from '@/core/log';
 
 const e = (i: number, msg = `m${i}`): LogEntry => ({ t: i, feature: 'core', level: 'info', msg });
 

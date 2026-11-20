@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { setLang } from './i18n';
-import type { Logger } from './log';
-import { runChecks, type SelfCheck } from './selfcheck';
+import { setLang } from '@/core/i18n';
+import type { Logger } from '@/core/log';
+import { runChecks, type SelfCheck } from '@/core/selfcheck';
 
 const log = (): Logger => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
 

@@ -4,18 +4,18 @@ import type { LogEntry } from './log';
 import type { CheckResult } from './selfcheck';
 
 export type Message =
-  | { type: 'yt+/log'; entries: LogEntry[] }
-  | { type: 'yt+/log-clear' }
-  | { type: 'yt+/selfcheck' }
-  | { type: 'yt+/open-options'; hash?: string }
-  | { type: 'yt+/tldr-status' }
-  | { type: 'yt+/tldr-resume' }
-  | { type: 'yt+/tldr-signin' }
-  | { type: 'yt+/tldr-recheck' };
+  | { type: 'YouTube+/log'; entries: LogEntry[] }
+  | { type: 'YouTube+/log-clear' }
+  | { type: 'YouTube+/selfcheck' }
+  | { type: 'YouTube+/open-options'; hash?: string }
+  | { type: 'YouTube+/tldr-status' }
+  | { type: 'YouTube+/tldr-resume' }
+  | { type: 'YouTube+/tldr-signin' }
+  | { type: 'YouTube+/tldr-recheck' };
 
 export type SelfCheckResponse = { results: CheckResult[] };
 
 export function isMessage(m: unknown): m is Message {
   return typeof m === 'object' && m !== null && typeof (m as { type?: unknown }).type === 'string'
-    && (m as { type: string }).type.startsWith('yt+/');
+    && (m as { type: string }).type.startsWith('YouTube+/');
 }

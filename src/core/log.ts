@@ -53,7 +53,7 @@ export function stringifyArg(a: unknown): string {
 export type LogSink = (entries: LogEntry[]) => void;
 
 let sink: LogSink = (entries) => {
-  browser.runtime.sendMessage({ type: 'yt+/log', entries }).catch(() => {
+  browser.runtime.sendMessage({ type: 'YouTube+/log', entries }).catch(() => {
     // Extension reloaded or worker unreachable: nothing sensible to do.
   });
 };
@@ -78,7 +78,7 @@ export function createLogger(feature: LogFeature): Logger {
     } catch {
       // Logging must never throw into feature code.
     }
-    if (level === 'error' || level === 'warn') console[level](`[yt+ ${feature}]`, ...args);
+    if (level === 'error' || level === 'warn') console[level](`[YouTube+ ${feature}]`, ...args);
   };
   return { debug: make('debug'), info: make('info'), warn: make('warn'), error: make('error') };
 }

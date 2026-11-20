@@ -174,10 +174,10 @@ function numberInput(get: () => number, set: (s: Settings, v: number) => void, m
 
 // Gemini connection: the one thing a new user has to do (design §15.1).
 const connState = el('span', { className: 'state', textContent: t('opt.tldr.connUnknown') });
-const signinBtn = button(t('opt.tldr.signin'), () => send({ type: 'yt+/tldr-signin' }), 'btn filled');
+const signinBtn = button(t('opt.tldr.signin'), () => send({ type: 'YouTube+/tldr-signin' }), 'btn filled');
 const recheckBtn = button(t('opt.tldr.recheck'), async () => {
   recheckBtn.disabled = true;
-  try { await send({ type: 'yt+/tldr-recheck' }); } finally { recheckBtn.disabled = false; }
+  try { await send({ type: 'YouTube+/tldr-recheck' }); } finally { recheckBtn.disabled = false; }
   await renderTldr();
 });
 const signinHint = hint(t('opt.tldr.signinHint'));
@@ -207,7 +207,7 @@ group(tldrTab, t('opt.tldr.limits'), t('opt.tldr.limitsHint'),
 
 const tldrStatus = el('p', { className: 'sub' });
 const resumeBtn = button(t('opt.resume'), async () => {
-  await send({ type: 'yt+/tldr-resume' });
+  await send({ type: 'YouTube+/tldr-resume' });
   void renderTldr();
 });
 group(tldrTab, t('opt.tldr.status'), undefined, tldrStatus, el('div', { className: 'inline mt' }, resumeBtn));
@@ -216,7 +216,7 @@ group(tldrTab, t('opt.tldr.status'), undefined, tldrStatus, el('div', { classNam
 const banner = document.getElementById('banner')!;
 banner.append(
   el('div', { className: 'text' }, el('strong', { textContent: t('opt.tldr.banner') }), el('span', { className: 'muted', textContent: t('opt.tldr.signinHint') })),
-  button(t('opt.tldr.signin'), () => send({ type: 'yt+/tldr-signin' }), 'btn filled'),
+  button(t('opt.tldr.signin'), () => send({ type: 'YouTube+/tldr-signin' }), 'btn filled'),
 );
 
 async function renderTldr() {
@@ -225,7 +225,7 @@ async function renderTldr() {
     return;
   }
   try {
-    const st = await send<TldrStatus>({ type: 'yt+/tldr-status' });
+    const st = await send<TldrStatus>({ type: 'YouTube+/tldr-status' });
     const out = st.gemini === 'signedOut';
     // The TL;DR tab has its own connection row; the banner is for every other tab.
     banner.hidden = !out || current === 'tldr';
@@ -304,7 +304,7 @@ async function restoreSnapshot() {
   restoreBtn.disabled = true;
   restoreMsg.textContent = t('opt.queue.restoring');
   try {
-    const r = (await browser.tabs.sendMessage(tab.id, { type: 'yt+/queue-restore-snapshot', snapshot: snap }, { frameId: 0 })) as { ok: boolean; restored?: number; error?: string };
+    const r = (await browser.tabs.sendMessage(tab.id, { type: 'YouTube+/queue-restore-snapshot', snapshot: snap }, { frameId: 0 })) as { ok: boolean; restored?: number; error?: string };
     restoreMsg.textContent = r.ok ? t('opt.queue.restored', { n: r.restored ?? 0 }) : t('opt.queue.restoreFail', { e: r.error ?? '' });
   } catch {
     restoreMsg.textContent = t('opt.queue.noScript');
@@ -353,7 +353,7 @@ const STORAGE_ROWS: {
   {
     cat: 'log', label: t('opt.storage.log'), unit: t('opt.unit.lines'),
     limit: () => limitInput(() => settings.storage.logMB, (s, v) => { s.storage.logMB = v; }),
-    clear: () => send({ type: 'yt+/log-clear' }),
+    clear: () => send({ type: 'YouTube+/log-clear' }),
   },
   {
     cat: 'tldrCache', label: t('opt.storage.tldr'), unit: t('opt.unit.entries'),
@@ -420,7 +420,7 @@ async function runSelfCheck() {
   checkBtn.disabled = true;
   checkList.replaceChildren(el('li', { className: 'muted', textContent: t('opt.running') }));
   try {
-    const { results } = await send<SelfCheckResponse>({ type: 'yt+/selfcheck' });
+    const { results } = await send<SelfCheckResponse>({ type: 'YouTube+/selfcheck' });
     renderChecks(results);
   } catch (e) {
     checkList.replaceChildren(el('li', { className: 'fail-line', textContent: t('opt.selfcheckFailed', { e: String(e) }) }));
@@ -454,11 +454,11 @@ const copyBtn = button(t('opt.copyAll'), async () => {
 });
 const exportBtn = button(t('opt.export'), () => {
   const url = URL.createObjectURL(new Blob([logText()], { type: 'text/plain' }));
-  const a = el('a', { href: url, download: `yt+-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt` });
+  const a = el('a', { href: url, download: `YouTube+-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt` });
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-const clearBtn = button(t('opt.clear'), () => send({ type: 'yt+/log-clear' }));
+const clearBtn = button(t('opt.clear'), () => send({ type: 'YouTube+/log-clear' }));
 group(diag, t('opt.log'), undefined,
   el('div', { className: 'inline mb' }, featureSel, levelSel, copyBtn, exportBtn, clearBtn, countSpan),
   logBox);
@@ -506,7 +506,7 @@ await loadLog();
 await renderStorage();
 await renderQueue();
 // Find out now whether Gemini is signed in, so the banner shows right away.
-if (settings.features.tldr) await send({ type: 'yt+/tldr-recheck' }).catch(() => {});
+if (settings.features.tldr) await send({ type: 'YouTube+/tldr-recheck' }).catch(() => {});
 await renderTldr();
 if (logFilter) logBox.scrollIntoView();
 if (hash === 'install') {

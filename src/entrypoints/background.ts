@@ -51,28 +51,28 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!isMessage(msg)) return;
     switch (msg.type) {
-      case 'yt+/tldr-status':
+      case 'YouTube+/tldr-status':
         tldr.status().then(sendResponse);
         return true;
-      case 'yt+/tldr-resume':
+      case 'YouTube+/tldr-resume':
         tldr.resume().then(() => sendResponse({}));
         return true;
-      case 'yt+/tldr-signin':
+      case 'YouTube+/tldr-signin':
         tldr.openSignin().then(() => sendResponse({}));
         return true;
-      case 'yt+/tldr-recheck':
+      case 'YouTube+/tldr-recheck':
         tldr.probe().then((gemini) => sendResponse({ gemini }));
         return true;
-      case 'yt+/open-options':
+      case 'YouTube+/open-options':
         void browser.tabs.create({ url: browser.runtime.getURL(`/options.html#${msg.hash ?? ''}`) });
         return;
-      case 'yt+/log':
+      case 'YouTube+/log':
         store.add(msg.entries);
         return;
-      case 'yt+/log-clear':
+      case 'YouTube+/log-clear':
         store.clear().then(() => sendResponse({}));
         return true;
-      case 'yt+/selfcheck':
+      case 'YouTube+/selfcheck':
         getSettings()
           .then((s) => runChecks(checks, (f) => f === 'core' || s.features[f], log))
           .then((results) => sendResponse({ results } satisfies SelfCheckResponse));

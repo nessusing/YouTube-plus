@@ -1,5 +1,5 @@
 // WXT builds a RegExp from the entrypoint's absolute path without escaping it,
-// so a project directory with regex metacharacters (our "yt++") crashes the
+// so a project directory with regex metacharacters (our "YouTube+") crashes the
 // build with "Nothing to repeat". Escape the path. Idempotent; runs on
 // postinstall. Drop this once WXT escapes it upstream.
 import { readFileSync, writeFileSync } from 'node:fs';

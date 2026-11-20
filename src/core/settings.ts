@@ -54,7 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lang: 'en',
   features: { tldr: true, queue: true, player: true },
   player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true },
-  queue: { listName: 'yt+' },
+  queue: { listName: 'YouTube+' },
   tldr: { titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200, batchSize: 5 },
   storage: { logMB: 2, tldrCacheMB: 5 },
 };

@@ -1,4 +1,4 @@
-# yt+
+# YouTube+
 
 A personal YouTube toolkit Chrome extension (MV3): TL;DR summaries on thumbnails, a queue that survives tabs and devices, and player tweaks. Design: [docs/design.md](docs/design.md).
 

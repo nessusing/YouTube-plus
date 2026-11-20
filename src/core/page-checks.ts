@@ -5,7 +5,7 @@ import { t, type MsgKey } from './i18n';
 import type { FeatureId } from './settings';
 import type { CheckOutcome, SelfCheck } from './selfcheck';
 
-type PageCheckMsg = { type: 'yt+/page-check'; feature: FeatureId; name: MsgKey };
+type PageCheckMsg = { type: 'YouTube+/page-check'; feature: FeatureId; name: MsgKey };
 
 /** Background: a SelfCheck that runs `name` inside a YouTube tab. */
 export function pageCheck(feature: FeatureId, name: MsgKey): SelfCheck {
@@ -17,7 +17,7 @@ export function pageCheck(feature: FeatureId, name: MsgKey): SelfCheck {
       const tab = tabs.find((t) => t.active) ?? tabs[0];
       if (!tab?.id) return { status: 'skip', detail: t('check.needYtTab') };
       try {
-        const res = (await browser.tabs.sendMessage(tab.id, { type: 'yt+/page-check', feature, name } satisfies PageCheckMsg, { frameId: 0 })) as CheckOutcome | undefined;
+        const res = (await browser.tabs.sendMessage(tab.id, { type: 'YouTube+/page-check', feature, name } satisfies PageCheckMsg, { frameId: 0 })) as CheckOutcome | undefined;
         return res ?? { status: 'fail', detail: t('check.noAnswer') };
       } catch {
         return { status: 'fail', detail: t('check.noScript') };
@@ -30,7 +30,7 @@ export function pageCheck(feature: FeatureId, name: MsgKey): SelfCheck {
 export function servePageChecks(feature: FeatureId, checks: Partial<Record<MsgKey, () => CheckOutcome | Promise<CheckOutcome>>>): void {
   browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
     const m = msg as PageCheckMsg;
-    if (m?.type !== 'yt+/page-check' || m.feature !== feature) return;
+    if (m?.type !== 'YouTube+/page-check' || m.feature !== feature) return;
     const check = checks[m.name];
     if (!check) return;
     Promise.resolve()

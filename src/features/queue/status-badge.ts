@@ -24,7 +24,7 @@ export function statusBadge(): StatusBadge {
         </style><button type="button"></button>`;
         button = root.querySelector('button')!;
         button.addEventListener('click', () => {
-          void browser.runtime.sendMessage({ type: 'yt+/open-options', hash: 'log=queue' });
+          void browser.runtime.sendMessage({ type: 'YouTube+/open-options', hash: 'log=queue' });
         });
         document.documentElement.append(host);
       }

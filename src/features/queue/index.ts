@@ -77,7 +77,7 @@ export async function startQueue(): Promise<void> {
   // Settings page asks a YouTube tab to restore the last snapshot (§25).
   browser.runtime.onMessage.addListener((msg: unknown, _s, sendResponse) => {
     const m = msg as { type?: string; snapshot?: Snapshot };
-    if (m?.type !== 'yt+/queue-restore-snapshot' || !m.snapshot) return;
+    if (m?.type !== 'YouTube+/queue-restore-snapshot' || !m.snapshot) return;
     restoreSnapshot(bridge.rpc, log, m.snapshot)
       .then((n) => sendResponse({ ok: true, restored: n }))
       .catch((e) => sendResponse({ ok: false, error: String(e) }));

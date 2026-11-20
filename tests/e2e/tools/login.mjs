@@ -11,6 +11,9 @@ mkdirSync(profile, { recursive: true });
 console.log(`Profile: ${profile}\nSign in to YouTube in the window that opens, then close it.`);
 const child = spawn(chromium.executablePath(), [
   `--user-data-dir=${profile}`,
+  // Same cookie encryption as Playwright uses, or the tests cannot read the sign-in.
+  '--password-store=basic',
+  '--use-mock-keychain',
   '--lang=en-US',
   '--no-first-run',
   'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F',

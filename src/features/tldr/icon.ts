@@ -96,5 +96,17 @@ export class Icon {
 
   attach(thumb: HTMLElement): void {
     if (this.host.parentElement !== thumb) thumb.append(this.host);
+    this.alignToBadge(thumb);
+  }
+
+  /** Line the icon's right edge up with the duration badge's right edge. */
+  private alignToBadge(thumb: HTMLElement): void {
+    const badge = thumb.querySelector<HTMLElement>('badge-shape, ytd-thumbnail-overlay-time-status-renderer #time-status');
+    const box = this.host.offsetParent;
+    if (!badge || !box) return;
+    const b = badge.getBoundingClientRect();
+    if (!b.width) return; // not laid out yet; the next rescan retries
+    const right = Math.round(box.getBoundingClientRect().right - b.right);
+    if (right >= 0 && right < 40) this.host.style.right = `${right}px`;
   }
 }

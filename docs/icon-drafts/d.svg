@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="14 -10 132 132" width="132" height="132">
+  <!-- Drawn on a 160×112 canvas; the square viewBox crops to the red base's width and centres it vertically. -->
+  <!-- Red base: top edge bows up, bottom edge bows down, large rounded corners -->
+  <path d="M 14 28
+       Q 14 14 30 13
+       Q 80 9.5 130 13
+       Q 146 14 146 28
+       L 146 84
+       Q 146 98 130 99
+       Q 80 102.5 30 99
+       Q 14 98 14 84
+       Z" fill="#FF0000" />
+  <!-- White play triangle -->
+  <polygon points="44,37 44,75 74,56" fill="#FFFFFF" />
+  <!-- Square-cornered white "+" next to the triangle -->
+  <g fill="#FFFFFF">
+    <rect x="85" y="50.5" width="34" height="11" />
+    <rect x="96.5" y="39" width="11" height="34" />
+  </g>
+</svg>

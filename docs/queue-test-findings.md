@@ -70,7 +70,7 @@ L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测�
 
 ## L4（真实 YouTube，`tests/e2e/`）
 
-### F7　读列表时把列表下面的「推荐视频」也算进去了（严重）
+### F7　读列表时把列表下面的「推荐视频」也算进去了（严重，2026-11-20 已修）
 
 - **场景**：任何一个比较短的列表（实测 2 条）。
 - **预期**：`readPlaylist()` 只返回列表里的条目。
@@ -81,7 +81,7 @@ L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测�
   - 最后一条看完后，「下一条」是推荐视频：扩展会跳过去播，再试图删掉它；
   - 「已在列表中」、`meetsExpect` 重试、清空和撤销的计划都会被带偏。
 - **测试**：`tests/e2e/specs/smoke.spec.ts`（数字应为 2）
-- **建议**：bug，要先修，否则大部分 L4 结果都没有意义。只跟随 `playlistVideoListRenderer` 自己的 continuation（列表超过 100 条时，它在 `playlistVideoListRenderer.contents` 的最后一项），以及 continuation 返回里接在列表后面的那一段；推荐区一概不跟。
+- **已修**（经确认提前修）：新增纯函数 `core.ts` 的 `playlistPage()`，只读 `playlistVideoListRenderer` 里的条目，只跟随它最后一项的 continuation（列表超过 100 条时才有）；continuation 返回里只认 `continuationItems` 的直接子项，跳过 `targetId` 为 `VL…` 或 `recommended_videos_shelf` 的推荐区。L1 测试用实测录下来的 2 条和 105 条列表的返回（裁剪后放在 `tests/unit/features/queue/fixtures/`）。修完后，L4 smoke 测试数字正确。
 
 ### A4（实测）　新建列表加入视频后，立刻读是空的
 

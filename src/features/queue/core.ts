@@ -301,6 +301,58 @@ export function panelSnapshot(data: unknown, at: number): { playlistId: string; 
   return { playlistId: d.playlistId, snap: { rows, total: Math.max(rows.length, total), at } };
 }
 
+// ---- reading a playlist (§21.4) ----
+
+const arr = (x: unknown): unknown[] => (Array.isArray(x) ? x : []);
+
+function findFirst(o: unknown, key: string, depth = 0): unknown {
+  const x = obj(o) ?? (Array.isArray(o) ? o : undefined);
+  if (!x || depth > 30) return undefined;
+  if (!Array.isArray(x) && key in x) return (x as Obj)[key];
+  for (const v of Object.values(x)) {
+    const hit = findFirst(v, key, depth + 1);
+    if (hit !== undefined) return hit;
+  }
+  return undefined;
+}
+
+function entryOf(row: unknown): ListItem | undefined {
+  const r = obj(obj(row)?.playlistVideoRenderer);
+  if (!r || typeof r.videoId !== 'string' || typeof r.setVideoId !== 'string') return undefined;
+  const pct = findFirst(r.thumbnailOverlays, 'percentDurationWatched');
+  return { videoId: r.videoId, setVideoId: r.setVideoId, percent: typeof pct === 'number' ? pct : undefined };
+}
+
+function tokenOf(rows: unknown[]): string | undefined {
+  const more = rows.map((r) => obj(r)?.continuationItemRenderer).find(Boolean);
+  const t = (findFirst(more, 'continuationCommand') as { token?: unknown } | undefined)?.token;
+  return typeof t === 'string' ? t : undefined;
+}
+
+/**
+ * One page of a playlist read (`browse` for VL<id>, or a continuation of it):
+ * the list's own entries and the token for the list's next page. Only the
+ * list's own rows count. A short list is followed by a "Recommended videos"
+ * section whose rows look the same (playlistVideoRenderer with a setVideoId)
+ * and that loads through its own continuation, outside playlistVideoListRenderer
+ * (recorded 2026-11-20, findings F7).
+ */
+export function playlistPage(json: unknown): { items: ListItem[]; token?: string } {
+  const list = obj(findFirst(json, 'playlistVideoListRenderer'));
+  let rows: unknown[];
+  if (list) {
+    rows = arr(list.contents);
+  } else {
+    // A continuation: the list's rows are direct children of the appended items;
+    // the recommendations target the page (VL…) and come wrapped in a section.
+    rows = arr(obj(json)?.onResponseReceivedActions)
+      .map((a) => obj(obj(a)?.appendContinuationItemsAction))
+      .filter((a): a is Obj => !!a && !(typeof a.targetId === 'string' && (a.targetId.startsWith('VL') || a.targetId === 'recommended_videos_shelf')))
+      .flatMap((a) => arr(a.continuationItems));
+  }
+  return { items: rows.map(entryOf).filter((i): i is ListItem => !!i), token: tokenOf(rows) };
+}
+
 /** Order-sensitive fingerprint, to tell whether the list changed elsewhere. */
 export function listSignature(items: ListItem[]): string {
   return items.map((i) => i.setVideoId || i.videoId).join(',');

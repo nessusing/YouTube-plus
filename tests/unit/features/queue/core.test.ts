@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   chunk, decideTakeover, DEFAULT_PROFILE, isQueueCommand, countWith, isWatchedHere, listSignature, panelSnapshot, meetsExpect, mergeExpect, nextAfter, nextRows, notInList, panelView, parseEdit, parseQueueAction, queueView, planClear,
-  planUndoMoves, profileWithDefaults, type ListItem, type TakeoverInput,
+  planUndoMoves, playlistPage, profileWithDefaults, type ListItem, type TakeoverInput,
 } from '@/features/queue/core';
+
+// Recorded 2026-11-20 on real lists, pruned to the structure.
+import bigFirst from './fixtures/browse-big-first.json';
+import bigMore from './fixtures/browse-big-more.json';
+import bigRecommended from './fixtures/browse-big-recommended.json';
+import smallFirst from './fixtures/browse-small-first.json';
+import smallRecommended from './fixtures/browse-small-recommended.json';
 
 const L = (v: string, s: string, percent?: number): ListItem => ({ videoId: v, setVideoId: s, percent });
 
@@ -278,5 +285,36 @@ describe('clear and undo', () => {
       order.splice(m.afterSetVideoId ? order.indexOf(m.afterSetVideoId) + 1 : 0, 0, m.setVideoId);
     }
     expect(order).toEqual(['n1', 'l2', 'n3', 'l4']);
+  });
+});
+
+describe('playlistPage (findings F7)', () => {
+  it('a short list: its own entries, and no next page (the recommendations under it are not the list)', () => {
+    const p = playlistPage(smallFirst);
+    expect(p.items.map((i) => i.videoId)).toEqual(['dQw4w9WgXcQ', '9bZkp7q19f0']);
+    expect(p.items.every((i) => i.setVideoId)).toBe(true);
+    expect(p.token).toBeUndefined();
+  });
+
+  it('over 100 entries: the first 100, and the token of the list\'s own next page', () => {
+    const p = playlistPage(bigFirst);
+    expect(p.items).toHaveLength(100);
+    expect(p.token).toBe('TOKEN3');
+  });
+
+  it('the list\'s next page: the remaining entries, nothing more to load', () => {
+    const p = playlistPage(bigMore);
+    expect(p.items).toHaveLength(5);
+    expect(p.token).toBeUndefined();
+  });
+
+  it('the recommendations, if ever fed in, give no entries', () => {
+    expect(playlistPage(smallRecommended).items).toEqual([]);
+    expect(playlistPage(bigRecommended).items).toEqual([]);
+  });
+
+  it('105 entries in all, each once', () => {
+    const all = [...playlistPage(bigFirst).items, ...playlistPage(bigMore).items];
+    expect(new Set(all.map((i) => i.setVideoId)).size).toBe(105);
   });
 });

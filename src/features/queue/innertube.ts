@@ -2,7 +2,7 @@
 // itself (design §21.5). Missing X-Goog-PageId does not fail: it silently acts
 // as the primary account, so always send it for brand accounts.
 
-import type { ListAction, ListItem } from './core';
+import { playlistPage, type ListAction } from './core';
 import type { Identity } from './profiles';
 import type { PlaylistData, PlaylistRef } from './rpc';
 
@@ -98,20 +98,6 @@ export async function createPrivatePlaylist(title: string): Promise<string> {
   return j.playlistId;
 }
 
-function listItems(j: unknown): ListItem[] {
-  return (walk(j, 'playlistVideoRenderer') as Record<string, unknown>[])
-    .filter((v) => typeof v.videoId === 'string' && typeof v.setVideoId === 'string')
-    .map((v) => {
-      const pct = walk(v.thumbnailOverlays, 'percentDurationWatched')[0];
-      return { videoId: v.videoId as string, setVideoId: v.setVideoId as string, percent: typeof pct === 'number' ? pct : undefined };
-    });
-}
-
-function continuation(j: unknown): string | undefined {
-  const c = walk(j, 'continuationCommand')[0] as { token?: string } | undefined;
-  return c?.token;
-}
-
 /** Read a whole playlist, following continuations (~100 per page). */
 export async function readPlaylist(id: string): Promise<PlaylistData> {
   const first = await call('browse', { browseId: `VL${id}` });
@@ -119,12 +105,14 @@ export async function readPlaylist(id: string): Promise<PlaylistData> {
   const editableFlag = walk(first, 'isEditable')[0];
   const header = walk(first, 'playlistHeaderRenderer')[0] as Record<string, unknown> | undefined;
   if (alerts.some((a) => a.type === 'ERROR') && !header) return { exists: false, editable: false, title: '', items: [] };
-  const items = listItems(first);
-  let token = continuation(first);
+  // Only the list's own pages, never the recommendations under it (findings F7).
+  const page = playlistPage(first);
+  const items = page.items;
+  let token = page.token;
   for (let i = 0; token && i < 100; i++) {
-    const next = await call('browse', { continuation: token });
-    items.push(...listItems(next));
-    token = continuation(next);
+    const more = playlistPage(await call('browse', { continuation: token }));
+    items.push(...more.items);
+    token = more.token;
   }
   return { exists: true, editable: editableFlag === true, title: text(header?.title), items };
 }

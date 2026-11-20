@@ -46,9 +46,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     if (!me.loggedIn || !me.key) throw new Error('not signed in to YouTube in the e2e profile: run npm run e2e:login');
     const left = await TestLists.sweep(helper);
     if (left.length) console.log(`deleted ${left.length} test list(s) left by an earlier run`);
-    // English UI for the extension, everything else as it is.
-    const settings = (await storageGet(ctx, 'sync', 'settings')) as Record<string, unknown> | undefined;
-    await storageSet(ctx, 'sync', { settings: { ...settings, lang: 'en' } });
+    // English UI for the extension; TL;DR off (it would call Gemini for every thumbnail).
+    const settings = ((await storageGet(ctx, 'sync', 'settings')) ?? {}) as { features?: Record<string, boolean> };
+    await storageSet(ctx, 'sync', { settings: { ...settings, lang: 'en', features: { ...settings.features, tldr: false, queue: true, player: true } } });
     await use({ me: me as Account['me'], helper });
     await helper.close();
   }, { scope: 'worker' }],

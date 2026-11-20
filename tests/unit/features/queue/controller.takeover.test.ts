@@ -182,12 +182,13 @@ describe('Add (§24.2)', () => {
     expect(h.yt.player.playlistId).toBe('PLo');
   });
 
-  it('the native queue playing in the miniplayer: leaves it', async () => {
-    const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('v1', 'TLPQabc', { mini: true }) });
+  // F8: docs/queue-test-findings.md
+  it.fails('the native queue playing in the miniplayer: leaves it', async () => {
+    const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.playNativeQueue(['v1', 'q1', 'q2']) });
     await h.ctl.onAdd(['x']);
     await h.settle();
-    expect(h.yt.player.playlistId).toBe('TLPQabc');
-    expect(h.yt.panel).toBeUndefined();
+    expect(h.yt.panel?.playlistId).toBe('TLPQabc');
+    expect(h.yt.panel?.rows.map((r) => r.videoId)).toEqual(['v1', 'q1', 'q2']);
   });
 
   it('during an ad: does not attach', async () => {

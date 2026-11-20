@@ -22,7 +22,7 @@ const PLAYLIST: Partial<QueueProfile> = { mode: 'playlist', listId: 'PLq', listN
 const STATES: Record<string, (yt: FakeYouTube) => void> = {
   '① nothing playing': () => {},
   '② a single video in the miniplayer': (yt) => yt.load('v1', undefined, { mini: true }),
-  '③ the native queue in the miniplayer': (yt) => yt.load('v1', 'TLPQabc', { mini: true }),
+  '③ the native queue in the miniplayer': (yt) => yt.playNativeQueue(['v1', 'q1', 'q2']),
   '④ our list playing': (yt) => yt.load('a', 'PLq'),
 };
 
@@ -76,12 +76,14 @@ describe('native → playlist, what is playing afterwards', () => {
     expect(h.yt.panel).toMatchObject({ playlistId: 'PLq', top: 'v1' });
   });
 
-  it('③ native queue: Add leaves the native queue playing', async () => {
+  // F8: docs/queue-test-findings.md
+  it.fails('③ native queue: Add leaves the native queue playing', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE, before: STATES['③ the native queue in the miniplayer'] });
     await switchTo(h, { mode: 'playlist' });
     await h.ctl.onAdd(['x']);
     await h.settle();
-    expect(h.yt.player.playlistId).toBe('TLPQabc');
+    expect(h.yt.panel?.playlistId).toBe('TLPQabc');
+    expect(h.yt.player.playlistId).toBeUndefined();
     // Its videos ending is none of our business.
     h.ctl.onPlayer(h.yt.playerEvent('ended'));
     await h.settle();

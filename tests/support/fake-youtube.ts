@@ -139,6 +139,16 @@ export class FakeYouTube {
     else this.panel = undefined;
   }
 
+  /**
+   * The native queue playing: the panel holds a TLPQ… list, but
+   * player.getPlaylistId() is empty (measured 2026-11-20, findings A5).
+   */
+  playNativeQueue(videoIds: string[], where: { mini?: boolean } = { mini: true }): void {
+    const mini = !!where.mini;
+    this.player = { videoId: videoIds[0], playlistId: undefined, index: 0, mini, onWatch: !mini, ad: false };
+    this.panel = { playlistId: 'TLPQabc', rows: videoIds.map((v, i) => ({ videoId: v, setVideoId: `Q${i}` })) };
+  }
+
   /** The page put list data in the panel; yt-playlist-data-updated reports it. */
   showPanel(p: Panel): void {
     this.panel = p;

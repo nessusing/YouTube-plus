@@ -64,11 +64,20 @@
 
 L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测的。L4 跑完后在这里写结论，跟真实页面不一致的话要改假服务器，再重跑 L2。
 
-- **A1**：用 `yt-playlist-manager` 把列表挂到单个视频上以后，`player.getPlaylistId()` 是否返回这个列表的 ID。假服务器假设是。如果不是，挂上以后再加入会按「没在播列表」重新挂一次，当前视频放完时也不会触发 `onPlayer`。
+- **A1**（2026-11-20 实测确认）：用 `yt-playlist-manager` 把列表挂到单个视频上以后，`player.getPlaylistId()` 返回这个列表的 ID，`getPlaylistIndex()` 是 0。面板里当前视频在最上面，后面是列表，不重新载入。跟假服务器的假设一致。
+- **A5**（2026-11-20 实测，跟原来的假设**不一致**）：官方队列在迷你播放器里播放时，`player.getPlaylistId()` 返回空，只有 `yt-playlist-manager.getPlaylistData().playlistId` 是 `TLPQ…`。迷你播放器下面的信息栏显示「队列 • 1 / 3」。假服务器已经改成这样（`playNativeQueue()`），由此发现了 F8。
 - **A2**：页面在面板里删掉一条以后，自己会重新请求 `next` 并重画面板（2026-11-20 实测）。假服务器假设大约 200 毫秒后，用当时读到的（可能还是旧的）数据重画。
 - **A3**：删除后读取延迟的实际长度。假服务器测了 0、1、4、12 秒。
 
 ## L4（真实 YouTube，`tests/e2e/`）
+
+### F8　官方队列在播时切到播放列表模式再点「加入」，官方队列被我们的列表顶掉
+
+- **场景**：自带队列模式下，迷你播放器在放官方队列（「队列 • 1 / 3」）。切到播放列表模式（立即生效），然后点某个视频的「加入 <列表名>」。
+- **预期**：视频进了列表，提示一下；官方队列保持原样（§24.2「正在播别的列表时不挂」，§24.6「已有的官方队列保持原样」）。
+- **实际**：`attachIfIdle()` 用 `playing().playlistId` 判断有没有在播列表，但官方队列播放时它是空的（A5）。于是扩展把当前视频当成「不在任何列表里」，调用 `syncList(attach)`，用我们的列表替换了面板，官方队列里后面的视频就没了。main-world 的 `syncList()` 也是只看 `getPlaylistId()`。
+- **测试**：`controller.takeover` › the native queue playing in the miniplayer: leaves it；`controller.modes` › ③ native queue: Add leaves the native queue playing（L2，用改过的假服务器）。真实页面上的对应测试在 L4 的 `modes.spec.ts`。
+- **建议**：bug。main-world 判断「正在播列表」时，`getPlaylistId()` 为空的话再看 `yt-playlist-manager.getPlaylistData().playlistId`；`playing()` 也一起改，这样 controller 能看到 `TLPQ…`。
 
 ### F7　读列表时把列表下面的「推荐视频」也算进去了（严重，2026-11-20 已修）
 

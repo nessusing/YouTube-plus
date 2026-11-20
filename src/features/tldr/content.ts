@@ -3,7 +3,7 @@
 
 import { initLang } from '@/core/i18n';
 import { createLogger } from '@/core/log';
-import { getSettings, onSettingsChanged } from '@/core/settings';
+import { featureOn, getSettings, onSettingsChanged } from '@/core/settings';
 import { Icon } from './icon';
 import { PORT_NAME, type ToService, type ToTab } from './messages';
 import { scan, type Found } from './scanner';
@@ -12,7 +12,7 @@ import type { BadgeState } from './types';
 
 export async function startTldr(): Promise<void> {
   const log = createLogger('tldr');
-  let enabled = (await getSettings()).features.tldr;
+  let enabled = featureOn(await getSettings(), 'tldr');
   let port: Browser.runtime.Port | undefined;
   const icons = new Map<Element, Icon>(); // item element → icon (items get recycled)
   const states = new Map<string, BadgeState>();
@@ -192,8 +192,8 @@ export async function startTldr(): Promise<void> {
     announce([], true);
   });
   onSettingsChanged((s) => {
-    if (s.features.tldr === enabled) return;
-    enabled = s.features.tldr;
+    if (featureOn(s, 'tldr') === enabled) return;
+    enabled = featureOn(s, 'tldr');
     if (enabled) on();
     else off();
   });

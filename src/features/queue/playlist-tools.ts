@@ -1,12 +1,13 @@
 // "Clear all" and "Remove watched" on your own playlist pages (design §25),
-// with confirm, 10 s undo, and the most recent snapshot kept for the settings
-// page.
+// with confirm, 10 s undo, and the most recent snapshot kept (per identity)
+// for the settings page.
 
 import { t as tr } from '@/core/i18n';
 import type { Logger } from '@/core/log';
 import { chunk, planClear, planUndoMoves, type ListAction, type Snapshot } from './core';
-import { SNAPSHOT_KEY } from './keys';
+import { saveSnapshot } from './profiles';
 import type { Rpc } from './rpc';
+import { toast } from './toast';
 
 const UNDO_MS = 10_000;
 const HEADER = 'ytd-playlist-header-renderer, yt-page-header-renderer';
@@ -29,11 +30,6 @@ const STYLE = `
   .row { display: flex; justify-content: flex-end; gap: 8px; }
   .primary { background: #3ea6ff; color: #0f0f0f; }
   .primary:hover { background: #65b8ff; }
-  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2300; background: #f1f1f1; color: #0f0f0f;
-    border-radius: 8px; padding: 10px 8px 10px 16px; display: flex; align-items: center; gap: 12px; font-size: 14px;
-    box-shadow: 0 4px 16px rgba(0,0,0,.3); }
-  .toast .link { all: unset; cursor: pointer; color: #065fd4; font-weight: 500; padding: 6px 10px; border-radius: 16px; }
-  .toast .link:hover { background: rgba(6,95,212,.1); }
 `;
 
 function listIdFromUrl(): string | undefined {
@@ -41,7 +37,8 @@ function listIdFromUrl(): string | undefined {
   return new URL(location.href).searchParams.get('list') ?? undefined;
 }
 
-export function playlistTools(rpc: Rpc, log: Logger) {
+/** `identity` is the hash the snapshot is stored under (design §25). */
+export function playlistTools(rpc: Rpc, log: Logger, identity: () => string | undefined) {
   let host: HTMLElement | undefined;
   let root: ShadowRoot | undefined;
   let forList: string | undefined;
@@ -60,26 +57,6 @@ export function playlistTools(rpc: Rpc, log: Logger) {
   };
 
   const closeOverlays = () => root?.querySelectorAll('.menu, .scrim').forEach((e) => e.remove());
-
-  const toast = (text: string, action?: { label: string; run: () => void }, ms = UNDO_MS) => {
-    root?.querySelector('.toast')?.remove();
-    const t = document.createElement('div');
-    t.className = 'toast';
-    t.setAttribute('role', 'status');
-    t.append(text);
-    if (action) {
-      const b = document.createElement('button');
-      b.className = 'link';
-      b.textContent = action.label;
-      b.addEventListener('click', () => {
-        t.remove();
-        action.run();
-      });
-      t.append(b);
-    }
-    ui().append(t);
-    setTimeout(() => t.remove(), ms);
-  };
 
   const confirmDialog = (text: string, ok: string) =>
     new Promise<boolean>((resolve) => {
@@ -128,10 +105,11 @@ export function playlistTools(rpc: Rpc, log: Logger) {
       }
       if (failed) log.warn(`clear (${mode}) on ${listId}: ${failed} of ${remove.length} failed`);
       const snapshot: Snapshot = { listId, listName: title, time: Date.now(), mode, removed };
-      await browser.storage.local.set({ [SNAPSHOT_KEY]: snapshot });
+      const id = identity();
+      if (id) await saveSnapshot(id, snapshot);
       removeRows(new Set(remove.map((i) => i.setVideoId)));
       log.info(`clear (${mode}) on ${listId}: removed ${remove.length - failed}`);
-      toast(tr('queue.deleted', { n: remove.length - failed }), { label: tr('queue.undo'), run: () => void restoreSnapshot(rpc, log, snapshot).then(() => location.reload()) });
+      toast(tr('queue.deleted', { n: remove.length - failed }), { label: tr('queue.undo'), run: () => void restoreSnapshot(rpc, log, snapshot).then(() => location.reload()) }, UNDO_MS);
     } catch (e) {
       log.error('clear failed', e);
       toast(tr('queue.failed'), undefined, 6000);

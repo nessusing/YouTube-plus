@@ -1,6 +1,6 @@
 # YouTube+
 
-A personal YouTube toolkit Chrome extension (MV3): TL;DR summaries on thumbnails, a queue that survives tabs and devices, and player tweaks. Design: [docs/design.md](docs/design.md).
+A personal YouTube toolkit Chrome extension (MV3): TL;DR summaries on thumbnails, an Add to queue that can go into a playlist (so it survives tabs and devices), and player tweaks. Design: [docs/design.md](docs/design.md).
 
 ## Develop
 
@@ -19,7 +19,7 @@ Load it: chrome://extensions → Developer mode → Load unpacked → `.output/c
 
 - `src/core/` — settings, log, self-check framework, storage usage, page checks
 - `src/features/player/` — miniplayer controls and drag, sticky player, back to top
-- `src/features/queue/` — queue ↔ private playlist sync (MAIN-world script + isolated controller), clear all / remove watched
+- `src/features/queue/` — native queue or a playlist, chosen per channel: Add to queue takeover and relabel (MAIN-world script), top-bar play button and remove-after-watching (isolated controller), clear all / remove watched
 - `src/features/tldr/` — Gemini web client, job queue, cache (service worker) and thumbnail icons + tooltip (content script)
 - `src/entrypoints/` — background, options page, content scripts
 

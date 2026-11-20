@@ -3,11 +3,15 @@ import { formatEntry, LOG_KEY, LOG_LEVELS, type LogEntry, type LogFeature } from
 import type { Message, SelfCheckResponse } from '@/core/messages';
 import type { CheckResult } from '@/core/selfcheck';
 import { MINI_POS_KEY } from '@/features/player/consts';
-import type { Snapshot } from '@/features/queue/core';
-import { OUTBOX_KEY, SNAPSHOT_KEY, STATE_KEY } from '@/features/queue/keys';
+import { recentYouTubeTab } from '@/core/page-checks';
+import { DEFAULT_PROFILE, type QueueMode, type QueueProfile } from '@/features/queue/core';
+import { PROFILE_PREFIX, PROTOCOL_ERROR_KEY, SNAPSHOT_PREFIX } from '@/features/queue/keys';
+import type { QueueOp, QueueRequest, QueueResponse } from '@/features/queue/messages';
+import { getProfile, getSnapshot, updateProfile, type Identity } from '@/features/queue/profiles';
+import type { PlaylistRef } from '@/features/queue/rpc';
 import type { TldrStatus } from '@/features/tldr/service';
 import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
-import { FEATURES, getSettings, saveSettings, type PlayerSettings, type Settings } from '@/core/settings';
+import { FEATURES, featureOn, getSettings, saveSettings, type PlayerSettings, type Settings } from '@/core/settings';
 
 // Build the page in the chosen language; rebuild (reload) when it changes.
 await initLang(() => location.reload());
@@ -102,7 +106,6 @@ function selectTab(id: TabId) {
   for (const [k, s] of sections) s.hidden = k !== id;
   for (const [k, b] of buttons) b.setAttribute('aria-selected', String(k === id));
   try { localStorage.setItem('tab', id); } catch { /* ignore */ }
-  current = id;
   void renderTldr();
   if (id === 'storage') void renderStorage();
   window.scrollTo(0, 0);
@@ -119,7 +122,6 @@ for (const tab of tabs) {
   sections.set(tab.id, s);
   panels.append(s);
 }
-let current: TabId = 'general';
 const isTab = (x: string | null): x is TabId => !!x && sections.has(x as TabId);
 
 // ---------- settings ----------
@@ -134,6 +136,10 @@ const update = async (mut: (s: Settings) => void) => {
 
 const general = sections.get('general')!;
 pageHead(general, t('opt.tab.general'), t('opt.general.title'), t('opt.general.sub'));
+
+// Master switch: off turns every feature off without losing their own switches.
+group(general, t('opt.enabled'), t('opt.enabledHint'), toggle(t('opt.enabledLabel'), settings.enabled,
+  (v) => update((s) => { s.enabled = v; }).then(() => { syncFeatureList(); return renderTldr(); })));
 
 const radios = el('div', { className: 'radios', role: 'radiogroup' });
 for (const l of Object.keys(LANG_NAMES) as Lang[]) {
@@ -155,6 +161,11 @@ for (const f of FEATURES) {
     t(`opt.featureDesc.${f}` as MsgKey)));
 }
 group(general, t('opt.features'), t('opt.featuresHint'), featureList);
+function syncFeatureList() {
+  featureList.classList.toggle('off', !settings.enabled);
+  for (const i of featureList.querySelectorAll('input')) i.disabled = !settings.enabled;
+}
+syncFeatureList();
 
 // ---------- TL;DR (design §15) ----------
 
@@ -194,16 +205,18 @@ for (const [text, href] of [
 ] as const) pre.append(el('a', { href, target: '_blank', rel: 'noopener', textContent: text }));
 group(tldrTab, t('opt.tldr.prereq'), t('opt.tldr.prereqHint'), pre);
 
-group(tldrTab, t('opt.tldr.output'), undefined,
-  toggle(t('opt.tldr.titleCheck'), settings.tldr.titleCheck, (v) => update((s) => { s.tldr.titleCheck = v; })));
+// These need Gemini; dimmed while signed out (design §27).
+const tldrNeedsGemini: HTMLElement[] = [];
+tldrNeedsGemini.push(group(tldrTab, t('opt.tldr.output'), undefined,
+  toggle(t('opt.tldr.titleCheck'), settings.tldr.titleCheck, (v) => update((s) => { s.tldr.titleCheck = v; }))));
 
-group(tldrTab, t('opt.tldr.limits'), t('opt.tldr.limitsHint'),
+tldrNeedsGemini.push(group(tldrTab, t('opt.tldr.limits'), t('opt.tldr.limitsHint'),
   el('div', { className: 'row' }, el('div', {}), el('div', { className: 'row-body' },
     toggle(t('opt.tldr.prefetch'), settings.tldr.prefetch, (v) => update((s) => { s.tldr.prefetch = v; })))),
   row(t('opt.tldr.perHour'), inline(numberInput(() => settings.tldr.perHour, (s, v) => { s.tldr.perHour = v; }, 1))),
   row(t('opt.tldr.perDay'), inline(numberInput(() => settings.tldr.perDay, (s, v) => { s.tldr.perDay = v; }, 1))),
   row(t('opt.tldr.batchSize'), inline(numberInput(() => settings.tldr.batchSize, (s, v) => { s.tldr.batchSize = v; }, 1, 10)), hint(t('opt.tldr.batchHint'))),
-);
+));
 
 const tldrStatus = el('p', { className: 'sub' });
 const resumeBtn = button(t('opt.resume'), async () => {
@@ -212,27 +225,47 @@ const resumeBtn = button(t('opt.resume'), async () => {
 });
 group(tldrTab, t('opt.tldr.status'), undefined, tldrStatus, el('div', { className: 'inline mt' }, resumeBtn));
 
-// The banner sits above every tab: signing in is what unblocks TL;DR.
+// ---------- sign-in status, above every tab (design §3, §27) ----------
+
+const YT_SIGNIN = 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F';
+const openYouTube = () => browser.tabs.create({ url: 'https://www.youtube.com/' });
+
 const banner = document.getElementById('banner')!;
-banner.append(
-  el('div', { className: 'text' }, el('strong', { textContent: t('opt.tldr.banner') }), el('span', { className: 'muted', textContent: t('opt.tldr.signinHint') })),
-  button(t('opt.tldr.signin'), () => send({ type: 'YouTube+/tldr-signin' }), 'btn filled'),
-);
+banner.className = 'status';
+const ytState = el('span', { className: 'state' });
+const ytActions = el('span', { className: 'inline' });
+const gmState = el('span', { className: 'state' });
+const gmActions = el('span', { className: 'inline' },
+  button(t('opt.tldr.signin'), () => send({ type: 'YouTube+/tldr-signin' }), 'btn filled'));
+const gmRow = el('div', { className: 'status-row' }, el('span', { className: 'status-label', textContent: 'Gemini' }), gmState, gmActions);
+banner.append(el('div', { className: 'status-row' }, el('span', { className: 'status-label', textContent: 'YouTube' }), ytState, ytActions), gmRow);
+banner.hidden = false;
+
+function setState(span: HTMLElement, kind: 'ok' | 'bad' | '', text: string) {
+  span.className = `state${kind ? ` ${kind}` : ''}`;
+  span.textContent = text;
+}
 
 async function renderTldr() {
-  if (!settings.features.tldr) {
-    banner.hidden = true;
+  if (!featureOn(settings, 'tldr')) {
+    gmRow.hidden = true;
+    for (const g of tldrNeedsGemini) g.classList.remove('dim');
     return;
   }
   try {
     const st = await send<TldrStatus>({ type: 'YouTube+/tldr-status' });
     const out = st.gemini === 'signedOut';
-    // The TL;DR tab has its own connection row; the banner is for every other tab.
-    banner.hidden = !out || current === 'tldr';
-    connState.className = `state${st.gemini === 'ok' ? ' ok' : out ? ' bad' : ''}`;
-    connState.textContent = st.gemini === 'ok' ? t('opt.tldr.connOk', { n: st.account })
+    const kind = st.gemini === 'ok' ? 'ok' : out ? 'bad' : '';
+    const text = st.gemini === 'ok' ? t('opt.tldr.connOk', { n: st.account })
       : out ? t('opt.tldr.connOut', { n: st.account }) : t('opt.tldr.connUnknown');
-    signinBtn.hidden = signinHint.hidden = !out;
+    setState(connState, kind, text);
+    setState(gmState, kind, text);
+    gmRow.hidden = false;
+    gmActions.hidden = signinBtn.hidden = signinHint.hidden = !out;
+    for (const g of tldrNeedsGemini) {
+      g.classList.toggle('dim', out);
+      g.title = out ? t('opt.needGemini') : '';
+    }
 
     const b = st.breaker;
     const breaker = b.state === 'quota' ? t('opt.tldr.brQuota')
@@ -247,71 +280,284 @@ async function renderTldr() {
     tldrStatus.textContent = t('opt.tldr.statusFail', { e: String(e) });
   }
 }
-// Cheap (no network): keeps the banner and status current, e.g. after signing in elsewhere.
+// Cheap (no network): keeps the Gemini status current, e.g. after signing in elsewhere.
 setInterval(() => void renderTldr(), 3000);
 
 // ---------- queue (design §27) ----------
+// Queue settings belong to a YouTube identity (channel); this page edits the
+// one signed in on the YouTube tab used last, and works through that tab.
 
 const queue = sections.get('queue')!;
 pageHead(queue, t('feature.queue'), t('opt.queue.title'), t('opt.queue.sub'));
-const nameInput = el('input', { type: 'text', value: settings.queue.listName, className: 'field text' });
-const nameSave = button(t('opt.save'), async () => {
-  const v = nameInput.value.trim();
-  if (!v || v === settings.queue.listName) return;
-  await update((s) => { s.queue.listName = v; });
-  flash(nameSave, t('opt.saved'));
-});
-nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') nameSave.click(); });
-const listLine = el('p', { className: 'sub' });
-const outboxLine = el('p', { className: 'hint' });
-group(queue, t('opt.queue.list'), undefined,
-  row(t('opt.queue.name'), inline(nameInput, nameSave), hint(t('opt.queue.nameHint'))),
-  el('div', { className: 'row' }, el('div', {}), el('div', { className: 'row-body' }, listLine, outboxLine)),
+
+type Who =
+  | { kind: 'noTab' }
+  | { kind: 'noScript'; tab: Browser.tabs.Tab }
+  | { kind: 'ok'; tab: Browser.tabs.Tab; me: Identity };
+let who: Who = { kind: 'noTab' };
+let profile: QueueProfile = { ...DEFAULT_PROFILE };
+let lists: PlaylistRef[] | undefined;
+let listsFor: string | undefined;
+
+async function ask<T>(tab: Browser.tabs.Tab, m: QueueOp): Promise<T> {
+  const r = (await browser.tabs.sendMessage(tab.id!, { type: 'YouTube+/queue', ...m } satisfies QueueRequest, { frameId: 0 })) as QueueResponse<T> | undefined;
+  if (!r) throw new Error(t('opt.queue.noScript'));
+  if (!r.ok) throw new Error(r.error);
+  return r.result;
+}
+
+const whoLine = el('div', { className: 'inline who' });
+group(queue, t('opt.queue.who'), t('opt.queue.whoHint'), whoLine);
+
+// Mode: two options with their explanations.
+const modeInputs = new Map<QueueMode, HTMLInputElement>();
+const modeBox = el('div', { className: 'radios rich', role: 'radiogroup' });
+function modeOption(mode: QueueMode, title: string, desc: string, ...extra: Child[]): HTMLElement {
+  const input = el('input', { type: 'radio', name: 'queue-mode', value: mode });
+  input.addEventListener('change', () => input.checked && void saveProfile((p) => { p.mode = mode; }));
+  modeInputs.set(mode, input);
+  const label = el('label', {}, input, el('span', { className: 'text' }, el('strong', { textContent: title }), el('small', { textContent: desc })));
+  return el('div', { className: 'option' }, label, ...extra);
+}
+
+const listSel = el('select', { className: 'list-select' });
+listSel.setAttribute('aria-label', t('opt.queue.list'));
+const NEW = '__new__';
+const newName = el('input', { type: 'text', value: 'YouTube+', className: 'field text' });
+newName.setAttribute('aria-label', t('opt.queue.newName'));
+const createBtn = button(t('opt.queue.create'), createList, 'btn filled');
+const newRow = el('div', { className: 'inline' }, newName, createBtn);
+newRow.hidden = true;
+newName.addEventListener('keydown', (e) => { if (e.key === 'Enter') createBtn.click(); });
+const listMsg = el('p', { className: 'hint' });
+const pickHint = hint(t('opt.queue.pickHint'));
+const removeToggle = toggle(t('opt.queue.removeWatched'), true, (v) => void saveProfile((p) => { p.removeWatched = v; }));
+const removeInput = removeToggle.querySelector('input')!;
+const protoLine = el('p', { className: 'hint warn' });
+const playlistBlock = el('div', { className: 'option-body' },
+  el('div', { className: 'inline' }, el('span', { className: 'muted', textContent: t('opt.queue.list') }), listSel), newRow, pickHint, listMsg, removeToggle, protoLine);
+const playlistNeeds = el('p', { className: 'hint' });
+
+modeBox.append(
+  modeOption('native', t('opt.queue.native'), t('opt.queue.nativeDesc')),
+  modeOption('playlist', t('opt.queue.playlist'), t('opt.queue.playlistDesc'), playlistNeeds, playlistBlock),
 );
+const modeGroup = group(queue, t('opt.queue.mode'), undefined, modeBox);
+
+listSel.addEventListener('change', () => {
+  if (listSel.value === NEW) {
+    newRow.hidden = false;
+    newName.focus();
+    newName.select();
+    return;
+  }
+  newRow.hidden = true;
+  const l = lists?.find((x) => x.id === listSel.value);
+  if (l) void saveProfile((p) => { p.listId = l.id; p.listName = l.title; });
+});
+
+async function saveProfile(mut: (p: QueueProfile) => void) {
+  if (who.kind !== 'ok' || !who.me.key) return;
+  profile = await updateProfile(who.me.key, mut);
+  renderQueueControls();
+}
+
+async function createList() {
+  if (who.kind !== 'ok') return;
+  const title = newName.value.trim() || 'YouTube+';
+  createBtn.disabled = true;
+  listMsg.textContent = t('opt.queue.creating');
+  try {
+    const id = await ask<string>(who.tab, { op: 'create', title });
+    lists = undefined;
+    await saveProfile((p) => { p.listId = id; p.listName = title; });
+    newRow.hidden = true;
+    listMsg.textContent = t('opt.queue.created', { name: title });
+    await loadLists(true);
+  } catch (e) {
+    listMsg.textContent = t('opt.queue.createFail', { e: e instanceof Error ? e.message : String(e) });
+  } finally {
+    createBtn.disabled = false;
+  }
+}
+
+/** The lists this identity can edit, incl. Watch Later (§24.5). */
+async function loadLists(force = false) {
+  if (who.kind !== 'ok' || !who.me.key) return;
+  if (!force && lists && listsFor === who.me.key) return;
+  try {
+    lists = await ask<PlaylistRef[]>(who.tab, { op: 'lists' });
+    listsFor = who.me.key;
+  } catch (e) {
+    lists = undefined;
+    listMsg.textContent = t('opt.queue.listsFail', { e: e instanceof Error ? e.message : String(e) });
+  }
+  renderQueueControls();
+}
+
+function renderListSelect() {
+  const keepNew = listSel.value === NEW;
+  listSel.replaceChildren();
+  const chosen = profile.listId;
+  if (!chosen) listSel.append(el('option', { value: '', textContent: t('opt.queue.pick'), disabled: true }));
+  for (const l of lists ?? []) {
+    const name = l.id === 'WL' ? `${l.title || t('queue.watchLater')}` : l.title;
+    listSel.append(el('option', { value: l.id, textContent: l.privacy ? `${name} · ${privacyLabel(l.privacy)}` : name }));
+  }
+  if (chosen && !lists?.some((l) => l.id === chosen)) {
+    // Not in this identity's editable lists (or the lists are still loading).
+    listSel.append(el('option', { value: chosen, textContent: lists ? t('opt.queue.unavailable', { name: profile.listName ?? chosen }) : profile.listName ?? chosen }));
+  }
+  listSel.append(el('option', { value: NEW, textContent: t('opt.queue.new') }));
+  listSel.value = keepNew ? NEW : chosen ?? '';
+}
+
+function privacyLabel(p: string): string {
+  return p === 'PRIVATE' ? t('opt.queue.private') : p === 'UNLISTED' ? t('opt.queue.unlisted') : p === 'PUBLIC' ? t('opt.queue.public') : p;
+}
+
+function renderQueueControls() {
+  const signedIn = who.kind === 'ok' && who.me.loggedIn && !!who.me.key;
+  modeGroup.classList.toggle('dim', !signedIn);
+  for (const [m, input] of modeInputs) {
+    input.checked = profile.mode === m;
+    input.disabled = !signedIn;
+  }
+  playlistNeeds.textContent = who.kind === 'ok' && !who.me.loggedIn ? t('opt.queue.needYouTube') : '';
+  playlistNeeds.hidden = !playlistNeeds.textContent;
+  const on = signedIn && profile.mode === 'playlist';
+  playlistBlock.classList.toggle('dim', !on);
+  listSel.disabled = !on;
+  removeInput.disabled = !on;
+  removeInput.checked = profile.removeWatched;
+  renderListSelect();
+  pickHint.hidden = !on || !!profile.listId;
+}
+
+function renderWho() {
+  whoLine.replaceChildren();
+  ytActions.replaceChildren();
+  if (who.kind === 'noTab') {
+    whoLine.append(el('span', { className: 'muted', textContent: t('opt.queue.openYt') }), button(t('opt.queue.openYtBtn'), openYouTube));
+    setState(ytState, '', t('opt.yt.noTab'));
+    ytActions.append(button(t('opt.queue.openYtBtn'), openYouTube));
+    return;
+  }
+  if (who.kind === 'noScript') {
+    whoLine.append(el('span', { className: 'muted', textContent: t('opt.queue.noScript') }));
+    setState(ytState, '', t('opt.yt.unknown'));
+    return;
+  }
+  const me = who.me;
+  if (!me.loggedIn) {
+    whoLine.append(el('span', { className: 'muted', textContent: t('opt.queue.signedOut') }));
+    setState(ytState, 'bad', t('opt.yt.signedOut'));
+    ytActions.append(button(t('opt.yt.signin'), () => browser.tabs.create({ url: YT_SIGNIN }), 'btn filled'));
+    return;
+  }
+  const name = me.name ?? t('opt.queue.unnamed');
+  whoLine.append(el('span', { className: 'muted', textContent: t('opt.queue.editing') }));
+  if (me.avatar) whoLine.append(el('img', { src: me.avatar, alt: '', width: 24, height: 24, className: 'avatar', referrerPolicy: 'no-referrer' }));
+  whoLine.append(el('strong', { textContent: name }));
+  setState(ytState, 'ok', t('opt.yt.signedIn', { name }));
+}
+
 const snapLine = el('p', { className: 'sub' });
 const restoreMsg = el('span', { className: 'muted' });
 const restoreBtn = button(t('opt.resume'), restoreSnapshot);
-group(queue, t('opt.queue.lastClear'), undefined, snapLine, el('div', { className: 'inline mt' }, restoreBtn, restoreMsg));
+group(queue, t('opt.queue.lastClear'), t('opt.queue.lastClearHint'), snapLine, el('div', { className: 'inline mt' }, restoreBtn, restoreMsg));
 
-async function renderQueue() {
-  const local = await browser.storage.local.get([STATE_KEY, OUTBOX_KEY, SNAPSHOT_KEY]);
-  const state = local[STATE_KEY] as { listId?: string; listName?: string; count?: number; updatedAt?: number } | undefined;
-  listLine.replaceChildren();
-  if (state?.listId) {
-    const a = el('a', { href: `https://www.youtube.com/playlist?list=${encodeURIComponent(state.listId)}`, target: '_blank', rel: 'noopener', textContent: state.listName ?? state.listId });
-    listLine.append(t('opt.queue.current'), a, t('opt.queue.currentTail', { n: state.count ?? 0, t: new Date(state.updatedAt ?? 0).toLocaleString() }));
-  } else {
-    listLine.append(t('opt.queue.notConnected'));
-  }
-  const outbox = (local[OUTBOX_KEY] as unknown[] | undefined) ?? [];
-  outboxLine.textContent = t('opt.queue.outbox', { n: outbox.length });
-  const snap = local[SNAPSHOT_KEY] as Snapshot | undefined;
+async function renderSnapshot() {
+  const key = who.kind === 'ok' ? who.me.key : undefined;
+  const snap = key ? await getSnapshot(key) : undefined;
   restoreBtn.disabled = !snap;
   snapLine.textContent = snap
     ? t('opt.queue.snap', { t: new Date(snap.time).toLocaleString(), name: snap.listName, mode: t(snap.mode === 'all' ? 'queue.clearAll' : 'queue.removeWatched'), n: snap.removed.length })
     : t('opt.queue.never');
 }
 
+async function renderProtocolError() {
+  const err = (await browser.storage.local.get(PROTOCOL_ERROR_KEY))[PROTOCOL_ERROR_KEY] as { time: number; detail: string } | undefined;
+  protoLine.replaceChildren();
+  protoLine.hidden = !err;
+  if (err) {
+    protoLine.append(t('opt.queue.protocol', { t: new Date(err.time).toLocaleString(), e: err.detail }), ' ');
+    const dismiss = el('a', { href: '#', textContent: t('opt.queue.dismiss') });
+    dismiss.addEventListener('click', (e) => {
+      e.preventDefault();
+      void browser.storage.local.remove(PROTOCOL_ERROR_KEY);
+    });
+    protoLine.append(dismiss);
+  }
+}
+
+/** Find the identity again and redraw the tab and the YouTube status (cheap: one message). */
+let queueBusy: Promise<void> | undefined;
+function renderQueue(): Promise<void> {
+  queueBusy ??= (async () => {
+    try {
+      const tab = await recentYouTubeTab();
+      if (!tab?.id) who = { kind: 'noTab' };
+      else {
+        try {
+          who = { kind: 'ok', tab, me: await ask<Identity>(tab, { op: 'whoami' }) };
+        } catch {
+          who = { kind: 'noScript', tab };
+        }
+      }
+      const key = who.kind === 'ok' ? who.me.key : undefined;
+      if (key !== listsFor) lists = undefined;
+      profile = key ? await getProfile(key) : { ...DEFAULT_PROFILE };
+      renderWho();
+      renderQueueControls();
+      await Promise.all([renderSnapshot(), renderProtocolError()]);
+      if (profile.mode === 'playlist') await loadLists();
+    } finally {
+      queueBusy = undefined;
+    }
+  })();
+  return queueBusy;
+}
+
 async function restoreSnapshot() {
-  const snap = (await browser.storage.local.get(SNAPSHOT_KEY))[SNAPSHOT_KEY] as Snapshot | undefined;
-  if (!snap) return;
-  const ytTabs = await browser.tabs.query({ url: 'https://www.youtube.com/*' });
-  const tab = ytTabs.find((x) => x.active) ?? ytTabs[0];
-  if (!tab?.id) {
+  if (who.kind !== 'ok' || !who.me.key) {
     restoreMsg.textContent = t('opt.queue.needTab');
     return;
   }
+  const snap = await getSnapshot(who.me.key);
+  if (!snap) return;
   restoreBtn.disabled = true;
   restoreMsg.textContent = t('opt.queue.restoring');
   try {
-    const r = (await browser.tabs.sendMessage(tab.id, { type: 'YouTube+/queue-restore-snapshot', snapshot: snap }, { frameId: 0 })) as { ok: boolean; restored?: number; error?: string };
-    restoreMsg.textContent = r.ok ? t('opt.queue.restored', { n: r.restored ?? 0 }) : t('opt.queue.restoreFail', { e: r.error ?? '' });
-  } catch {
-    restoreMsg.textContent = t('opt.queue.noScript');
+    const n = await ask<number>(who.tab, { op: 'restore', key: who.me.key, snapshot: snap });
+    restoreMsg.textContent = t('opt.queue.restored', { n });
+  } catch (e) {
+    restoreMsg.textContent = t('opt.queue.restoreFail', { e: e instanceof Error ? e.message : String(e) });
   } finally {
     restoreBtn.disabled = false;
   }
 }
+
+// Follow the YouTube tab: coming back to this page, or a YouTube tab loading.
+let ytTimer: ReturnType<typeof setTimeout> | undefined;
+const queueSoon = () => {
+  if (ytTimer) clearTimeout(ytTimer);
+  ytTimer = setTimeout(() => void renderQueue(), 400);
+};
+window.addEventListener('focus', queueSoon);
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && queueSoon());
+browser.tabs.onUpdated.addListener((_id, info, tab) => {
+  if (info.status === 'complete' && /^https:\/\/www\.youtube\.com\//.test(tab.url ?? '')) queueSoon();
+});
+browser.tabs.onRemoved.addListener(queueSoon);
+browser.storage.onChanged.addListener((changes, area) => {
+  const key = who.kind === 'ok' ? who.me.key : undefined;
+  if (area === 'sync' && key && `${PROFILE_PREFIX}${key}` in changes) {
+    void getProfile(key).then((p) => { profile = p; renderQueueControls(); if (p.mode === 'playlist') void loadLists(); });
+  }
+  if (area === 'local' && key && `${SNAPSHOT_PREFIX}${key}` in changes) void renderSnapshot();
+  if (area === 'local' && PROTOCOL_ERROR_KEY in changes) void renderProtocolError();
+});
 
 // ---------- player ----------
 
@@ -484,7 +730,6 @@ levelSel.addEventListener('change', renderLog);
 browser.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (LOG_KEY in changes) void loadLog();
-  if (STATE_KEY in changes || OUTBOX_KEY in changes || SNAPSHOT_KEY in changes) void renderQueue();
   scheduleStorageRender();
 });
 
@@ -506,7 +751,7 @@ await loadLog();
 await renderStorage();
 await renderQueue();
 // Find out now whether Gemini is signed in, so the banner shows right away.
-if (settings.features.tldr) await send({ type: 'YouTube+/tldr-recheck' }).catch(() => {});
+if (featureOn(settings, 'tldr')) await send({ type: 'YouTube+/tldr-recheck' }).catch(() => {});
 await renderTldr();
 if (logFilter) logBox.scrollIntoView();
 if (hash === 'install') {

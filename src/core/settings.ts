@@ -1,5 +1,6 @@
 // Settings shared by all features (docs/design.md §3). Feature-specific
-// settings join this object as each feature lands.
+// settings join this object as each feature lands. The queue's settings are
+// kept per YouTube identity instead (features/queue/profiles.ts, design §22).
 
 export type FeatureId = 'tldr' | 'queue' | 'player';
 
@@ -36,28 +37,29 @@ export interface TldrSettings {
   batchSize: number;
 }
 
-export interface QueueSettings {
-  /** Name of the private playlist that stores the queue (design §24.1). */
-  listName: string;
-}
-
 export interface Settings {
+  /** Master switch: when false, no feature runs. */
+  enabled: boolean;
   lang: Lang;
   features: Record<FeatureId, boolean>;
   player: PlayerSettings;
-  queue: QueueSettings;
   tldr: TldrSettings;
   storage: StorageLimits;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  enabled: true,
   lang: 'en',
   features: { tldr: true, queue: true, player: true },
   player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true },
-  queue: { listName: 'YouTube+' },
   tldr: { titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200, batchSize: 5 },
   storage: { logMB: 2, tldrCacheMB: 5 },
 };
+
+/** A feature runs only when both the master switch and its own switch are on. */
+export function featureOn(s: Settings, f: FeatureId): boolean {
+  return s.enabled && s.features[f];
+}
 
 const KEY = 'settings';
 
@@ -67,10 +69,10 @@ type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]>
 export function withDefaults(stored: DeepPartial<Settings> | undefined): Settings {
   const s = stored ?? {};
   return {
+    enabled: s.enabled !== false,
     lang: s.lang === 'en' || s.lang === 'zh' ? s.lang : detectLang(),
     features: { ...DEFAULT_SETTINGS.features, ...s.features },
     player: { ...DEFAULT_SETTINGS.player, ...s.player },
-    queue: { ...DEFAULT_SETTINGS.queue, ...s.queue },
     tldr: { ...DEFAULT_SETTINGS.tldr, ...s.tldr },
     storage: { ...DEFAULT_SETTINGS.storage, ...s.storage },
   };

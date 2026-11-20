@@ -6,12 +6,13 @@ import { LOG_KEY } from './log';
 export type StorageCategory = 'log' | 'tldrCache' | 'queueSnapshot' | 'other';
 
 export const TLDR_CACHE_PREFIX = 'tldr/cache/';
-export const QUEUE_SNAPSHOT_KEY = 'queue/snapshot';
+/** Queue clear snapshots, one per identity: queue/snapshot/<identity> (design §25). */
+export const QUEUE_SNAPSHOT_PREFIX = 'queue/snapshot/';
 
 export function categoryOf(key: string): StorageCategory {
   if (key === LOG_KEY) return 'log';
   if (key.startsWith(TLDR_CACHE_PREFIX)) return 'tldrCache';
-  if (key === QUEUE_SNAPSHOT_KEY) return 'queueSnapshot';
+  if (key.startsWith(QUEUE_SNAPSHOT_PREFIX)) return 'queueSnapshot';
   return 'other';
 }
 

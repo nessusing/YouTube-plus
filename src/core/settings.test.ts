@@ -13,6 +13,11 @@ describe('withDefaults', () => {
     expect(s.player.miniControls).toBe(true);
   });
 
+  it('keeps the extension on unless it was turned off', () => {
+    expect(withDefaults({}).enabled).toBe(true);
+    expect(withDefaults({ enabled: false }).enabled).toBe(false);
+  });
+
   it('does not share nested objects with the defaults', () => {
     const s = withDefaults(undefined);
     s.features.tldr = false;

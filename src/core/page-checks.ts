@@ -7,14 +7,19 @@ import type { CheckOutcome, SelfCheck } from './selfcheck';
 
 type PageCheckMsg = { type: 'YouTube+/page-check'; feature: FeatureId; name: MsgKey };
 
+/** The YouTube tab used last (design §22 Q24): settings and checks act through it. */
+export async function recentYouTubeTab(): Promise<Browser.tabs.Tab | undefined> {
+  const tabs = await browser.tabs.query({ url: 'https://www.youtube.com/*' });
+  return tabs.sort((a, b) => Number(b.active) - Number(a.active) || (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
+}
+
 /** Background: a SelfCheck that runs `name` inside a YouTube tab. */
 export function pageCheck(feature: FeatureId, name: MsgKey): SelfCheck {
   return {
     feature,
     name,
     async run(): Promise<CheckOutcome> {
-      const tabs = await browser.tabs.query({ url: 'https://www.youtube.com/*' });
-      const tab = tabs.find((t) => t.active) ?? tabs[0];
+      const tab = await recentYouTubeTab();
       if (!tab?.id) return { status: 'skip', detail: t('check.needYtTab') };
       try {
         const res = (await browser.tabs.sendMessage(tab.id, { type: 'YouTube+/page-check', feature, name } satisfies PageCheckMsg, { frameId: 0 })) as CheckOutcome | undefined;

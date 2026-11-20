@@ -1,6 +1,5 @@
-// Queue sync core (design §24, §25). Pure: no DOM, no fetch, no storage.
+// Queue core (design §24, §25). Pure: no DOM, no fetch, no storage.
 
-export interface TlpqItem { videoId: string; setVideoId: string }
 export interface ListItem { videoId: string; setVideoId: string; /** 0-100, from the resume overlay */ percent?: number }
 
 export type ListAction =
@@ -8,188 +7,14 @@ export type ListAction =
   | { action: 'ACTION_REMOVE_VIDEO'; setVideoId: string }
   | { action: 'ACTION_MOVE_VIDEO_AFTER'; setVideoId: string; movedSetVideoIdPredecessor?: string };
 
-/** What the user did to the official queue, read from a captured request. */
-export type LocalOp =
-  | { kind: 'create'; videoIds: string[] }
-  | { kind: 'add'; videoId: string }
-  | { kind: 'remove'; tlpqSetId: string }
-  | { kind: 'move'; tlpqSetId: string; afterTlpqSetId?: string };
-
 export const WATCHED_PERCENT = 90;
 export const WATCHED_REMAINING_S = 10;
 export const BATCH = 100;
 
-export function isTlpq(id: unknown): id is string {
-  return typeof id === 'string' && id.startsWith('TLPQ');
-}
-
-/**
- * Turn a captured page request into queue ops. `endpoint` is the path after
- * /youtubei/v1/. Only requests for the official queue count.
- */
-export function parseCaptured(endpoint: string, body: unknown): LocalOp[] {
-  const b = (body ?? {}) as Record<string, unknown>;
-  if (endpoint === 'playlist/create') {
-    // The official queue is created with params CAQ%3D (design §21).
-    if (b.params !== 'CAQ%3D' || !Array.isArray(b.videoIds)) return [];
-    return [{ kind: 'create', videoIds: b.videoIds.filter((v): v is string => typeof v === 'string') }];
-  }
-  if (endpoint !== 'browse/edit_playlist' || !isTlpq(b.playlistId) || !Array.isArray(b.actions)) return [];
-  const ops: LocalOp[] = [];
-  for (const a of b.actions as Record<string, unknown>[]) {
-    switch (a.action) {
-      case 'ACTION_ADD_VIDEO':
-        if (typeof a.addedVideoId === 'string') ops.push({ kind: 'add', videoId: a.addedVideoId });
-        break;
-      case 'ACTION_REMOVE_VIDEO':
-        if (typeof a.setVideoId === 'string') ops.push({ kind: 'remove', tlpqSetId: a.setVideoId });
-        break;
-      case 'ACTION_MOVE_VIDEO_AFTER':
-        if (typeof a.setVideoId === 'string') {
-          ops.push({
-            kind: 'move',
-            tlpqSetId: a.setVideoId,
-            afterTlpqSetId: typeof a.movedSetVideoIdPredecessor === 'string' ? a.movedSetVideoIdPredecessor : undefined,
-          });
-        }
-        break;
-    }
-  }
-  return ops;
-}
-
-export function opSignature(op: LocalOp): string {
-  switch (op.kind) {
-    case 'create': return `create:${op.videoIds.join(',')}`;
-    case 'add': return `add:${op.videoId}`;
-    case 'remove': return `remove:${op.tlpqSetId}`;
-    case 'move': return `move:${op.tlpqSetId}:${op.afterTlpqSetId ?? ''}`;
-  }
-}
-
-/**
- * Signatures we expect to see because we caused them (our own UI-path calls),
- * plus recently seen ones (the page sends some edits twice). Both are ignored.
- */
-export class SignatureFilter {
-  private expected = new Map<string, number[]>();
-  private seen = new Map<string, number>();
-  constructor(private ttlMs = 15000, private dupMs = 3000) {}
-
-  expect(sig: string, now: number): void {
-    const list = this.expected.get(sig) ?? [];
-    list.push(now + this.ttlMs);
-    this.expected.set(sig, list);
-  }
-
-  /** True if this op should be forwarded. */
-  accept(sig: string, now: number): boolean {
-    const list = (this.expected.get(sig) ?? []).filter((t) => t > now);
-    if (list.length) {
-      list.shift();
-      this.expected.set(sig, list);
-      this.seen.set(sig, now);
-      return false;
-    }
-    this.expected.delete(sig);
-    const last = this.seen.get(sig);
-    this.seen.set(sig, now);
-    return !(last !== undefined && now - last < this.dupMs);
-  }
-}
-
-/** tlpqSetId → listSetId */
-export type Mapping = Record<string, string>;
-
-/**
- * Keep pairs that still exist on both sides; pair unmapped queue items with
- * unmapped list items of the same video, in order.
- */
-export function reconcile(tlpq: TlpqItem[], list: ListItem[], map: Mapping): Mapping {
-  const listIds = new Set(list.map((i) => i.setVideoId));
-  const out: Mapping = {};
-  const usedList = new Set<string>();
-  for (const t of tlpq) {
-    const l = map[t.setVideoId];
-    if (l && listIds.has(l) && !usedList.has(l)) {
-      out[t.setVideoId] = l;
-      usedList.add(l);
-    }
-  }
-  for (const t of tlpq) {
-    if (out[t.setVideoId]) continue;
-    const l = list.find((i) => i.videoId === t.videoId && !usedList.has(i.setVideoId));
-    if (l) {
-      out[t.setVideoId] = l.setVideoId;
-      usedList.add(l.setVideoId);
-    }
-  }
+export function chunk<T>(xs: T[], n = BATCH): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
   return out;
-}
-
-export type Translation = { actions: ListAction[] } | { drop: string };
-
-/** One local op → actions on the list (design §24.3 table). */
-export function translate(op: LocalOp, map: Mapping): Translation {
-  switch (op.kind) {
-    case 'create':
-      return { actions: op.videoIds.map((v) => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: v, dedupeOption: 'DEDUPE_OPTION_SKIP' })) };
-    case 'add':
-      return { actions: [{ action: 'ACTION_ADD_VIDEO', addedVideoId: op.videoId, dedupeOption: 'DEDUPE_OPTION_SKIP' }] };
-    case 'remove': {
-      const l = map[op.tlpqSetId];
-      return l ? { actions: [{ action: 'ACTION_REMOVE_VIDEO', setVideoId: l }] } : { drop: `remove: ${op.tlpqSetId} has no list entry` };
-    }
-    case 'move': {
-      const l = map[op.tlpqSetId];
-      if (!l) return { drop: `move: ${op.tlpqSetId} has no list entry` };
-      if (op.afterTlpqSetId === undefined) return { actions: [{ action: 'ACTION_MOVE_VIDEO_AFTER', setVideoId: l }] };
-      const after = map[op.afterTlpqSetId];
-      if (!after) return { drop: `move: predecessor ${op.afterTlpqSetId} has no list entry` };
-      return { actions: [{ action: 'ACTION_MOVE_VIDEO_AFTER', setVideoId: l, movedSetVideoIdPredecessor: after }] };
-    }
-  }
-}
-
-export interface OverwritePlan {
-  /** queue items to remove (their list entry is gone) */
-  removeTlpq: string[];
-  /** list items missing from the queue, in list order */
-  add: ListItem[];
-  /** queue moves to match list order, applied after removes and adds */
-  moves: { tlpqSetId: string; afterTlpqSetId?: string }[];
-}
-
-/**
- * Make the queue match the list (design §24.4). The item playing now is never
- * removed. Moves are computed over the queue as it will be after removes and
- * adds, keeping the playing item where it is.
- */
-export function planOverwrite(tlpq: TlpqItem[], list: ListItem[], map: Mapping, playingTlpqSetId?: string): OverwritePlan {
-  const listIds = new Set(list.map((i) => i.setVideoId));
-  const removeTlpq = tlpq
-    .filter((t) => t.setVideoId !== playingTlpqSetId && !(map[t.setVideoId] && listIds.has(map[t.setVideoId]!)))
-    .map((t) => t.setVideoId);
-  const mappedList = new Set(Object.values(map));
-  const add = list.filter((l) => !mappedList.has(l.setVideoId));
-
-  // Desired order of the kept, mapped queue items = list order.
-  const removed = new Set(removeTlpq);
-  const kept = tlpq.filter((t) => !removed.has(t.setVideoId) && map[t.setVideoId] && listIds.has(map[t.setVideoId]!));
-  const listIndex = new Map(list.map((l, i) => [l.setVideoId, i]));
-  const desired = [...kept].sort((a, b) => listIndex.get(map[a.setVideoId]!)! - listIndex.get(map[b.setVideoId]!)!);
-  const moves: OverwritePlan['moves'] = [];
-  const current = kept.map((t) => t.setVideoId);
-  for (let i = 0; i < desired.length; i++) {
-    const want = desired[i]!.setVideoId;
-    if (current[i] === want) continue;
-    if (want === playingTlpqSetId) continue;
-    const from = current.indexOf(want);
-    current.splice(from, 1);
-    current.splice(i, 0, want);
-    moves.push({ tlpqSetId: want, afterTlpqSetId: i === 0 ? undefined : current[i - 1] });
-  }
-  return { removeTlpq, add, moves };
 }
 
 export function isWatchedElsewhere(item: ListItem): boolean {
@@ -200,16 +25,171 @@ export function isWatchedHere(currentTime: number, duration: number, ended: bool
   return ended || (duration > 0 && duration - currentTime < WATCHED_REMAINING_S);
 }
 
-/** Outbox retry delays: 5 s, 30 s, 2 min, 10 min, then every 30 min. */
-export function retryDelayMs(attempts: number): number {
-  const steps = [5_000, 30_000, 120_000, 600_000];
-  return steps[attempts] ?? 1_800_000;
+// ---- per-identity queue settings (§22 Q17/Q22, §24.7) ----
+
+export type QueueMode = 'native' | 'playlist';
+
+export interface QueueProfile {
+  mode: QueueMode;
+  /** The chosen playlist (§24.5); absent = none chosen. */
+  listId?: string;
+  /** Its title, for display only; refreshed when the list is read. */
+  listName?: string;
+  /** "Remove from the playlist after playing" (§24.4). */
+  removeWatched: boolean;
 }
 
-export function chunk<T>(xs: T[], n = BATCH): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
-  return out;
+export const DEFAULT_PROFILE: QueueProfile = { mode: 'native', removeWatched: true };
+
+export function profileWithDefaults(stored: Partial<QueueProfile> | undefined): QueueProfile {
+  const s = stored ?? {};
+  const p: QueueProfile = {
+    mode: s.mode === 'playlist' ? 'playlist' : 'native',
+    removeWatched: s.removeWatched !== false,
+  };
+  if (typeof s.listId === 'string' && s.listId) {
+    p.listId = s.listId;
+    if (typeof s.listName === 'string') p.listName = s.listName;
+  }
+  return p;
+}
+
+// ---- when to take over "Add to queue" (§24.1) ----
+
+export interface TakeoverInput {
+  featureOn: boolean;
+  profile: QueueProfile;
+  loggedIn: boolean;
+  /** undefined while the check is still running */
+  editable: boolean | undefined;
+  /** Responses stopped matching what we expect (§26); paused until reload. */
+  protocolError: boolean;
+}
+
+/**
+ * take: intercept and add to the list. native: leave it alone, say nothing.
+ * noList / notEditable: leave it alone, but tell the user why (once).
+ */
+export type Takeover = 'take' | 'native' | 'noList' | 'notEditable';
+
+export function decideTakeover(i: TakeoverInput): Takeover {
+  if (!i.featureOn || i.profile.mode !== 'playlist' || !i.loggedIn || i.protocolError) return 'native';
+  if (!i.profile.listId) return 'noList';
+  if (i.editable === false) return 'notEditable';
+  return i.editable ? 'take' : 'native';
+}
+
+// ---- recognising "Add to queue" (§21.2, §21.3) ----
+
+export const QUEUE_LIST_TYPE = 'PLAYLIST_EDIT_LIST_TYPE_QUEUE';
+export const QUEUE_ICON = 'ADD_TO_QUEUE_TAIL';
+
+/**
+ * Read a `yt-action` event's detail. `queue`: an Add to queue we can take over.
+ * `malformed`: it is an Add to queue but not shaped as recorded (YouTube
+ * changed?): leave it to the page (§26). `other`: anything else.
+ */
+export function parseQueueAction(detail: unknown):
+  | { kind: 'queue'; videoIds: string[] }
+  | { kind: 'malformed' }
+  | { kind: 'other' } {
+  const d = detail as { actionName?: unknown; args?: unknown } | null;
+  if (!d || d.actionName !== 'yt-add-to-playlist-command') return { kind: 'other' };
+  const cmd = (Array.isArray(d.args) ? (d.args[0] as { addToPlaylistCommand?: unknown } | undefined) : undefined)?.addToPlaylistCommand as
+    | { listType?: unknown; videoId?: unknown; videoIds?: unknown }
+    | undefined;
+  if (!cmd || typeof cmd !== 'object') return { kind: 'other' };
+  if (cmd.listType !== QUEUE_LIST_TYPE) return { kind: 'other' };
+  const ids = Array.isArray(cmd.videoIds) ? cmd.videoIds.filter((v): v is string => typeof v === 'string' && !!v) : [];
+  if (!ids.length && typeof cmd.videoId === 'string' && cmd.videoId) ids.push(cmd.videoId);
+  return ids.length ? { kind: 'queue', videoIds: [...new Set(ids)] } : { kind: 'malformed' };
+}
+
+/** True if a command object (menu item data) contains an Add to queue. */
+export function isQueueCommand(cmd: unknown, depth = 0): boolean {
+  if (!cmd || typeof cmd !== 'object' || depth > 8) return false;
+  const c = cmd as Record<string, unknown>;
+  const add = c.addToPlaylistCommand as { listType?: unknown } | undefined;
+  if (add && add.listType === QUEUE_LIST_TYPE) return true;
+  for (const v of Object.values(c)) {
+    if (Array.isArray(v) ? v.some((x) => isQueueCommand(x, depth + 1)) : isQueueCommand(v, depth + 1)) return true;
+  }
+  return false;
+}
+
+/** The videos not in the list yet. The server ignores DEDUPE_OPTION_SKIP (2026-11-20). */
+export function notInList(items: ListItem[], videoIds: string[]): string[] {
+  const have = new Set(items.map((i) => i.videoId));
+  return videoIds.filter((v) => !have.has(v));
+}
+
+export function addActions(videoIds: string[]): ListAction[] {
+  return videoIds.map((v) => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: v, dedupeOption: 'DEDUPE_OPTION_SKIP' }));
+}
+
+// ---- after a video is watched (§24.4) ----
+
+/**
+ * Given the list as it is now on the server, find the entry just watched and
+ * the one to play next. `hintIndex` is the player's playlist index, used to
+ * pick between duplicates and to carry on when the watched entry was already
+ * removed elsewhere.
+ */
+export function nextAfter(items: ListItem[], videoId: string, hintIndex?: number): { watched?: ListItem; next?: ListItem } {
+  const hits = items.map((it, i) => (it.videoId === videoId ? i : -1)).filter((i) => i >= 0);
+  if (!hits.length) {
+    // Gone already: whatever now sits at its old place is what came after it.
+    const at = hintIndex !== undefined && hintIndex >= 0 ? hintIndex : 0;
+    return { next: items[at] };
+  }
+  const idx = hintIndex === undefined ? hits[0]! : hits.reduce((a, b) => (Math.abs(b - hintIndex) < Math.abs(a - hintIndex) ? b : a));
+  return { watched: items[idx], next: items[idx + 1] };
+}
+
+// ---- attach the list to the video playing (§24.2) ----
+
+type Obj = Record<string, unknown>;
+const obj = (x: unknown): Obj | undefined => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Obj) : undefined);
+
+/**
+ * The list as the native queue would show it: the video playing now on top
+ * (local only, not added to the list), then the list, and autoplay pointing at
+ * the list's first entry. From a `next` response for (playing video, list).
+ */
+export function queueView(next: unknown, now: { videoId: string; title: string; author: string; duration: number }): { list: Obj; autoplay: Obj } | undefined {
+  const two = obj(obj(next)?.contents)?.twoColumnWatchNextResults as Obj | undefined;
+  const list = obj(obj(two?.playlist)?.playlist);
+  const autoplay = obj(obj(two?.autoplay)?.autoplay);
+  const contents = list?.contents;
+  if (!list || !autoplay || !Array.isArray(contents)) return undefined;
+  // Copies: the page keeps the response, so do not change it.
+  const copied = contents.map((c) => {
+    const r = obj(obj(c)?.playlistPanelVideoRenderer);
+    return r ? { ...obj(c), playlistPanelVideoRenderer: { ...r, selected: false } } : c;
+  });
+  const firstNav = copied.map((c) => obj(obj(c)?.playlistPanelVideoRenderer)?.navigationEndpoint).find(Boolean);
+  if (!firstNav || !Array.isArray(autoplay.sets)) return undefined;
+  const v = now.videoId;
+  const d = Math.round(now.duration);
+  const top = {
+    playlistPanelVideoRenderer: {
+      videoId: v,
+      title: { simpleText: now.title },
+      shortBylineText: { runs: [{ text: now.author }] },
+      longBylineText: { runs: [{ text: now.author }] },
+      thumbnail: { thumbnails: [{ url: `https://i.ytimg.com/vi/${v}/default.jpg`, width: 120, height: 90 }, { url: `https://i.ytimg.com/vi/${v}/mqdefault.jpg`, width: 320, height: 180 }] },
+      ...(d > 0 ? { lengthText: { simpleText: `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}` } } : {}),
+      indexText: { simpleText: '▶' },
+      selected: true,
+      navigationEndpoint: { commandMetadata: { webCommandMetadata: { url: `/watch?v=${v}`, webPageType: 'WEB_PAGE_TYPE_WATCH', rootVe: 3832 } }, watchEndpoint: { videoId: v } },
+    },
+  };
+  const total = typeof list.totalVideos === 'number' ? list.totalVideos + 1 : undefined;
+  const view = { ...list, contents: [top, ...copied], currentIndex: 0, localCurrentIndex: 0, ...(total ? { totalVideos: total } : {}) };
+  const sets = (autoplay.sets as unknown[]).map((x) => ({ ...obj(x), autoplayVideo: firstNav, nextButtonVideo: firstNav }));
+  const ap: Obj = { ...autoplay, sets };
+  delete ap.modifiedSets;
+  return { list: view, autoplay: ap };
 }
 
 // ---- clear all / remove watched (§25) ----

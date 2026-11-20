@@ -1,8 +1,13 @@
 // Storage keys used by the queue feature.
-export const LIST_KEY = 'queue/list'; // sync: { name, id }
-export const OUTBOX_KEY = 'queue/outbox'; // local
-export const LOCK_KEY = 'queue/outbox-lock'; // local
-export const STATE_KEY = 'queue/state'; // local: { listId, listName, count, updatedAt }
-export { QUEUE_SNAPSHOT_KEY as SNAPSHOT_KEY } from '@/core/storage-usage';
-/** Per tab (sessionStorage): tlpqSetId → listSetId */
-export const MAP_SESSION_KEY = 'ytpp-queue-map';
+
+export { QUEUE_SNAPSHOT_PREFIX as SNAPSHOT_PREFIX } from '@/core/storage-usage';
+/** sync: QueueProfile per identity, queue/profile/<identity> (design §24.7). */
+export const PROFILE_PREFIX = 'queue/profile/';
+/** local: { time, detail } when responses stopped matching (design §26). */
+export const PROTOCOL_ERROR_KEY = 'queue/protocol-error';
+
+/** Left behind by the old TLPQ ↔ playlist sync (before 2026-11-20). */
+export const LEGACY_KEYS = {
+  sync: ['queue/list'],
+  local: ['queue/outbox', 'queue/outbox-lock', 'queue/state', 'queue/snapshot'],
+};

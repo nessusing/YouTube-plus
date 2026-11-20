@@ -4,7 +4,7 @@ import { initLang, t } from '@/core/i18n';
 import type { Toggleable } from '@/core/dom';
 import { createLogger } from '@/core/log';
 import { servePageChecks } from '@/core/page-checks';
-import { getSettings, onSettingsChanged, type PlayerSettings, type Settings } from '@/core/settings';
+import { featureOn, getSettings, onSettingsChanged, type PlayerSettings, type Settings } from '@/core/settings';
 import { backToTop } from './back-to-top';
 import { miniControls } from './mini-controls';
 import { miniDrag } from './mini-drag';
@@ -31,7 +31,7 @@ export async function startPlayer(): Promise<void> {
 
   const apply = (s: Settings) => {
     for (const k of Object.keys(parts) as (keyof PlayerSettings)[]) {
-      const want = s.features.player && s.player[k];
+      const want = featureOn(s, 'player') && s.player[k];
       try {
         if (want && !on.has(k)) {
           parts[k].enable();

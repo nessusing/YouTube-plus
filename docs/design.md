@@ -1,6 +1,6 @@
 # YouTube+ 设计文档
 
-> 状态：三个功能都已实现（2026-11-18），待在真实浏览器里手测；实测结果见 §17、§21、§38.1。队列在 2026-11-20 重新设计（第三部分），代码还没改
+> 状态：三个功能都已实现（2026-11-18），待在真实浏览器里手测；实测结果见 §17、§21、§38.1。队列在 2026-11-20 重新设计（第三部分），同日按新设计改完代码，待手测（实现时自己定的细节见 §28.1）
 > 日期：2026-11-14（同日加入队列功能和播放器功能）；2026-11-18 复查并加入存储用量管理
 > 范围：个人自用的 Chrome 扩展（MV3），YouTube 工具合集
 
@@ -412,6 +412,10 @@ prompt 模板（实现时再细调），要点：
 - **写列表**：`browse/edit_playlist`，`{context, playlistId, actions: [...]}`，一个请求可以带多个操作（每批 100 个）：`ACTION_ADD_VIDEO`（`addedVideoId`，`dedupeOption: 'DEDUPE_OPTION_SKIP'`）、`ACTION_REMOVE_VIDEO`（`setVideoId`）、`ACTION_REMOVE_VIDEO_BY_VIDEO_ID`、`ACTION_MOVE_VIDEO_AFTER`（`setVideoId`、`movedSetVideoIdPredecessor`）。引用已经不存在的 `setVideoId` 返回 400「Precondition check failed」，列表不变。
 - **新建列表**：`playlist/create`。**新列表的 ID 可能很短**（实测 13 个字符：`PL` 加 11 位），不要按长度校验列表 ID。
 - **正在播放列表时往里加视频**：在同一个标签页里加，页面会发 `edit_playlist` → 派发 `yt-refresh-playlist-command` → 重新请求 `next`，右侧面板和 `player.getPlaylist()` 实时变长，当前播放不受影响。从别的标签页加，要等下一次 `next`（切到下一个视频或刷新）才显示。
+- **官方队列怎么挂到正在播的视频上**（2026-11-20 实测，迷你播放器里加入队列）：`playlist/create` 之后在 `yt-playlist-manager` 上依次调 `setAutoplayRenderer(autoplay)`、`setPlaylistData(playlistPanel 数据，当前视频在第 0 条)`、`setPlayerPlaybackControlData({playlistPanelRenderer: 同一份})`；再请求 `next`，用返回的 `playlist.playlist` 和 `autoplay.autoplay` 把这三个再调一遍。**只调 `setPlaylistData` 不够**：信息栏变了，播放器的 `getPlaylistId()` 仍是空；第三个方法才让播放器知道这个列表。
+- 用自己的列表照做：`next`（`videoId` = 当前视频、`playlistId` = 列表）返回的 `currentIndex` 是 0、自动播放指向**第二条**（当前视频不在列表里）；本地把当前视频插到最前、把 `autoplay.sets[].autoplayVideo/nextButtonVideo` 换成第一条的 `navigationEndpoint`、删掉 `modifiedSets` 再交给那三个方法：迷你播放器和观看页右侧面板都出现列表，视频不重新载入，放完官方自动播放接列表第一条，仍在迷你播放器里。迷你播放器展开成观看页后面板还在。
+- 退回方案（导航）：观看页上导航到 `watch?v=<当前视频>&list=<ID>`，`watchEndpoint` 带 `startTimeSeconds`：从同一秒接着播（重新载入约 1 秒），面板出现列表、没有选中项，`getPlaylistIndex()` 是 0，官方自动播放跳到第二条。从迷你播放器派发 `yt-navigate` 会展开成观看页。
+- **`DEDUPE_OPTION_SKIP` 不起作用**：对已经在列表里的视频 `ACTION_ADD_VIDEO` 会再加一条重复的。写操作后几秒内读列表可能还是旧的。
 - **正在播放列表时删除（会出错）**：
   - 在另一个标签页删掉下一条：这个标签页不刷新，当前视频播完后照旧播已经删掉的那条，然后面板才按服务器重新同步，选中状态和 `getPlaylistIndex()` 都不对。
   - 在面板里删掉正在播的这一条：播放不中断，但播放器的位置指到了它后面那条，面板里还留着一行隐藏的重复项；**播完后直接停在结束画面，不播下一条**。
@@ -441,7 +445,7 @@ prompt 模板（实现时再细调），要点：
 |---|---|---|
 | Q1 | 自带队列模式 | 扩展完全不管，就是原生行为 |
 | Q2/Q7 | 播放列表模式怎么加视频 | **接管**所有「加入队列」入口，文字一起改成「加入 <列表名>」；加入后提示「已加入 · 查看」。没走 `yt-action` 的入口保持原样，不硬改 |
-| Q8 | 加入后播什么 | 只是存进列表，不改变「下一个播放什么」，除非你正在播这个列表。顶栏有「播放 <列表名>」按钮，从头连续播放 |
+| Q8 | 加入后播什么 | 存进列表。正在看一个不属于任何列表的视频时（观看页或迷你播放器），像官方队列一样把列表挂到当前播放上：右侧面板 / 迷你播放器下面出现列表，当前视频在最上面，放完接着播列表第一条，不重新载入（2026-11-20 改，原来是完全不动当前播放）。正在播别的列表时不动。顶栏有「播放 <列表名>」按钮，从头连续播放 |
 | Q9/Q18/Q28 | 看完删除 | 「播放完后从列表中删除」，默认勾选。只在播放这个列表时才算；由扩展负责切到下一条再删，不依赖官方自动播放 |
 | Q19/Q25 | 播放入口 | 顶栏头像左边一个小按钮，显示视频数。迷你播放器下面的列表面板用官方自带的 |
 | Q6/Q10/Q15 | 用哪个列表 | 设置页下拉框选：当前频道能编辑的列表（含「稍后观看」）加一项「新建…」。保存**列表 ID** |
@@ -469,7 +473,7 @@ prompt 模板（实现时再细调），要点：
 │  │                  isolated 一侧；菜单打开时改写文字                 │
 │  ├─ Identity        读 ytcfg 的 LOGGED_IN / DATASYNC_ID / 名字头像    │
 │  └─ PlayerWatch     播放列表时监听 ended / 剩 10 秒切走，判断看完     │
-│            ▲ window.postMessage（带每次加载随机生成的 nonce）          │
+│            ▲ window.postMessage（固定 tag，见下）                     │
 │            ▼                                                         │
 │ isolated content script                                              │
 │  ├─ QueueMode       按当前身份读设置，决定接不接管；加入、提示        │
@@ -484,7 +488,8 @@ prompt 模板（实现时再细调），要点：
 ```
 
 - 写操作都在 MAIN world 里做：认证要的 cookie 和 `ytcfg` 在页面里，同源请求也最像用户自己的操作。
-- 设置页要读列表、新建列表、读身份时，通过 service worker 转给最近获得焦点的 YouTube 标签页去做（跟现在的自检一样）。
+- 设置页要读列表、新建列表、读身份时，交给最近使用的 YouTube 标签页去做：设置页自己用 `tabs.sendMessage` 发给那个标签页的 content script（按 `active`、再按 `lastAccessed` 选标签页，自检也用同一个规则），不用 service worker 记焦点。
+- MAIN world 和 isolated 之间的消息只带一个固定的 tag，没有做 nonce：MAIN world 就是页面自己的 JS 环境，nonce 放在哪儿页面都读得到，防不了什么。
 - 纯逻辑（按身份取设置、判断接不接管、看完后的下一条、清空和撤销的计划）不碰 DOM、不直接 `fetch`，依赖从外面注入，方便单元测试。
 - 所有 DOM 选择器和 InnerTube 字段路径各集中在一个文件里，YouTube 改版时只改那一处（跟 §14.3 一样）。
 
@@ -506,6 +511,9 @@ prompt 模板（实现时再细调），要点：
 - QueueTakeover 在 `document` 上 capture 监听 `yt-action`：`actionName === 'yt-add-to-playlist-command'` 且 `listType === 'PLAYLIST_EDIT_LIST_TYPE_QUEUE'` 时 `stopImmediatePropagation()`，把 `videoIds` 交给 QueueMode。
 - QueueMode 对列表发 `ACTION_ADD_VIDEO`（`DEDUPE_OPTION_SKIP`），成功后底部提示「已加入 <列表名> · 查看」，「查看」打开列表页。已经在列表里的提示「已在 <列表名> 中」。
 - 如果当前正在播放这个列表，加完后在页面上派发 `yt-refresh-playlist-command`，让右侧面板跟着刷新（§21.4）。
+- **把列表挂到当前播放上**（跟官方队列一样能看到）：正在看一个不属于任何列表的视频（观看页，或者迷你播放器开着）时，加完后照官方队列的做法（§21.4）：用当前视频和列表 ID 请求一次 `next`，在本地把当前视频插到列表最前面（不写进服务器上的列表），自动播放改指列表第一条，然后交给 `yt-playlist-manager` 的三个方法。不重新载入，右侧面板 / 迷你播放器下面马上出现列表，当前视频放完由官方自动播放接列表第一条。正在播别的列表或者在放广告时不挂，只有提示。
+- 加入前先读一遍列表，已经在里面的视频不再发 `ACTION_ADD_VIDEO`，提示「已在 <列表名> 中」（服务器不认 `DEDUPE_OPTION_SKIP`，见 §21.4）。
+- 那三个方法不在了（YouTube 改版）或者 `next` 的结构对不上时退回：只在观看页上用 SPA 导航到 `watch?v=<当前视频>&list=<ID>&t=<秒数>s`（重新载入约 1 秒）。这样挂上后播放器的位置是 0，官方自动播放会跳过列表第一条，所以这个视频放完时不管勾没勾「播放完后删除」，都由扩展切到第一条。迷你播放器里不退回（导航会把它展开成观看页）。
 - 发送失败：提示「加入失败」，写日志，不重试、不排队（没有 outbox 了）。返回结果说明列表不存在时，按 §24.5 处理。
 
 ### 24.3 改文字
@@ -533,8 +541,8 @@ prompt 模板（实现时再细调），要点：
 
 ### 24.7 身份
 
-- 用 `DATASYNC_ID` 区分身份：不管是另一个 Google 账号，还是同一账号下的另一个频道，都算不同的身份。存储时只存它的哈希。
-- 按身份存的只有：模式、列表 ID 和列表名（显示用）、看完删除、清空快照。
+- 用 `DATASYNC_ID` 区分身份：不管是另一个 Google 账号，还是同一账号下的另一个频道，都算不同的身份。存储时只存它的哈希（SHA-256 的前 16 位十六进制，在页面里算）。
+- 按身份存的只有：模式、列表 ID 和列表名（显示用）、看完删除、清空快照。前四项存在 `chrome.storage.sync` 的 `queue/profile/<哈希>`，快照存在 `chrome.storage.local` 的 `queue/snapshot/<哈希>`。
 - 页面上身份变了（切换账号后页面会整页重新加载），重新读这个身份的设置。
 
 ## 25. 清空全部与移除已看完
@@ -586,10 +594,29 @@ prompt 模板（实现时再细调），要点：
 
 前三轮实测（2026-11-14、11-18、11-20）的结果已经写进 §21。
 
+### 28.1 实现时定的细节（2026-11-20，待手测确认）
+
+上面四项没来得及实测，先按下面的做法写了，手测时逐条确认：
+
+1. **悬停按钮**：拦截走的是同一个 `yt-action`，不另外处理。改文字是在鼠标移到按钮上时把 `data` 换成一个 `untoggledTooltip` 改过的副本（Polymer 会重新渲染）；不接管时换回原来的。
+2. **跳到下一条**：在 `ytd-app` 上派发 `yt-navigate`（带 `watchEndpoint{videoId, playlistId}`），1.5 秒内没看到 `yt-navigate-start` 就整页跳转。顶栏按钮和「查看」（打开列表页，用 `browseEndpoint`）也走这条路。
+3. **头像和名字**：名字用 `ytcfg` 的 `USER_ACCOUNT_NAME`，头像读顶栏 `#avatar-btn img` 的 `src`，读不到就只显示名字。
+4. **Gemini 登录状态**：直接用 TL;DR 已有的 `tldr-status`（打开设置页时先 `tldr-recheck` 一次）。TL;DR 关掉时不显示 Gemini 那一行。
+
+另外几处也是推测的写法：
+
+- **新版菜单的数据**：从菜单项往上找祖先元素上的 `componentProps`（元素本身、`ytSheetViewModel`、或者元素的任一属性下面），`data` 是函数就调用，再在结果里找 `listItems`。按菜单项在 sheet 里的序号取对应那一项，用标题核对序号对得上，再按图标 `ADD_TO_QUEUE_TAIL` 或命令判断是不是「加入队列」。找不到数据就不改文字（拦截不受影响）。
+- **刷新右侧面板**：加入正在播放的列表后，在 `ytd-app` 上派发 `yt-action`，`actionName: 'yt-refresh-playlist-command'`。
+- **「已在列表中」**：加入前先读列表比对（`DEDUPE_OPTION_SKIP` 实测不起作用，§21.4）。
+- **剩不到 10 秒时关掉标签页**：剩 10 秒时扩展先读一次列表，算好下一条和要删的那一条，并让页面脚本预先签好一个删除请求（每分钟重签一次）；`pagehide` 时页面脚本直接用 `fetch(..., {keepalive: true})` 发出去，不经过 isolated 一侧。
+- **协议错误**（§26）：目前只认一种：`playlist/get_add_to_playlist` 一个列表都没返回（「稍后观看」总该在）。出现时这个页面停止接管，记一条 error 日志，设置页队列标签里显示，可以手动关掉提示。
+
 ## 29. 开发顺序与测试
 
+以下 1–6 步 2026-11-20 都已完成，待手测。
+
 1. **删掉同步**：`sync.ts`、`outbox.ts`、`core.ts` 里 TLPQ 的翻译和覆盖逻辑、FetchTap 对 TLPQ 的抓取、对应的自检项和设置项（列表名字输入框、outbox 计数）、存储里的 outbox、列表 ID 和映射。§25 的代码保留。
-2. 身份：`DATASYNC_ID` 哈希，按身份存取队列设置；把旧的全局设置迁成「没选列表」（旧的按名字找到的 ID 不沿用，§24.5）。
+2. 身份：`DATASYNC_ID` 哈希，按身份存取队列设置；把旧的全局设置迁成「没选列表」（旧的按名字找到的 ID 不沿用，§24.5）。实现：扩展更新时删掉旧的 `queue/list`、`queue/outbox`、`queue/outbox-lock`、`queue/state`、`queue/snapshot`；`settings.queue.listName` 不再读，下次保存设置时自然消失。
 3. 设置页：顶部登录状态、「正在设置」、模式单选和说明、下拉框和新建。
 4. QueueTakeover 和改文字。
 5. 顶栏播放按钮、看完后切下一条并删除。

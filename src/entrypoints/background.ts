@@ -3,11 +3,12 @@ import { initLang } from '@/core/i18n';
 import { pageCheck } from '@/core/page-checks';
 import { PLAYER_PAGE_CHECKS } from '@/features/player/consts';
 import { QUEUE_PAGE_CHECKS } from '@/features/queue/consts';
+import { removeLegacyKeys } from '@/features/queue/profiles';
 import { createLogger, setLogSink } from '@/core/log';
 import { LogStore } from '@/core/log-store';
 import { isMessage, type SelfCheckResponse } from '@/core/messages';
 import { runChecks, type SelfCheck } from '@/core/selfcheck';
-import { getSettings, onSettingsChanged, withDefaults, type Settings } from '@/core/settings';
+import { featureOn, getSettings, onSettingsChanged, withDefaults, type Settings } from '@/core/settings';
 import { tldrChecks } from '@/features/tldr/checks';
 import { installHeaderRule } from '@/features/tldr/client';
 import { TldrService } from '@/features/tldr/service';
@@ -31,12 +32,12 @@ export default defineBackground(() => {
   });
   // Coming back from signing in: check again without waiting for a click (design §15.1).
   browser.tabs.onUpdated.addListener((_id, info, tab) => {
-    if (info.status !== 'complete' || !settings.features.tldr) return;
+    if (info.status !== 'complete' || !featureOn(settings, 'tldr')) return;
     if (/^https:\/\/(gemini|accounts)\.google\.com\//.test(tab.url ?? '')) tldr.onGeminiPage();
   });
   installHeaderRule().catch((e) => createLogger('tldr').error('header rule failed', e));
   browser.runtime.onConnect.addListener((port) => {
-    if (settings.features.tldr) tldr.attach(port);
+    if (featureOn(settings, 'tldr')) tldr.attach(port);
   });
   const log = createLogger('core');
 
@@ -74,7 +75,7 @@ export default defineBackground(() => {
         return true;
       case 'YouTube+/selfcheck':
         getSettings()
-          .then((s) => runChecks(checks, (f) => f === 'core' || s.features[f], log))
+          .then((s) => runChecks(checks, (f) => f === 'core' || featureOn(s, f), log))
           .then((results) => sendResponse({ results } satisfies SelfCheckResponse));
         return true;
     }
@@ -82,6 +83,8 @@ export default defineBackground(() => {
 
   browser.runtime.onInstalled.addListener(({ reason }) => {
     log.info(`installed (${reason}), version ${browser.runtime.getManifest().version}`);
+    // The old queue sync's leftovers (design §29 step 1); harmless when absent.
+    if (reason === 'update') removeLegacyKeys().catch((e) => createLogger('queue').warn('removing old queue keys failed', e));
     if (reason === 'install') {
       // The options page runs the full self-check when opened with #install.
       void browser.tabs.create({ url: browser.runtime.getURL('/options.html#install') });

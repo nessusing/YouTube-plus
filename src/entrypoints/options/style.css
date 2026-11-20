@@ -138,6 +138,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
 
 /* ---------- toggle switch ---------- */
 
+.stack.off { opacity: 0.5; }
+.stack.off .switch-row { cursor: default; }
 .switch-row { display: flex; align-items: flex-start; gap: 16px; cursor: pointer; }
 .switch-row .text { padding-top: 1px; }
 .switch-row .text small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -173,7 +175,7 @@ input.switch:focus-visible { outline: 2px solid var(--link); outline-offset: 4px
 
 .radios { display: flex; flex-direction: column; gap: 16px; }
 .radios label { display: flex; align-items: center; gap: 16px; cursor: pointer; }
-.radios input {
+.radios input[type="radio"] {
   appearance: none;
   flex: none;
   width: 20px;
@@ -185,9 +187,9 @@ input.switch:focus-visible { outline: 2px solid var(--link); outline-offset: 4px
   place-items: center;
   cursor: pointer;
 }
-.radios input:checked { border-color: var(--link); }
-.radios input:checked::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--link); }
-.radios input:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.radios input[type="radio"]:checked { border-color: var(--link); }
+.radios input[type="radio"]:checked::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--link); }
+.radios input[type="radio"]:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 
 /* ---------- buttons and fields ---------- */
 
@@ -255,6 +257,27 @@ select {
 .banner .text { flex: 1 1 260px; }
 .banner .text strong { display: block; font-weight: 500; }
 
+/* sign-in status above every tab */
+.status { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 20px; }
+.status-row { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-height: 36px; }
+.status-label { width: 72px; font-weight: 500; }
+.status-row .inline { min-height: 0; }
+
+/* parts that cannot be used right now (signed out, other mode) */
+.dim { opacity: 0.5; }
+.dim .btn, .dim input, .dim select { pointer-events: none; }
+
+/* radio options with a title and an explanation */
+.radios.rich { gap: 24px; }
+.radios.rich label { align-items: flex-start; }
+.radios.rich .text strong { display: block; font-weight: 500; }
+.radios.rich .text small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; max-width: 60ch; }
+.option-body { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 0 36px; }
+.option > .hint { margin: 8px 0 0 36px; color: var(--fail); }
+.list-select { max-width: min(28em, 100%); }
+.who .avatar { border-radius: 50%; }
+.hint.warn { color: var(--warn); }
+
 .checks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .checks li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: baseline; }
 .chip { font-size: 12px; font-weight: 500; text-align: center; border-radius: 10px; padding: 1px 0; background: var(--panel); }
@@ -300,6 +323,7 @@ select {
   .eyebrow { margin-bottom: 20px; }
   .row { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
   .row-label { padding-top: 0; }
+  .option-body, .option > .hint { margin-left: 0; }
 }
 
 .mt { margin-top: 16px; }

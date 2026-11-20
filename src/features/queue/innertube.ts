@@ -1,23 +1,24 @@
 // InnerTube calls made from the page (MAIN world), authenticated like the page
-// itself (design §28.1). Missing X-Goog-PageId does not fail: it silently acts
+// itself (design §21.5). Missing X-Goog-PageId does not fail: it silently acts
 // as the primary account, so always send it for brand accounts.
 
-import type { ListAction, ListItem, TlpqItem } from './core';
+import type { ListAction, ListItem } from './core';
+import type { Identity } from './profiles';
+import type { PlaylistData, PlaylistRef } from './rpc';
 
 declare const ytcfg: { get(key: string): unknown };
 
 const ORIGIN = 'https://www.youtube.com';
-/** Marks our own requests so the fetch tap ignores them. */
-export const OWN_HEADER = 'x-ytpp-own';
 
 function cookie(name: string): string | undefined {
   return document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1);
 }
 
-async function sha1(s: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(s));
+async function digest(algo: 'SHA-1' | 'SHA-256', s: string): Promise<string> {
+  const buf = await crypto.subtle.digest(algo, new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+const sha1 = (s: string) => digest('SHA-1', s);
 
 export class InnerTubeError extends Error {
   constructor(public status: number, message: string) {
@@ -25,7 +26,8 @@ export class InnerTubeError extends Error {
   }
 }
 
-export async function call<T = Record<string, unknown>>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+/** URL and init for one InnerTube POST, signed now. */
+export async function prepare(endpoint: string, body: Record<string, unknown>): Promise<{ url: string; init: RequestInit }> {
   const p3 = cookie('__Secure-3PAPISID');
   const sap = cookie('SAPISID') ?? p3;
   if (!sap || !p3) throw new InnerTubeError(401, 'not signed in (no SAPISID cookie)');
@@ -37,16 +39,18 @@ export async function call<T = Record<string, unknown>>(endpoint: string, body: 
     'X-Goog-AuthUser': String(ytcfg.get('SESSION_INDEX') ?? 0),
     'X-Youtube-Client-Name': '1',
     'X-Youtube-Client-Version': String(ytcfg.get('INNERTUBE_CLIENT_VERSION') ?? ''),
-    [OWN_HEADER]: '1',
   };
   const pageId = ytcfg.get('DELEGATED_SESSION_ID');
   if (pageId) headers['X-Goog-PageId'] = String(pageId);
-  const res = await fetch(`/youtubei/v1/${endpoint}?prettyPrint=false`, {
-    method: 'POST',
-    credentials: 'include',
-    headers,
-    body: JSON.stringify({ context: ytcfg.get('INNERTUBE_CONTEXT'), ...body }),
-  });
+  return {
+    url: `/youtubei/v1/${endpoint}?prettyPrint=false`,
+    init: { method: 'POST', credentials: 'include', headers, body: JSON.stringify({ context: ytcfg.get('INNERTUBE_CONTEXT'), ...body }) },
+  };
+}
+
+export async function call<T = Record<string, unknown>>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+  const req = await prepare(endpoint, body);
+  const res = await fetch(req.url, req.init);
   let json: Record<string, unknown> = {};
   try {
     json = await res.json();
@@ -60,7 +64,7 @@ export async function call<T = Record<string, unknown>>(endpoint: string, body: 
   return json as T;
 }
 
-function walk(o: unknown, key: string, out: unknown[] = []): unknown[] {
+export function walk(o: unknown, key: string, out: unknown[] = []): unknown[] {
   if (o && typeof o === 'object') {
     const r = o as Record<string, unknown>;
     if (key in r) out.push(r[key]);
@@ -74,7 +78,6 @@ function text(t: unknown): string {
   return x?.simpleText ?? x?.runs?.map((r) => r.text).join('') ?? '';
 }
 
-export interface PlaylistRef { id: string; title: string; privacy: string }
 
 /** All playlists this channel can edit (incl. Watch Later). */
 export async function editablePlaylists(): Promise<PlaylistRef[]> {
@@ -91,8 +94,6 @@ export async function createPrivatePlaylist(title: string): Promise<string> {
   if (!j.playlistId) throw new InnerTubeError(500, 'playlist/create returned no playlistId');
   return j.playlistId;
 }
-
-export interface PlaylistData { exists: boolean; editable: boolean; title: string; items: ListItem[] }
 
 function listItems(j: unknown): ListItem[] {
   return (walk(j, 'playlistVideoRenderer') as Record<string, unknown>[])
@@ -138,15 +139,24 @@ export async function editPlaylist(id: string, actions: ListAction[]): Promise<E
   }
 }
 
-/** The official queue of this tab (TLPQ), read from the server. */
-export async function readQueue(tlpq: string): Promise<TlpqItem[]> {
-  const j = await call('next', { playlistId: tlpq });
-  return (walk(j, 'playlistPanelVideoRenderer') as Record<string, unknown>[])
-    .filter((v) => typeof v.videoId === 'string' && typeof v.playlistSetVideoId === 'string')
-    .map((v) => ({ videoId: v.videoId as string, setVideoId: v.playlistSetVideoId as string }));
-}
-
-/** Which channel these calls act as; for the self-check. */
-export function identity(): { loggedIn: boolean; brand: boolean } {
-  return { loggedIn: ytcfg.get('LOGGED_IN') === true, brand: !!ytcfg.get('DELEGATED_SESSION_ID') };
+/**
+ * Who this page acts as (design §24.7). The key is a hash of DATASYNC_ID, so a
+ * different Google account and a different channel of the same account are
+ * different identities. The avatar is read from the top bar (best effort).
+ */
+export async function identity(): Promise<Identity> {
+  const loggedIn = ytcfg.get('LOGGED_IN') === true;
+  const brand = !!ytcfg.get('DELEGATED_SESSION_ID');
+  if (!loggedIn) return { loggedIn, brand };
+  const ds = ytcfg.get('DATASYNC_ID');
+  const raw = typeof ds === 'string' && ds ? ds : `${String(ytcfg.get('DELEGATED_SESSION_ID') ?? '')}||${String(ytcfg.get('USER_SESSION_ID') ?? '')}`;
+  const name = ytcfg.get('USER_ACCOUNT_NAME');
+  const img = document.querySelector<HTMLImageElement>('ytd-masthead #avatar-btn img, ytd-masthead ytd-topbar-menu-button-renderer img');
+  return {
+    loggedIn,
+    brand,
+    key: raw === '||' ? undefined : (await digest('SHA-256', `YouTube+ identity ${raw}`)).slice(0, 16),
+    name: typeof name === 'string' ? name : undefined,
+    avatar: img?.src || undefined,
+  };
 }

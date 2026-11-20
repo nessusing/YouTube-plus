@@ -2,7 +2,7 @@
 // world script. Both sides live on youtube.com; the tag keeps our messages
 // apart from the page's.
 
-import type { Takeover } from './core';
+import type { ListEdit, ListSnapshot, Takeover } from './core';
 
 export const TAG = 'ytpp-queue';
 
@@ -14,6 +14,10 @@ export type ToIso =
   | { tag: typeof TAG; dir: 'toIso'; event: 'nativeAdd' }
   | { tag: typeof TAG; dir: 'toIso'; event: 'warn'; msg: string }
   | { tag: typeof TAG; dir: 'toIso'; event: 'player'; payload: PlayerEvent }
+  /** A successful edit_playlist, by the page or by us (§24.8). */
+  | { tag: typeof TAG; dir: 'toIso'; event: 'edited'; edit: ListEdit }
+  /** The page put this list in the playlist panel (§24.8). */
+  | { tag: typeof TAG; dir: 'toIso'; event: 'panel'; playlistId: string; snap: ListSnapshot }
   | { tag: typeof TAG; dir: 'toIso'; event: 'ready' };
 
 /**

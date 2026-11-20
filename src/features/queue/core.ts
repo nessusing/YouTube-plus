@@ -192,6 +192,120 @@ export function queueView(next: unknown, now: { videoId: string; title: string; 
   return { list: view, autoplay: ap };
 }
 
+/** The list's entries in a `next` response. */
+export function nextRows(next: unknown): ListItem[] {
+  const two = obj(obj(next)?.contents)?.twoColumnWatchNextResults as Obj | undefined;
+  const contents = obj(obj(two?.playlist)?.playlist)?.contents;
+  if (!Array.isArray(contents)) return [];
+  return contents
+    .map((c) => obj(obj(c)?.playlistPanelVideoRenderer))
+    .filter((r): r is Obj => !!r && typeof r.videoId === 'string')
+    .map((r) => ({ videoId: r.videoId as string, setVideoId: typeof r.playlistSetVideoId === 'string' ? r.playlistSetVideoId : '' }));
+}
+
+/**
+ * What to hand the playlist manager for the video playing now: the list as
+ * the server has it when that video is in it, else the queue view above.
+ */
+export function panelView(next: unknown, now: { videoId: string; title: string; author: string; duration: number }): { list: Obj; autoplay: Obj } | undefined {
+  if (!nextRows(next).some((r) => r.videoId === now.videoId)) return queueView(next, now);
+  const two = obj(obj(next)?.contents)?.twoColumnWatchNextResults as Obj | undefined;
+  const list = obj(obj(two?.playlist)?.playlist);
+  const autoplay = obj(obj(two?.autoplay)?.autoplay);
+  return list && autoplay ? { list: { ...list }, autoplay: { ...autoplay } } : undefined;
+}
+
+// ---- keeping the UI in step with the list (§24.8) ----
+
+/**
+ * What a list edit should look like once reads catch up (removals can take a
+ * few seconds to show, §21.4): these videos in it, these entries gone.
+ */
+export interface Expect {
+  has?: string[];
+  /** setVideoIds */
+  gone?: string[];
+  /** videoIds removed by id */
+  goneVideos?: string[];
+}
+
+export interface ListEdit extends Expect {
+  playlistId: string;
+}
+
+/** Read an edit_playlist request body (the page's or ours). */
+export function parseEdit(body: unknown): ListEdit | undefined {
+  const b = obj(body);
+  if (!b || typeof b.playlistId !== 'string' || !Array.isArray(b.actions)) return undefined;
+  const e: ListEdit = { playlistId: b.playlistId, has: [], gone: [], goneVideos: [] };
+  for (const a of b.actions.map(obj)) {
+    if (a?.action === 'ACTION_ADD_VIDEO' && typeof a.addedVideoId === 'string') e.has!.push(a.addedVideoId);
+    else if (a?.action === 'ACTION_REMOVE_VIDEO' && typeof a.setVideoId === 'string') e.gone!.push(a.setVideoId);
+    else if (a?.action === 'ACTION_REMOVE_VIDEO_BY_VIDEO_ID' && typeof a.removedVideoId === 'string') e.goneVideos!.push(a.removedVideoId);
+  }
+  return e;
+}
+
+export function mergeExpect(a: Expect | undefined, b: Expect | undefined): Expect {
+  const cat = (x?: string[], y?: string[]) => [...(x ?? []), ...(y ?? [])];
+  // Added then removed again (or the reverse) within one batch: the last word wins.
+  const gone = cat(a?.gone, b?.gone);
+  const goneVideos = cat(a?.goneVideos, b?.goneVideos).filter((v) => !(b?.has ?? []).includes(v));
+  const has = cat(a?.has, b?.has).filter((v) => !(b?.goneVideos ?? []).includes(v));
+  return { has: [...new Set(has)], gone: [...new Set(gone)], goneVideos: [...new Set(goneVideos)] };
+}
+
+export function meetsExpect(items: ListItem[], e: Expect | undefined): boolean {
+  if (!e) return true;
+  const vids = new Set(items.map((i) => i.videoId));
+  const sets = new Set(items.map((i) => i.setVideoId));
+  return (e.has ?? []).every((v) => vids.has(v))
+    && (e.gone ?? []).every((s) => !sets.has(s))
+    && (e.goneVideos ?? []).every((v) => !vids.has(v));
+}
+
+/**
+ * One look at the list: from our own read, or what the page just put in the
+ * playlist panel. `total` can exceed `rows` (the panel shows a window of a
+ * long list).
+ */
+export interface ListSnapshot {
+  rows: ListItem[];
+  total: number;
+  at: number;
+}
+
+/**
+ * The count to show: the latest snapshot with the edits we know of applied on
+ * top, so a read that has not caught up yet cannot bring back an old number.
+ */
+export function countWith(snap: ListSnapshot | undefined, e: Expect | undefined): number | undefined {
+  if (!snap) return undefined;
+  const gone = new Set(e?.gone ?? []);
+  const goneVideos = new Set(e?.goneVideos ?? []);
+  const vids = new Set(snap.rows.map((r) => r.videoId));
+  const stale = snap.rows.filter((r) => gone.has(r.setVideoId) || goneVideos.has(r.videoId)).length;
+  const missing = (e?.has ?? []).filter((v) => !vids.has(v)).length;
+  return Math.max(0, snap.total - stale + missing);
+}
+
+/** Read the panel data the page handed the playlist manager (our own top row has no setVideoId). */
+export function panelSnapshot(data: unknown, at: number): { playlistId: string; snap: ListSnapshot } | undefined {
+  const d = obj(data);
+  if (!d || typeof d.playlistId !== 'string' || !Array.isArray(d.contents)) return undefined;
+  const all = d.contents.map((c) => obj(obj(c)?.playlistPanelVideoRenderer)).filter((r): r is Obj => !!r && typeof r.videoId === 'string');
+  const rows = all.filter((r) => typeof r.playlistSetVideoId === 'string' && r.playlistSetVideoId)
+    .map((r) => ({ videoId: r.videoId as string, setVideoId: r.playlistSetVideoId as string }));
+  const local = all.length - rows.length;
+  const total = typeof d.totalVideos === 'number' ? d.totalVideos - local : rows.length;
+  return { playlistId: d.playlistId, snap: { rows, total: Math.max(rows.length, total), at } };
+}
+
+/** Order-sensitive fingerprint, to tell whether the list changed elsewhere. */
+export function listSignature(items: ListItem[]): string {
+  return items.map((i) => i.setVideoId || i.videoId).join(',');
+}
+
 // ---- clear all / remove watched (§25) ----
 
 export interface Snapshot {

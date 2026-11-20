@@ -29,6 +29,8 @@ export async function startQueue(): Promise<void> {
   bridge.onNativeAdd(() => ctl.onNativeAdd());
   bridge.onWarn((msg) => log.warn(msg));
   bridge.onPlayer((e) => ctl.onPlayer(e));
+  bridge.onEdited((e) => ctl.onEdited(e));
+  bridge.onPanel((id, snap) => ctl.onPanel(id, snap));
 
   servePageChecks('queue', {
     [QUEUE_PAGE_CHECKS[0]]: async () => {

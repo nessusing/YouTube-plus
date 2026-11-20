@@ -1,6 +1,12 @@
-// Top bar button, left of the avatar: "▶ <list name> · N" (design §24.4).
+// Top bar button, left of the avatar: "[YouTube+ icon] <list name> · N" (design §24.4).
 
 import { t } from '@/core/i18n';
+
+// The extension icon (docs/icon-drafts/d.svg), cropped tight to the red base.
+const ICON = '<svg class="icon" viewBox="14 9 132 94" aria-hidden="true">'
+  + '<path d="M14 28Q14 14 30 13Q80 9.5 130 13Q146 14 146 28L146 84Q146 98 130 99Q80 102.5 30 99Q14 98 14 84Z" fill="#f00"/>'
+  + '<polygon points="44,37 44,75 74,56" fill="#fff"/>'
+  + '<path d="M85 50.5h34v11H85zM96.5 39h11v34h-11z" fill="#fff"/></svg>';
 
 const STYLE = `
   :host { all: initial; display: inline-flex; align-items: center; margin: 0 8px; }
@@ -11,8 +17,7 @@ const STYLE = `
   button:hover { background: var(--yt-spec-button-chip-background-hover, rgba(0,0,0,.1)); }
   button:focus-visible { outline: 2px solid #065fd4; outline-offset: 2px; }
   button[disabled] { cursor: default; opacity: .5; }
-  .icon { flex: none; width: 0; height: 0; border-style: solid; border-width: 6px 0 6px 10px;
-    border-color: transparent transparent transparent currentColor; }
+  .icon { flex: none; display: block; width: 24px; height: 17px; }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .n { flex: none; color: var(--yt-spec-text-secondary, #606060); }
   /* YouTube no longer sets the --yt-spec-* variables where we can see them. */
@@ -52,7 +57,7 @@ export function playButton(onClick: () => void): PlayButton {
     if (!host) {
       host = document.createElement('ytpp-queue-play');
       const root = host.attachShadow({ mode: 'closed' });
-      root.innerHTML = `<style>${STYLE}</style><button type="button"><span class="icon"></span><span class="name"></span><span class="n"></span></button>`;
+      root.innerHTML = `<style>${STYLE}</style><button type="button">${ICON}<span class="name"></span><span class="n"></span></button>`;
       btn = root.querySelector('button')!;
       btn.addEventListener('click', onClick);
     }

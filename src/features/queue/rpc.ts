@@ -1,11 +1,13 @@
 // Isolated-world client for the MAIN world script.
 
 import { isToIso, TAG, type PlayerEvent, type TakeoverState } from './bridge';
-import type { ListAction, ListItem } from './core';
+import type { Expect, ListAction, ListEdit, ListItem, ListSnapshot } from './core';
 import type { Identity } from './profiles';
 
 export interface PlaylistRef { id: string; title: string; privacy: string }
 export interface PlaylistData { exists: boolean; editable: boolean; title: string; items: ListItem[] }
+/** panel: done through the playlist manager; navigated: fallback reload into the list; none: left alone. */
+export interface SyncResult { how: 'panel' | 'navigated' | 'none'; videoId?: string }
 export interface Playing { videoId?: string; playlistId?: string; index?: number }
 
 export interface Rpc {
@@ -19,9 +21,12 @@ export interface Rpc {
   disarm(): Promise<void>;
   playVideo(videoId: string, listId: string): Promise<void>;
   openPlaylist(listId: string): Promise<void>;
-  /** Show the list next to the video playing outside any list (§24.2); how, or false if left alone. */
-  attachList(listId: string): Promise<'panel' | 'navigated' | false>;
-  refreshPlaylist(): Promise<void>;
+  /**
+   * Bring the playlist panel (side panel / under the miniplayer) up to date
+   * with the list, once reads show `expect` (§24.8). With `attach`, also hand
+   * the list to a video playing outside any list (§24.2).
+   */
+  syncList(listId: string, expect: Expect | undefined, attach: boolean): Promise<SyncResult>;
   health(): Promise<{ app: boolean; ytcfg: boolean; takeover: boolean }>;
   playing(): Promise<Playing>;
 }
@@ -32,6 +37,8 @@ export interface Bridge {
   onNativeAdd(cb: () => void): void;
   onWarn(cb: (msg: string) => void): void;
   onPlayer(cb: (e: PlayerEvent) => void): void;
+  onEdited(cb: (e: ListEdit) => void): void;
+  onPanel(cb: (playlistId: string, snap: ListSnapshot) => void): void;
   ready: Promise<void>;
 }
 
@@ -42,6 +49,8 @@ export function connect(timeoutMs = 20000): Bridge {
   const nativeCbs: (() => void)[] = [];
   const warnCbs: ((msg: string) => void)[] = [];
   const playerCbs: ((e: PlayerEvent) => void)[] = [];
+  const editCbs: ((e: ListEdit) => void)[] = [];
+  const panelCbs: ((playlistId: string, snap: ListSnapshot) => void)[] = [];
   let markReady!: () => void;
   const ready = new Promise<void>((r) => (markReady = r));
 
@@ -53,6 +62,8 @@ export function connect(timeoutMs = 20000): Bridge {
       else if (d.event === 'nativeAdd') nativeCbs.forEach((cb) => cb());
       else if (d.event === 'warn') warnCbs.forEach((cb) => cb(d.msg));
       else if (d.event === 'player') playerCbs.forEach((cb) => cb(d.payload));
+      else if (d.event === 'edited') editCbs.forEach((cb) => cb(d.edit));
+      else if (d.event === 'panel') panelCbs.forEach((cb) => cb(d.playlistId, d.snap));
       else if (d.event === 'ready') markReady();
       return;
     }
@@ -84,6 +95,8 @@ export function connect(timeoutMs = 20000): Bridge {
     onNativeAdd: (cb) => nativeCbs.push(cb),
     onWarn: (cb) => warnCbs.push(cb),
     onPlayer: (cb) => playerCbs.push(cb),
+    onEdited: (cb) => editCbs.push(cb),
+    onPanel: (cb) => panelCbs.push(cb),
     ready,
   };
 }

@@ -26,6 +26,10 @@ export class InnerTubeError extends Error {
   }
 }
 
+/** Our own request inits, so the page's fetch watcher can tell them apart. */
+const own = new WeakSet<object>();
+export const isOwn = (init: unknown): boolean => !!init && typeof init === 'object' && own.has(init);
+
 /** URL and init for one InnerTube POST, signed now. */
 export async function prepare(endpoint: string, body: Record<string, unknown>): Promise<{ url: string; init: RequestInit }> {
   const p3 = cookie('__Secure-3PAPISID');
@@ -42,10 +46,9 @@ export async function prepare(endpoint: string, body: Record<string, unknown>): 
   };
   const pageId = ytcfg.get('DELEGATED_SESSION_ID');
   if (pageId) headers['X-Goog-PageId'] = String(pageId);
-  return {
-    url: `/youtubei/v1/${endpoint}?prettyPrint=false`,
-    init: { method: 'POST', credentials: 'include', headers, body: JSON.stringify({ context: ytcfg.get('INNERTUBE_CONTEXT'), ...body }) },
-  };
+  const init: RequestInit = { method: 'POST', credentials: 'include', headers, body: JSON.stringify({ context: ytcfg.get('INNERTUBE_CONTEXT'), ...body }) };
+  own.add(init);
+  return { url: `/youtubei/v1/${endpoint}?prettyPrint=false`, init };
 }
 
 export async function call<T = Record<string, unknown>>(endpoint: string, body: Record<string, unknown>): Promise<T> {

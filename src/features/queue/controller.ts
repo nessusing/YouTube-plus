@@ -1,13 +1,15 @@
 // Playlist mode, isolated side (design §24): decide whether to take over Add
-// to queue, add to the chosen list, keep the top bar button current, and after
-// a video from the list is watched, move on to the next one and remove it.
+// to queue, add to the chosen list, keep the top bar button and the playlist
+// panel in step with the list whoever edits it (§24.8), and after a video from
+// the list is watched, move on to the next one and remove it.
 
 import { t } from '@/core/i18n';
 import type { Toggleable } from '@/core/dom';
 import type { Logger } from '@/core/log';
 import type { PlayerEvent } from './bridge';
 import {
-  addActions, decideTakeover, DEFAULT_PROFILE, isWatchedHere, nextAfter, notInList, type ListItem, type QueueMode, type QueueProfile, type Takeover,
+  addActions, countWith, decideTakeover, DEFAULT_PROFILE, isWatchedHere, listSignature, meetsExpect, mergeExpect, nextAfter, notInList,
+  type Expect, type ListEdit, type ListItem, type ListSnapshot, type QueueMode, type QueueProfile, type Takeover,
 } from './core';
 import { PROTOCOL_ERROR_KEY } from './keys';
 import type { PlayButton } from './play-button';
@@ -15,8 +17,14 @@ import { getProfile, onProfileChanged, updateProfile, type Identity } from './pr
 import type { Rpc } from './rpc';
 import { toast } from './toast';
 
-/** Re-read the list for the button count at most this often when the tab comes back. */
-const RECOUNT_MS = 30_000;
+/** When the tab comes back, re-read the list (edits elsewhere) at most this often. */
+const RECHECK_MS = 5_000;
+/** Edits closer together than this are handled as one (clear all sends one per 100). */
+const EDIT_BATCH_MS = 300;
+/** Removals can take a few seconds to show in reads (§21.4). */
+const READ_WAITS = [0, 1500, 3000, 5000];
+/** How long our own knowledge of an edit outranks what reads say (they lag behind). */
+const OVERLAY_MS = 30_000;
 
 type Plan = { videoId: string; watched?: ListItem; next?: ListItem };
 
@@ -36,6 +44,12 @@ export class QueueController {
   private toolsOn = false;
   /** The video reloaded inside the list by the fallback attach (§24.2), until it ends. */
   private attached: string | undefined;
+  private edits: { expect: Expect; timer: ReturnType<typeof setTimeout> } | undefined;
+  /** The latest look at the list, ours or the panel's; the count is taken from it (§24.8). */
+  private snap: ListSnapshot | undefined;
+  /** Edits seen lately, applied on top of any snapshot until reads surely show them. */
+  private overlay: { expect: Expect; until: number } | undefined;
+  private syncGen = 0;
 
   constructor(
     private rpc: Rpc,
@@ -47,7 +61,7 @@ export class QueueController {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
       if (this.modeToast) this.showModeToast(this.modeToast);
-      if (this.decision === 'take' && Date.now() - this.lastRead > RECOUNT_MS) void this.recount();
+      if (this.decision === 'take' && Date.now() - this.lastRead > RECHECK_MS) void this.recheck();
     });
   }
 
@@ -78,6 +92,10 @@ export class QueueController {
     }
     const profile = me.key ? await getProfile(me.key) : DEFAULT_PROFILE;
     if (gen !== this.gen) return;
+    if (profile.listId !== this.profile.listId) {
+      this.snap = undefined;
+      this.overlay = undefined;
+    }
     this.profile = profile;
     this.editable = undefined;
     if (on && profile.mode === 'playlist' && profile.listId) await this.checkList();
@@ -131,26 +149,104 @@ export class QueueController {
     }
     this.editable = undefined;
     this.items = [];
+    this.snap = undefined;
+    this.overlay = undefined;
   }
 
   private async readItems(): Promise<ListItem[]> {
     const data = await this.rpc.readPlaylist(this.profile.listId!);
-    this.items = data.items;
-    this.lastRead = Date.now();
+    this.took(data.items);
     return this.items;
   }
 
-  private async recount(): Promise<void> {
+  /** A fresh read of the list. */
+  private took(items: ListItem[]): void {
+    this.items = items;
+    this.lastRead = Date.now();
+    this.takeSnapshot({ rows: items, total: items.length, at: this.lastRead });
+  }
+
+  /** The newest snapshot wins; an older one arriving late is ignored. */
+  private takeSnapshot(snap: ListSnapshot): void {
+    if (this.snap && snap.at < this.snap.at) return;
+    this.snap = snap;
+  }
+
+  /** The page put a list in the playlist panel: if it is ours, the count follows it. */
+  onPanel(playlistId: string, snap: ListSnapshot): void {
+    if (this.decision !== 'take' || playlistId !== this.listId) return;
+    this.takeSnapshot(snap);
+    this.showButton();
+  }
+
+  private activeOverlay(): Expect | undefined {
+    if (this.overlay && Date.now() > this.overlay.until) this.overlay = undefined;
+    return this.overlay?.expect;
+  }
+
+  /** Back to this tab: if the list changed elsewhere (another tab, the phone), catch up. */
+  private async recheck(): Promise<void> {
+    const listId = this.listId;
+    if (!listId) return;
     try {
+      const before = listSignature(this.items);
       await this.readItems();
       this.showButton();
+      if (listSignature(this.items) !== before) await this.rpc.syncList(listId, undefined, false);
+    } catch (e) {
+      this.log.debug(`recheck failed: ${String(e)}`);
+    }
+  }
+
+  // ---------- §24.8 keep the UI in step ----------
+
+  /** Any successful edit of a list, by the page or by us. */
+  onEdited(e: ListEdit): void {
+    const listId = this.listId;
+    if (this.decision !== 'take' || e.playlistId !== listId) return;
+    // The count changes now; reads and the panel follow.
+    const prev = this.activeOverlay();
+    // Added a moment ago and now removed by entry: no longer expected.
+    const removed = new Set((e.gone ?? []).map((sid) => [...this.items, ...(this.snap?.rows ?? [])].find((i) => i.setVideoId === sid)?.videoId).filter(Boolean));
+    const kept = prev ? { ...prev, has: (prev.has ?? []).filter((v) => !removed.has(v)) } : undefined;
+    this.overlay = { expect: mergeExpect(kept, e), until: Date.now() + OVERLAY_MS };
+    this.showButton();
+    const expect = mergeExpect(this.edits?.expect, e);
+    if (this.edits) clearTimeout(this.edits.timer);
+    this.edits = {
+      expect,
+      timer: setTimeout(() => {
+        this.edits = undefined;
+        void this.afterEdit(listId, expect);
+      }, EDIT_BATCH_MS),
+    };
+  }
+
+  /** Top bar count, and the panel if this list is playing, once reads show the edit. */
+  private async afterEdit(listId: string, expect: Expect): Promise<void> {
+    const gen = ++this.syncGen;
+    await Promise.all([
+      this.recountUntil(expect, gen),
+      this.rpc.syncList(listId, expect, false).catch((err) => this.log.debug(`sync panel: ${String(err)}`)),
+    ]);
+  }
+
+  private async recountUntil(expect: Expect, gen: number): Promise<void> {
+    try {
+      for (const wait of READ_WAITS) {
+        if (wait) await new Promise((r) => setTimeout(r, wait));
+        if (gen !== this.syncGen) return; // a newer edit took over
+        await this.readItems();
+        if (meetsExpect(this.items, expect)) break;
+      }
+      if (gen === this.syncGen) this.showButton();
     } catch (e) {
       this.log.debug(`recount failed: ${String(e)}`);
     }
   }
 
   private showButton(): void {
-    if (this.decision === 'take') this.button.show(this.listName(), this.items.length);
+    if (this.decision === 'take') this.button.show(this.listName(), countWith(this.snap, this.activeOverlay()) ?? this.items.length);
     else this.button.hide();
   }
 
@@ -200,12 +296,11 @@ export class QueueController {
       // The server ignores DEDUPE_OPTION_SKIP and appends a duplicate, so check first.
       const data = await this.rpc.readPlaylist(listId);
       if (!data.exists) return await gone();
-      this.items = data.items;
-      this.lastRead = Date.now();
+      this.took(data.items);
       const fresh = notInList(data.items, videoIds);
       if (!fresh.length) {
         toast(t('queue.already', { name }), view);
-        await this.showInPlayback(listId, false);
+        await this.attachIfIdle(listId, undefined);
         return;
       }
       const r = await this.rpc.editPlaylist(listId, addActions(fresh));
@@ -218,8 +313,8 @@ export class QueueController {
       }
       this.log.info(`added ${fresh.join(',')} to ${listId}`);
       toast(t('queue.added', { name }), view);
-      await this.showInPlayback(listId, true);
-      await this.recount();
+      // The count and a panel already showing the list follow from the edit event.
+      await this.attachIfIdle(listId, { has: fresh });
     } catch (e) {
       this.log.error('add failed', e);
       toast(t('queue.addFailed'));
@@ -227,25 +322,21 @@ export class QueueController {
   }
 
   /**
-   * Make the list show next to what is playing, like the native queue (§24.2):
-   * already playing it → refresh the panel; watching a video outside any list
-   * (watch page or miniplayer) → attach the list to it. Another list playing:
-   * leave it, the toast is all.
+   * Watching a video outside any list (watch page or miniplayer): show the
+   * list next to it like the native queue, to play after it (§24.2). Another
+   * list playing: leave it, the toast is all.
    */
-  private async showInPlayback(listId: string, changed: boolean): Promise<void> {
+  private async attachIfIdle(listId: string, expect: Expect | undefined): Promise<void> {
     try {
       const playing = await this.rpc.playing();
-      if (playing.playlistId === listId) {
-        if (changed) await this.rpc.refreshPlaylist();
-      } else if (!playing.playlistId && playing.videoId) {
-        const how = await this.rpc.attachList(listId);
-        // Reloaded inside the list, the player sits on the list's first entry
-        // and its autoplay would skip it; the panel way puts this video on top.
-        if (how === 'navigated') this.attached = playing.videoId;
-        if (how) this.log.info(`attached ${listId} to ${playing.videoId} (${how})`);
-      }
+      if (playing.playlistId || !playing.videoId) return;
+      const r = await this.rpc.syncList(listId, expect, true);
+      // Reloaded inside the list, the player sits on the list's first entry and
+      // its autoplay would skip it; the panel way puts this video on top instead.
+      if (r.how === 'navigated') this.attached = r.videoId;
+      if (r.how !== 'none') this.log.info(`attached ${listId} to ${r.videoId} (${r.how})`);
     } catch (e) {
-      this.log.debug(`show list in playback: ${String(e)}`);
+      this.log.debug(`attach: ${String(e)}`);
     }
   }
 
@@ -343,7 +434,6 @@ export class QueueController {
       this.log.warn(`watched ${item.videoId}: removing from ${listId} failed: ${r.error ?? r.status}`);
       toast(t('queue.removeFailed'));
     }
-    await this.recount();
   }
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chunk, decideTakeover, DEFAULT_PROFILE, isQueueCommand, isWatchedHere, nextAfter, notInList, parseQueueAction, queueView, planClear,
+  chunk, decideTakeover, DEFAULT_PROFILE, isQueueCommand, countWith, isWatchedHere, listSignature, panelSnapshot, meetsExpect, mergeExpect, nextAfter, nextRows, notInList, panelView, parseEdit, parseQueueAction, queueView, planClear,
   planUndoMoves, profileWithDefaults, type ListItem, type TakeoverInput,
 } from './core';
 
@@ -145,6 +145,86 @@ describe('queueView (§24.2)', () => {
   it('gives up on an unexpected shape or an empty list', () => {
     expect(queueView({}, now)).toBeUndefined();
     expect(queueView({ contents: { twoColumnWatchNextResults: { playlist: { playlist: { contents: [] } }, autoplay: { autoplay: { sets: [] } } } } }, now)).toBeUndefined();
+  });
+});
+
+describe('keeping the UI in step (§24.8)', () => {
+  const row = (v: string, s: string) => ({ playlistPanelVideoRenderer: { videoId: v, playlistSetVideoId: s, navigationEndpoint: { watchEndpoint: { videoId: v } } } });
+  const next = (rows: unknown[]) => ({
+    contents: { twoColumnWatchNextResults: {
+      playlist: { playlist: { playlistId: 'PL1', totalVideos: rows.length, contents: rows } },
+      autoplay: { autoplay: { sets: [{ autoplayVideo: { watchEndpoint: { videoId: 'srv' } } }] } },
+    } },
+  });
+
+  it('reads the page\'s and our edit_playlist bodies', () => {
+    expect(parseEdit({ context: {}, playlistId: 'PL1', actions: [
+      { action: 'ACTION_ADD_VIDEO', addedVideoId: 'a' },
+      { setVideoId: 'S1', action: 'ACTION_REMOVE_VIDEO' },
+      { action: 'ACTION_REMOVE_VIDEO_BY_VIDEO_ID', removedVideoId: 'b' },
+      { action: 'ACTION_MOVE_VIDEO_AFTER', setVideoId: 'S2' },
+    ] })).toEqual({ playlistId: 'PL1', has: ['a'], gone: ['S1'], goneVideos: ['b'] });
+    expect(parseEdit({ playlistId: 'PL1' })).toBeUndefined();
+    expect(parseEdit('nope')).toBeUndefined();
+  });
+
+  it('knows when reads have caught up', () => {
+    const items = [L('a', 'S1'), L('b', 'S2')];
+    expect(meetsExpect(items, undefined)).toBe(true);
+    expect(meetsExpect(items, { has: ['a'], gone: ['S9'], goneVideos: ['z'] })).toBe(true);
+    expect(meetsExpect(items, { has: ['c'] })).toBe(false);
+    expect(meetsExpect(items, { gone: ['S2'] })).toBe(false);
+    expect(meetsExpect(items, { goneVideos: ['b'] })).toBe(false);
+  });
+
+  it('merges a burst of edits; the last word on a video wins', () => {
+    expect(mergeExpect({ has: ['a'] }, { has: ['b'], gone: ['S1'] })).toEqual({ has: ['a', 'b'], gone: ['S1'], goneVideos: [] });
+    expect(mergeExpect({ has: ['a'] }, { goneVideos: ['a'] })).toEqual({ has: [], gone: [], goneVideos: ['a'] });
+    expect(mergeExpect({ goneVideos: ['a'] }, { has: ['a'] })).toEqual({ has: ['a'], gone: [], goneVideos: [] });
+  });
+
+  it('counts the latest snapshot with known edits on top', () => {
+    const snap = { rows: [L('a', 'S1'), L('b', 'S2'), L('c', 'S3')], total: 3, at: 0 };
+    expect(countWith(undefined, undefined)).toBeUndefined();
+    expect(countWith(snap, undefined)).toBe(3);
+    // A read that has not caught up with a removal, or an add.
+    expect(countWith(snap, { gone: ['S2'] })).toBe(2);
+    expect(countWith(snap, { goneVideos: ['c'], has: ['d'] })).toBe(3);
+    // Already caught up: nothing counted twice.
+    expect(countWith({ ...snap, rows: [L('a', 'S1')], total: 1 }, { gone: ['S2'], has: ['a'] })).toBe(1);
+    // A window of a longer list.
+    expect(countWith({ rows: [L('a', 'S1')], total: 250, at: 0 }, { gone: ['S1'] })).toBe(249);
+  });
+
+  it('reads what the page put in the panel, leaving out our local top row', () => {
+    const data = { playlistId: 'PL1', totalVideos: 3, contents: [
+      { playlistPanelVideoRenderer: { videoId: 'x' } },
+      { playlistPanelVideoRenderer: { videoId: 'a', playlistSetVideoId: 'S1' } },
+      { playlistPanelVideoRenderer: { videoId: 'b', playlistSetVideoId: 'S2' } },
+    ] };
+    expect(panelSnapshot(data, 5)).toEqual({ playlistId: 'PL1', snap: { rows: [L('a', 'S1'), L('b', 'S2')].map(({ videoId, setVideoId }) => ({ videoId, setVideoId })), total: 2, at: 5 } });
+    expect(panelSnapshot({}, 0)).toBeUndefined();
+  });
+
+  it('fingerprints the order', () => {
+    expect(listSignature([L('a', 'S1'), L('b', 'S2')])).not.toBe(listSignature([L('b', 'S2'), L('a', 'S1')]));
+  });
+
+  it('reads the list out of next', () => {
+    expect(nextRows(next([row('a', 'S1'), row('b', 'S2')]))).toEqual([L('a', 'S1'), L('b', 'S2')].map(({ videoId, setVideoId }) => ({ videoId, setVideoId })));
+    expect(nextRows({})).toEqual([]);
+  });
+
+  it('keeps the server view when the video playing is in the list', () => {
+    const n = next([row('a', 'S1'), row('b', 'S2')]);
+    const v = panelView(n, { videoId: 'b', title: '', author: '', duration: 0 })!;
+    expect((v.list.contents as unknown[]).length).toBe(2);
+    expect(v.autoplay.sets).toEqual([{ autoplayVideo: { watchEndpoint: { videoId: 'srv' } } }]);
+  });
+
+  it('puts a video from outside the list on top', () => {
+    const v = panelView(next([row('a', 'S1')]), { videoId: 'x', title: 'X', author: '', duration: 0 })!;
+    expect((v.list.contents as { playlistPanelVideoRenderer: { videoId: string } }[]).map((c) => c.playlistPanelVideoRenderer.videoId)).toEqual(['x', 'a']);
   });
 });
 

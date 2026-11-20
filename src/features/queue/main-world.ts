@@ -4,7 +4,8 @@
 // swallows its own errors.
 
 import { isToMain, TAG, type PlayerEvent, type TakeoverState, type ToIso } from './bridge';
-import { isQueueCommand, isWatchedHere, parseQueueAction, QUEUE_ICON, queueView } from './core';
+import type { SyncResult } from './rpc';
+import { isQueueCommand, isWatchedHere, meetsExpect, nextRows, panelSnapshot, panelView, parseEdit, parseQueueAction, QUEUE_ICON, type Expect, type ListAction } from './core';
 import * as it from './innertube';
 
 const post = (m: Omit<ToIso, 'tag' | 'dir'>) => window.postMessage({ tag: TAG, dir: 'toIso', ...m }, location.origin);
@@ -321,43 +322,60 @@ function openPlaylist(listId: string): void {
 
 /** YouTube's playlist manager; the native queue calls these three (§21.4). */
 type PlaylistManager = HTMLElement & {
+  getPlaylistData?: () => unknown;
   setAutoplayRenderer?: (a: unknown) => void;
   setPlaylistData?: (d: unknown) => void;
   setPlayerPlaybackControlData?: (d: unknown) => void;
 };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Removals can take a few seconds to show in reads (§21.4). */
+const SYNC_WAITS = [0, 1500, 3000, 5000];
+
 /**
- * Watching a video outside any list, on the watch page or in the miniplayer:
- * hand the queue list to the page the way the native queue does, so it shows
- * in the side panel / under the miniplayer and plays after this video, with
- * no reload (§24.2). 'panel' when done that way; 'navigated' when that failed
- * and the watch page was reloaded inside the list instead; false: left alone.
+ * Bring the playlist panel up to date (§24.8), the way the native queue does
+ * it (§21.4): read `next` for the video playing and the list, then hand it to
+ * the playlist manager. Works on the watch page and under the miniplayer, no
+ * reload. Playing the list: refresh. Playing a video outside any list and
+ * `attach`: show the list with that video on top, to play after it (§24.2).
  */
-async function attachList(listId: string): Promise<'panel' | 'navigated' | false> {
+async function syncList(listId: string, expect: Expect | undefined, attach: boolean): Promise<SyncResult> {
   const p = player();
   const data = p?.getVideoData?.();
   const videoId = data?.video_id;
-  if (!p || !videoId || p.getPlaylistId?.() || p.classList.contains('ad-showing')) return false;
+  if (!p || !videoId || p.classList.contains('ad-showing')) return { how: 'none' };
+  const playing = p.getPlaylistId?.() || undefined;
+  if (playing ? playing !== listId : !attach) return { how: 'none' };
   const mini = app().hasAttribute('miniplayer-is-active');
   const onWatch = location.pathname === '/watch' && new URLSearchParams(location.search).get('v') === videoId;
   // Anywhere else the player is a leftover, not something playing.
-  if (!mini && !onWatch) return false;
+  if (!mini && !onWatch) return { how: 'none' };
   const pm = document.querySelector<PlaylistManager>('yt-playlist-manager');
   if (pm?.setPlaylistData && pm.setPlayerPlaybackControlData && pm.setAutoplayRenderer) {
     try {
-      const next = await it.call('next', { videoId, playlistId: listId });
-      const view = queueView(next, { videoId, title: data.title ?? '', author: data.author ?? '', duration: p.getDuration?.() ?? 0 });
-      if (view && player()?.getVideoData?.()?.video_id === videoId && !player()?.getPlaylistId?.()) {
+      for (const [i, wait] of SYNC_WAITS.entries()) {
+        if (wait) await sleep(wait);
+        const next = await it.call('next', { videoId, playlistId: listId });
+        if (!meetsExpect(nextRows(next), expect) && i < SYNC_WAITS.length - 1) continue;
+        // Moved on meanwhile: the page has loaded what goes with the new video.
+        const now = player();
+        if (now?.getVideoData?.()?.video_id !== videoId || (now.getPlaylistId?.() || undefined) !== playing) return { how: 'none' };
+        const view = panelView(next, { videoId, title: data.title ?? '', author: data.author ?? '', duration: p.getDuration?.() ?? 0 });
+        if (!view) break;
         pm.setAutoplayRenderer(view.autoplay);
         pm.setPlaylistData(view.list);
         pm.setPlayerPlaybackControlData({ playlistPanelRenderer: view.list });
-        if (player()?.getPlaylistId?.() === listId) return 'panel';
+        return { how: 'panel', videoId };
       }
     } catch {
       // fall back below
     }
   }
-  return onWatch && !mini && navigateIntoList(p, videoId, listId) ? 'navigated' : false;
+  if (playing) {
+    refreshPlaylist();
+    return { how: 'none' };
+  }
+  return onWatch && !mini && navigateIntoList(p, videoId, listId) ? { how: 'navigated', videoId } : { how: 'none' };
 }
 
 /** Fallback: reload the video inside the list at the same second (about 1 s of buffering). */
@@ -377,7 +395,7 @@ function navigateIntoList(p: PlayerApi, videoId: string, listId: string): boolea
   return true;
 }
 
-/** After adding to the list that is playing, let the side panel reload it (§21.4). */
+/** Fallback when the playlist manager is not there: ask the page to reload the panel (does nothing under the miniplayer). */
 function refreshPlaylist(): void {
   const a = app();
   a.dispatchEvent(new CustomEvent('yt-action', {
@@ -387,13 +405,70 @@ function refreshPlaylist(): void {
   }));
 }
 
+// ---------- page edits (§24.8) ----------
+
+/**
+ * The page edits lists itself too: Remove from playlist in the side panel,
+ * Save to playlist, Add to queue straight into the list playing in the
+ * miniplayer. Watch its edit_playlist requests (read only, never changed) and
+ * report the ones that went through. YouTube looks `fetch` up on every call,
+ * so wrapping it at document_start sees them.
+ */
+function installEditWatch(): void {
+  const orig = window.fetch;
+  window.fetch = function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
+    let body: Promise<string> | undefined;
+    try {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/youtubei/v1/browse/edit_playlist') && !it.isOwn(init)) {
+        if (typeof init?.body === 'string') body = Promise.resolve(init.body);
+        // Clone before the page's request reads its body.
+        else if (input instanceof Request) body = input.clone().text();
+      }
+    } catch {
+      body = undefined;
+    }
+    const res = orig.call(this, input, init);
+    if (body) {
+      void Promise.all([body, res]).then(([b, r]) => {
+        if (!r.ok) return;
+        const edit = parseEdit(JSON.parse(b));
+        if (edit) post({ event: 'edited', edit } as ToIso);
+      }).catch(() => {});
+    }
+    return res;
+  } as typeof window.fetch;
+}
+
+/**
+ * Whenever the page (or we) put list data in the playlist panel, report it,
+ * so the top bar count shows what the panel shows (§24.8).
+ */
+function installPanelWatch(): void {
+  const report = () => {
+    try {
+      const pm = document.querySelector<PlaylistManager>('yt-playlist-manager');
+      const p = panelSnapshot(pm?.getPlaylistData?.(), Date.now());
+      if (p) post({ event: 'panel', playlistId: p.playlistId, snap: p.snap } as ToIso);
+    } catch {
+      // the count catches up on the next read
+    }
+  };
+  document.addEventListener('yt-playlist-data-updated', () => setTimeout(report, 0), true);
+}
+
 // ---------- RPC ----------
 
 const methods: Record<string, (...args: never[]) => unknown> = {
   editablePlaylists: it.editablePlaylists,
   createPrivatePlaylist: it.createPrivatePlaylist,
   readPlaylist: it.readPlaylist,
-  editPlaylist: it.editPlaylist,
+  editPlaylist: async (id: string, actions: ListAction[]) => {
+    const r = await it.editPlaylist(id, actions);
+    const edit = parseEdit({ playlistId: id, actions });
+    if (r.ok && edit) post({ event: 'edited', edit } as ToIso);
+    return r;
+  },
   identity: it.identity,
   setTakeover: (s: TakeoverState) => {
     state = s;
@@ -405,8 +480,7 @@ const methods: Record<string, (...args: never[]) => unknown> = {
   },
   playVideo,
   openPlaylist,
-  attachList,
-  refreshPlaylist,
+  syncList,
   health: () => ({
     app: !!document.querySelector('ytd-app'),
     ytcfg: typeof (window as { ytcfg?: unknown }).ytcfg === 'object',
@@ -421,6 +495,8 @@ const methods: Record<string, (...args: never[]) => unknown> = {
 
 export function startMainWorld(): void {
   installTakeover();
+  installEditWatch();
+  installPanelWatch();
   installRelabel();
   installPlayerWatch();
   window.addEventListener('message', async (e) => {

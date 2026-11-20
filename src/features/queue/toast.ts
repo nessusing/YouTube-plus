@@ -43,5 +43,10 @@ export function toast(text: string, action?: { label: string; run: () => void },
     t.append(b);
   }
   root!.append(t);
-  timer = setTimeout(() => t.remove(), ms);
+  // Readable from outside the closed shadow root (e2e tests, debugging).
+  host.dataset.text = text;
+  timer = setTimeout(() => {
+    t.remove();
+    delete host?.dataset.text;
+  }, ms);
 }

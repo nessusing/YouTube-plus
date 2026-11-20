@@ -8,12 +8,17 @@
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/e2e",
     "test": "vitest run --config tests/vitest.config.ts",
     "icons": "bash scripts/icons.sh",
-    "postinstall": "node scripts/patch-wxt.mjs && wxt prepare"
+    "postinstall": "node scripts/patch-wxt.mjs && wxt prepare",
+    "test:e2e": "wxt build && playwright test -c tests/e2e/playwright.config.ts --project=e2e",
+    "e2e:login": "node tests/e2e/tools/login.mjs",
+    "e2e:cleanup": "playwright test -c tests/e2e/playwright.config.ts --project=cleanup"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^26.6.6",
     "happy-dom": "^21.0.4",
     "typescript": "^7.0.2",
     "vitest": "^5.1.1",

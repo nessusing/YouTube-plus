@@ -45,6 +45,9 @@ export function playButton(onClick: () => void): PlayButton {
     const label = want.count ? t('queue.playLabel', { name: want.name, n: want.count }) : t('queue.playEmpty', { name: want.name });
     btn.title = label;
     btn.setAttribute('aria-label', label);
+    // Readable from outside the closed shadow root (e2e tests, debugging).
+    host!.dataset.name = want.name;
+    host!.dataset.count = String(want.count);
   };
 
   /** Put it before the avatar; the masthead can re-render, so keep checking. */

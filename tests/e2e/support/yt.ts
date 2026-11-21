@@ -253,3 +253,14 @@ export function playButton(page: Page) {
 export async function lastToast(page: Page): Promise<string | undefined> {
   return (await page.locator('ytpp-toast').getAttribute('data-text', { timeout: 1000 }).catch(() => null)) ?? undefined;
 }
+
+/**
+ * "The user comes back to this tab": fire the visibilitychange the browser
+ * fires then. Playwright never really hides a tab (focus emulation, windows
+ * never occluded; minimising and switching tabs were tried), so the page is
+ * visible throughout; the extension only checks it is visible when the event
+ * comes, so this runs the same path.
+ */
+export async function comeBack(page: Page): Promise<void> {
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+}

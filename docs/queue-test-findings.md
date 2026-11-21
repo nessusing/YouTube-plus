@@ -92,6 +92,17 @@ L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测�
 - **测试**：`tests/e2e/specs/smoke.spec.ts`（数字应为 2）
 - **已修**（经确认提前修）：新增纯函数 `core.ts` 的 `playlistPage()`，只读 `playlistVideoListRenderer` 里的条目，只跟随它最后一项的 continuation（列表超过 100 条时才有）；continuation 返回里只认 `continuationItems` 的直接子项，跳过 `targetId` 为 `VL…` 或 `recommended_videos_shelf` 的推荐区。L1 测试用实测录下来的 2 条和 105 条列表的返回（裁剪后放在 `tests/unit/features/queue/fixtures/`）。修完后，L4 smoke 测试数字正确。
 
+### F9　列表最后一条放完后，YouTube 自己的自动播放会接着放推荐视频（设计跟实际不一致）
+
+- **场景**：在放列表的最后一条，「自动播放」开着（默认开），视频放完。
+- **§24.4 写的**：「最后一条看完后列表空了，就停在结束画面」。
+- **实际**（2026-11-20 实测，勾不勾「播放完后删除」都一样）：结束画面停大约 6 秒，然后 YouTube 自动播放一个推荐视频，离开了列表（URL 里没有 `list=` 了）。这是 YouTube 自己的行为，不是扩展造成的；勾选「播放完后删除」时，扩展确实删掉了最后一条。
+- **测试**：`tests/e2e/specs/watched.spec.ts` › the last entry: removed, stays on the end screen（用 `test.fail` 标出）
+- **要你定**：
+  - (a) 改设计：接受 YouTube 的行为，把 §24.4 这句改成「之后照 YouTube 的自动播放设置走」，测试也跟着改；
+  - (b) 改代码：播放列表模式下列表放完时，扩展取消这次自动播放（比如在结束画面上点取消，或者暂停），停在结束画面。
+  - 我倾向 (a)：用户自己开着自动播放，扩展不应该替他关掉；而且 (b) 要跟 YouTube 的倒计时界面较劲，容易坏。
+
 ### A4（实测）　新建列表加入视频后，立刻读是空的
 
 - 新建的私密列表加入 2 个视频后，立刻 `browse` 读到 0 条，约 3 秒后才读到。这跟 §21.4「加入是立刻可见的」不一致，至少对刚建的列表是这样。还不确定已有的列表是不是也这样，后面的 L4 测试会顺带观察。

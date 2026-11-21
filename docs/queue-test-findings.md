@@ -26,6 +26,7 @@
 | F14 | 读不到列表标题：确认框、快照里显示成列表 ID | 中 | bug | **已修** |
 | F15 | 清空 / 移除后，页面上的行没去掉 | 中 | bug | **已修** |
 | F16 | 设置页新建列表后，选择马上被清掉 | **高** | bug | **已修** |
+| F17 | 复查一个已删的列表期间换了新列表，新的选择被清掉 | 中 | bug | **已修** |
 
 ## L2（controller 集成测试，`tests/unit/features/queue/controller.*.test.ts`）
 
@@ -207,3 +208,12 @@ L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测�
   - 设置页创建后离开「新建…」状态；在新列表出现之前多读几次可编辑列表（0、1.5、3 秒）。
   - 撤销（§25）也一样：放回去以后先等读得到再刷新页面，不然刷新出来还是空的。
 - **测试**：L2 `controller.sync` › a list just created（假服务器加了 `newListLagMs`）；L4 `settings.spec.ts` › New…。
+
+### F17　复查一个已删的列表期间换了新列表，新的选择被清掉（2026-11-20 已修）
+
+- **场景**：选中的列表在别处被删了。标签页读到「不存在」，按 F16 开始复查（约 4.5 秒）；这期间在设置页选了另一个列表，或者新建了一个。
+- **预期**：复查结论只针对旧列表；新的选择保留。
+- **实际**：复查结束后，`listGone()` 清掉的是 profile 里**当前**的 `listId`，也就是刚选的新列表。设置页下拉框回到「选择列表」，日志里写成新列表「no longer exists」。
+- **原因**：只有 `noticeGone` 在复查后核对了选择没变；`checkList` 和「加入」两条路径没核对。e2e 里连跑「New…」就会碰上：上一次建的列表测完被删，profile 还指着它。
+- **修法**：`listGone(id)` 在写 profile 时核对存储里的 `listId` 仍是 `id`，不是就什么都不清、不提示。三条路径都改成传入复查的那个 ID。
+- **测试**：L2 `controller.takeover` › another list chosen while a deleted one is being checked；L4 `settings.spec.ts` › New…（连跑两次）。

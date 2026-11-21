@@ -142,7 +142,7 @@ export class QueueController {
         return;
       }
       const now = await this.goneForSure(id);
-      if (now === 'gone') await this.listGone();
+      if (now === 'gone') await this.listGone(id);
       else if (now === 'there') return await this.checkList();
       else this.editable = undefined;
     } catch (e) {
@@ -171,20 +171,27 @@ export class QueueController {
     return 'gone';
   }
 
-  /** The list was deleted elsewhere: forget it for this identity (§24.5). */
-  private async listGone(): Promise<void> {
-    const id = this.profile.listId;
+  /**
+   * List `id` was deleted elsewhere: forget it for this identity (§24.5).
+   * False, and nothing cleared, if another list was chosen while `id` was being
+   * checked: the check takes seconds, and the choice is read again at the end.
+   */
+  private async listGone(id: string): Promise<boolean> {
+    if (!this.me?.key) return false;
+    let cleared = false;
+    this.profile = await updateProfile(this.me.key, (p) => {
+      if (p.listId !== id) return;
+      delete p.listId;
+      delete p.listName;
+      cleared = true;
+    });
+    if (!cleared) return false;
     this.log.info(`queue playlist ${id} no longer exists; cleared the choice`);
-    if (this.me?.key) {
-      this.profile = await updateProfile(this.me.key, (p) => {
-        delete p.listId;
-        delete p.listName;
-      });
-    }
     this.editable = undefined;
     this.items = [];
     this.snap = undefined;
     this.overlay = undefined;
+    return true;
   }
 
   private async readItems(): Promise<ListItem[]> {
@@ -200,9 +207,9 @@ export class QueueController {
 
   /** A read says the list is not there (deleted elsewhere): check, then forget it and say so (§24.5, findings F5). */
   private async noticeGone(listId: string): Promise<void> {
-    if (await this.goneForSure(listId) !== 'gone' || this.listId !== listId) return;
+    if (await this.goneForSure(listId) !== 'gone') return;
     const name = this.listName();
-    await this.listGone();
+    if (!await this.listGone(listId)) return;
     await this.apply();
     toast(t('queue.listGone', { name }), { label: t('queue.toSettings'), run: openSettings });
   }
@@ -365,7 +372,7 @@ export class QueueController {
     if (this.decision !== 'take' || !listId) return;
     const name = this.listName();
     const gone = async () => {
-      await this.listGone();
+      if (!await this.listGone(listId)) return;
       await this.apply();
       toast(t('queue.listGone', { name }), { label: t('queue.toSettings'), run: openSettings });
     };

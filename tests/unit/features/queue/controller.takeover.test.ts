@@ -55,6 +55,18 @@ describe('deciding to take over (§24.1)', () => {
     expect(p?.listName).toBeUndefined();
   });
 
+  it('another list chosen while a deleted one is being checked: the new choice stays', async () => {
+    // The check reads again for seconds (findings F16); the settings page can choose a new list meanwhile.
+    const h = await setup({ lists: { PLnew: ['a'] }, profile: { mode: 'playlist', listId: 'PLgone', listName: 'Old' }, start: false });
+    const p = h.ctl.refresh();
+    await h.settle(500);
+    await h.setProfile({ listId: 'PLnew', listName: 'New' });
+    await h.settle();
+    await p;
+    expect((await h.profile())?.listId).toBe('PLnew');
+    expect(h.toasts.map((x) => x.text)).not.toContain(t('queue.listGone', { name: 'Old' }));
+  });
+
   it('no playlists listed at all: protocol error, back to native, reported for the settings page (§26)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => (yt.protocolBroken = true) });
     expect(h.ctl.decision).toBe('native');

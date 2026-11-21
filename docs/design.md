@@ -22,6 +22,8 @@
 
 自用（未打包加载），但按能上架的标准写；零成本（用浏览器已登录的账号，不用 API key / OAuth）；每个功能单独开关、互相隔离；WXT + TypeScript + 原生 DOM / Shadow DOM。
 
+**贴合官网**：扩展紧跟 YouTube 官网的数据、模式、体验和用户习惯。能从官网拿到的（账号、播放列表、用户设的语言等）就直接用，不在扩展里另存一份，也不让用户再设一遍；界面、控件、交互仿照官网，让人感觉是 YouTube 自带的功能。
+
 扩展图标用 `docs/icon-drafts/d.svg`。红色播放键取自 YouTube 商标，**上架前必须改掉**（plans.md P1）。
 
 已完成（2026-11-21，手测通过）：工具栏图标只跟「Turn on this extension」走：打开就是彩色，关闭就是灰色（`public/icon/gray-*.png`，`npm run icons` 生成），跟当前活动标签页是哪个网站无关。做法是在 manifest 里声明 `action`（不声明的话 Chrome 会在扩展不运行的网站上把图标变灰），后台每次唤醒和设置变化时 `action.setIcon`；点图标打开设置页。

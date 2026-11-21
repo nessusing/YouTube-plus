@@ -83,29 +83,67 @@ export async function api<T = Record<string, unknown>>(page: Page, endpoint: str
 
 // ---------- test lists (the only lists the suite may change) ----------
 
+/**
+ * Test lists are a small pool kept between runs ("YouTube+ e2e pool 1", "… 2"),
+ * emptied and refilled for each test: YouTube limits how many playlists an
+ * account may create in a day, and a run needs ~45. The pool grows only when one
+ * test needs more lists than it holds.
+ */
+const POOL = `${LIST_PREFIX} pool`;
+const isPool = (title: string) => title.startsWith(`${POOL} `);
+
 export class TestLists {
-  private mine = new Set<string>();
+  /** Pool lists, found once per worker. */
+  private static pool?: string[];
+  /** Pool lists this test has taken. */
+  private taken = new Set<string>();
+  /** Lists the extension created during this test: deleted after it. */
+  private adopted = new Set<string>();
 
   constructor(private helper: Page) {}
 
-  /** A new private list named "YouTube+ e2e …" holding these videos. */
+  /** A private test list holding exactly these videos, in this order. `label` names it in errors. */
   async create(videoIds: string[], label = ''): Promise<string> {
-    const title = `${LIST_PREFIX} ${new Date().toISOString()}${label ? ` ${label}` : ''}`;
-    const id = await rpc<string>(this.helper, 'createPrivatePlaylist', title);
-    this.mine.add(id);
-    if (videoIds.length) await this.edit(this.helper, id, videoIds.map((v) => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: v })));
-    // A new list's entries take a few seconds to show in reads (findings A4).
-    await expect.poll(async () => (await this.read(id)).items.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(videoIds.length);
+    const pool = await this.poolLists();
+    let id = pool.find((p) => !this.taken.has(p));
+    if (!id) {
+      id = await rpc<string>(this.helper, 'createPrivatePlaylist', `${POOL} ${pool.length + 1}`);
+      if (!id) throw new Error('playlist/create gave no playlist ID (YouTube may be limiting new playlists)');
+      pool.push(id);
+      // A new list reads as missing for a second or two (findings F16).
+      await expect.poll(async () => (await this.read(id!)).exists, { timeout: 15_000 }).toBe(true);
+    }
+    this.taken.add(id);
+    await this.fill(id, videoIds, label);
     return id;
   }
 
-  /** A list the extension created during a test: delete it after the test too. */
+  /** Empty the list and add these videos, in one edit; wait until reads show exactly them. */
+  private async fill(id: string, videoIds: string[], label: string): Promise<void> {
+    const actions: ListAction[] = [
+      ...(await this.read(id)).items.map((i): ListAction => ({ action: 'ACTION_REMOVE_VIDEO', setVideoId: i.setVideoId })),
+      ...videoIds.map((v): ListAction => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: v })),
+    ];
+    if (actions.length) await this.edit(this.helper, id, actions);
+    // Edits take a few seconds to show in reads (findings A4).
+    await expect.poll(() => this.videos(id), { timeout: 30_000, message: `filling test list ${label}` }).toEqual(videoIds);
+  }
+
+  private async poolLists(): Promise<string[]> {
+    if (!TestLists.pool) {
+      const all = await rpc<{ id: string; title: string }[]>(this.helper, 'editablePlaylists');
+      TestLists.pool = all.filter((l) => isPool(l.title)).sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true })).map((l) => l.id);
+    }
+    return TestLists.pool;
+  }
+
+  /** A list the extension created during a test: delete it after the test. */
   async adopt(id: string): Promise<void> {
     // A new list reads as missing for a second or two (findings F16).
     await expect.poll(async () => (await this.read(id)).exists, { timeout: 15_000 }).toBe(true);
     const d = await this.read(id);
     if (!d.title.startsWith(LIST_PREFIX)) throw new Error(`refusing to adopt ${id} ("${d.title}"): not a test list`);
-    this.mine.add(id);
+    this.adopted.add(id);
   }
 
   async read(id: string): Promise<PlaylistData> {
@@ -130,28 +168,26 @@ export class TestLists {
     await this.edit(from, id, [{ action: 'ACTION_REMOVE_VIDEO', setVideoId: item.setVideoId }]);
   }
 
-  async delete(id: string): Promise<void> {
-    await this.guard(id);
-    const r = await api(this.helper, 'playlist/delete', { playlistId: id });
-    if (!r.ok) throw new Error(`playlist/delete ${id}: HTTP ${r.status}`);
-    this.mine.delete(id);
-  }
-
-  async deleteAll(): Promise<void> {
-    for (const id of [...this.mine]) await this.delete(id).catch(() => {});
+  /** After a test: delete the adopted lists; the pool lists stay for the next test. */
+  async release(): Promise<void> {
+    for (const id of [...this.adopted]) {
+      await this.guard(id).then(() => api(this.helper, 'playlist/delete', { playlistId: id })).catch(() => {});
+    }
+    this.adopted.clear();
+    this.taken.clear();
   }
 
   /** Refuse to touch any list that is not a test list. */
   private async guard(id: string): Promise<void> {
-    if (this.mine.has(id)) return;
+    if (this.taken.has(id) || this.adopted.has(id)) return;
     const d = await this.read(id);
     if (!d.exists || !d.title.startsWith(LIST_PREFIX)) throw new Error(`refusing to change list ${id} ("${d.title}"): not a test list`);
   }
 
-  /** Delete what earlier runs left behind. */
+  /** Delete the test lists earlier runs left behind, except the pool. */
   static async sweep(helper: Page): Promise<string[]> {
     const lists = await rpc<{ id: string; title: string }[]>(helper, 'editablePlaylists');
-    const left = lists.filter((l) => l.title.startsWith(LIST_PREFIX));
+    const left = lists.filter((l) => l.title.startsWith(LIST_PREFIX) && !isPool(l.title));
     for (const l of left) await api(helper, 'playlist/delete', { playlistId: l.id });
     return left.map((l) => l.title);
   }

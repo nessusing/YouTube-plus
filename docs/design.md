@@ -239,7 +239,7 @@
 
 ## 29. 开发顺序与测试
 
-已完成，2026-11-20 手测通过；2026-11-21 L4 覆盖了加入的各入口、列表面板、看完删除、切换模式、清空 / 撤销 / 快照恢复、设置页选列表和新建。测试都在 `tests/`：L1 纯函数和 L2 controller 集成（内存里的假 YouTube，`tests/support/fake-youtube.ts`）跑 `npm test`；L4 在真实 YouTube 上跑（Playwright，`tests/e2e/`），第一次先 `npm run e2e:login`，然后 `npm run test:e2e`（`npm run test:all` 依次跑类型检查、L1/L2 和 L4），只碰名字以 `YouTube+ e2e` 开头的列表。窗口默认不显示（`YTPP_E2E_WINDOW=normal` 显示）。测试中发现的问题和修法记在 `docs/queue-test-findings.md`。
+已完成，2026-11-20 手测通过；2026-11-21 L4 覆盖了加入的各入口、列表面板、看完删除、切换模式、清空 / 撤销 / 快照恢复、设置页选列表和新建。测试都在 `tests/`：L1 纯函数和 L2 controller 集成（内存里的假 YouTube，`tests/support/fake-youtube.ts`）跑 `npm test`；L4 在真实 YouTube 上跑（Playwright，`tests/e2e/`），第一次先 `npm run e2e:login`，然后 `npm run test:e2e`（`npm run test:all` 依次跑类型检查、L1/L2 和 L4），只碰名字以 `YouTube+ e2e` 开头的列表。测试列表是跨运行保留的一个小池（`YouTube+ e2e pool 1`、`2`），每条测试清空后重新装入：YouTube 限制一个账号每天能新建的播放列表数，每条新建一个会碰到上限（2026-11-21 一天跑了几轮后，`playlist/create` 不再返回 ID）。窗口默认不显示（`YTPP_E2E_WINDOW=normal` 显示）。测试中发现的问题和修法记在 `docs/queue-test-findings.md`。
 
 ## 30. 以后再做
 

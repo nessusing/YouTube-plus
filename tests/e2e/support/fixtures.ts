@@ -1,5 +1,5 @@
 // Playwright fixtures: one Chromium with the extension and the signed-in
-// profile per run; a fresh tab per test; test lists that are deleted after.
+// profile per run; a fresh tab per test; test lists from a pool kept between runs.
 
 import { existsSync } from 'node:fs';
 import { chromium, test as base, type BrowserContext, type Page } from '@playwright/test';
@@ -84,7 +84,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   lists: async ({ account }, use) => {
     const lists = new TestLists(account.helper);
     await use(lists);
-    await lists.deleteAll();
+    await lists.release();
   },
 
   setProfile: async ({ ctx, account }, use) => {

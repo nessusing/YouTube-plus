@@ -76,7 +76,7 @@ L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测�
 - **场景**：自带队列模式下，迷你播放器在放官方队列（「队列 • 1 / 3」）。切到播放列表模式（立即生效），然后点某个视频的「加入 <列表名>」。
 - **预期**：视频进了列表，提示一下；官方队列保持原样（§24.2「正在播别的列表时不挂」，§24.6「已有的官方队列保持原样」）。
 - **实际**：`attachIfIdle()` 用 `playing().playlistId` 判断有没有在播列表，但官方队列播放时它是空的（A5）。于是扩展把当前视频当成「不在任何列表里」，调用 `syncList(attach)`，用我们的列表替换了面板，官方队列里后面的视频就没了。main-world 的 `syncList()` 也是只看 `getPlaylistId()`。
-- **测试**：`controller.takeover` › the native queue playing in the miniplayer: leaves it；`controller.modes` › ③ native queue: Add leaves the native queue playing（L2，用改过的假服务器）。真实页面上的对应测试在 L4 的 `modes.spec.ts`。
+- **测试**：`controller.takeover` › the native queue playing in the miniplayer: leaves it；`controller.modes` › ③ native queue: Add leaves the native queue playing（L2，用改过的假服务器）。L4 `modes.spec.ts` › ③ native queue in the miniplayer 在真实页面上复现：官方队列 `[a, DXK2…, qmI0…]` 点「加入」后变成 `[a, 9bZk…(我们的列表), sizw…(刚加的)]`。
 - **建议**：bug。main-world 判断「正在播列表」时，`getPlaylistId()` 为空的话再看 `yt-playlist-manager.getPlaylistData().playlistId`；`playing()` 也一起改，这样 controller 能看到 `TLPQ…`。
 
 ### F7　读列表时把列表下面的「推荐视频」也算进去了（严重，2026-11-20 已修）

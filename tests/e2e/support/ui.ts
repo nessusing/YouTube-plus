@@ -32,8 +32,11 @@ export async function openMenu(page: Page, lockup: Locator): Promise<string[]> {
   return (await items.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
 }
 
+/** Close it by clicking a blank spot of the top bar (Escape would also close the miniplayer). */
 export async function closeMenu(page: Page): Promise<void> {
-  await page.keyboard.press('Escape');
+  const start = await page.locator('ytd-masthead #start').boundingBox();
+  if (!start) throw new Error('no masthead');
+  await page.mouse.click(start.x + start.width + 12, start.y + start.height / 2);
   await expect(page.locator('ytd-popup-container yt-list-item-view-model').first()).toBeHidden().catch(() => {});
 }
 

@@ -5,7 +5,7 @@ import type { BrowserContext, Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures';
 import { VIDEOS } from '../support/env';
 import { clickToastAction } from '../support/ui';
-import { lastToast, seekToEnd, serviceWorker, storageGet, waitForVideo } from '../support/yt';
+import { lastToast, serviceWorker, storageGet, waitForVideo } from '../support/yt';
 
 const TOOLS = 'ytpp-playlist-tools';
 
@@ -72,8 +72,9 @@ test('Remove watched: only the entries watched to the end go', async ({ page, op
   // Watch VIDEOS.zoo (0:19) to the end first, so the history has it as watched.
   await open(`/watch?v=${VIDEOS.zoo}`);
   await waitForVideo(page, VIDEOS.zoo);
-  await seekToEnd(page, 2);
-  await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('#movie_player video')!.ended), { timeout: 20_000 }).toBe(true);
+  // Played through from the start: a jump to near the end is not always saved as watched.
+  await page.evaluate(() => { const v = document.querySelector<HTMLVideoElement>('#movie_player video')!; v.currentTime = 0; void v.play(); });
+  await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('#movie_player video')!.ended), { timeout: 45_000 }).toBe(true);
   const id = await lists.create([VIDEOS.c, VIDEOS.zoo, VIDEOS.d], 'watched');
   const pct = async () => Object.fromEntries((await lists.read(id)).items.map((i) => [i.videoId, (i as { percent?: number }).percent ?? 0]));
   await expect.poll(async () => (await pct())[VIDEOS.zoo], { timeout: 30_000, message: 'the history shows it watched' }).toBeGreaterThanOrEqual(90);

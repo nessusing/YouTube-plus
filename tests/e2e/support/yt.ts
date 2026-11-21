@@ -118,15 +118,28 @@ export class TestLists {
     return id;
   }
 
-  /** Empty the list and add these videos, in one edit; wait until reads show exactly them. */
+  /**
+   * Empty the list and add these videos; done when reads show exactly them
+   * twice, a few seconds apart. Reads lag behind edits (findings A4), so the
+   * read this empties from can miss what the previous test added last; such an
+   * entry shows up later, and the list is emptied again.
+   */
   private async fill(id: string, videoIds: string[], label: string): Promise<void> {
-    const actions: ListAction[] = [
-      ...(await this.read(id)).items.map((i): ListAction => ({ action: 'ACTION_REMOVE_VIDEO', setVideoId: i.setVideoId })),
-      ...videoIds.map((v): ListAction => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: v })),
-    ];
-    if (actions.length) await this.edit(this.helper, id, actions);
-    // Edits take a few seconds to show in reads (findings A4).
-    await expect.poll(() => this.videos(id), { timeout: 30_000, message: `filling test list ${label}` }).toEqual(videoIds);
+    const same = (a: string[]) => a.length === videoIds.length && a.every((v, i) => v === videoIds[i]);
+    for (let round = 0; round < 4; round++) {
+      const items = (await this.read(id)).items;
+      if (round === 0 || !same(items.map((i) => i.videoId))) {
+        const actions: ListAction[] = [
+          ...items.map((i): ListAction => ({ action: 'ACTION_REMOVE_VIDEO', setVideoId: i.setVideoId })),
+          ...videoIds.map((v): ListAction => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: v })),
+        ];
+        if (actions.length) await this.edit(this.helper, id, actions);
+        await expect.poll(() => this.videos(id), { timeout: 30_000, message: `filling test list ${label}` }).toEqual(videoIds);
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+      if (same(await this.videos(id))) return;
+    }
+    throw new Error(`test list ${label} would not settle on ${JSON.stringify(videoIds)}`);
   }
 
   private async poolLists(): Promise<string[]> {

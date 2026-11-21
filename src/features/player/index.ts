@@ -1,4 +1,4 @@
-// Player feature (design part 4): wires the four sub-features to settings.
+// Player feature (design part 4): wires the sub-features to settings.
 
 import { initLang, t } from '@/core/i18n';
 import type { Toggleable } from '@/core/dom';
@@ -6,6 +6,7 @@ import { createLogger } from '@/core/log';
 import { servePageChecks } from '@/core/page-checks';
 import { featureOn, getSettings, onSettingsChanged, type PlayerSettings, type Settings } from '@/core/settings';
 import { backToTop } from './back-to-top';
+import { loopButton } from './loop-button';
 import { miniControls } from './mini-controls';
 import { miniDrag } from './mini-drag';
 import { SEL, THEATER_COOKIE } from './selectors';
@@ -16,16 +17,19 @@ import { PLAYER_PAGE_CHECKS } from './consts';
 export async function startPlayer(): Promise<void> {
   // The back-to-top label is baked in when the button is built: rebuild it.
   await initLang(() => {
+    loop.relabel();
     if (!on.has('backToTop')) return;
     parts.backToTop.disable();
     parts.backToTop.enable();
   });
   const log = createLogger('player');
+  const loop = loopButton();
   const parts: Record<keyof PlayerSettings, Toggleable> = {
     miniControls: miniControls(),
     freeDrag: miniDrag(log),
     stickyPlayer: stickyPlayer(log),
     backToTop: backToTop(),
+    loopButton: loop,
   };
   const on = new Set<keyof PlayerSettings>();
 

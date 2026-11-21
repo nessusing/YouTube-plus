@@ -84,6 +84,39 @@ describe('remove after playing on', () => {
     expect(h.yt.truth('PLq')).toEqual(['a', 'b', 'c']);
   });
 
+  describe('on loop (§40.2)', () => {
+    const left = (o: object) => ({ currentTime: 295, duration: 300, loop: true, ...o });
+
+    it('looped, then another entry of the list: removed, no jump', async () => {
+      const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('a', 'PLq') });
+      h.ctl.onPlayer(h.yt.playerEvent('left', left({ currentTime: 3, looped: true, toPlaylistId: 'PLq' })));
+      await h.settle();
+      expect(h.yt.navigations).toEqual([]);
+      expect(h.yt.truth('PLq')).toEqual(['b', 'c']);
+    });
+
+    it('looped, then a video outside the list or the tab closed: kept', async () => {
+      const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('a', 'PLq') });
+      h.ctl.onPlayer(h.yt.playerEvent('left', left({ looped: true, toPlaylistId: undefined })));
+      await h.settle();
+      expect(h.yt.truth('PLq')).toEqual(['a', 'b', 'c']);
+    });
+
+    it('not looped yet: kept even with under 10 s left', async () => {
+      const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('a', 'PLq') });
+      h.ctl.onPlayer(h.yt.playerEvent('left', left({ toPlaylistId: 'PLq' })));
+      await h.settle();
+      expect(h.yt.truth('PLq')).toEqual(['a', 'b', 'c']);
+    });
+
+    it('remove after playing off: kept', async () => {
+      const h = await setup({ lists: LISTS, profile: { ...PLAYLIST, removeWatched: false }, before: (yt) => yt.load('a', 'PLq') });
+      h.ctl.onPlayer(h.yt.playerEvent('left', left({ looped: true, toPlaylistId: 'PLq' })));
+      await h.settle();
+      expect(h.yt.truth('PLq')).toEqual(['a', 'b', 'c']);
+    });
+  });
+
   it('the user moved on before the end was handled: removes, does not drag them back', async () => {
     const h = await setup({ lists: { ...LISTS, PLo: ['o1'] }, profile: PLAYLIST, before: (yt) => yt.load('a', 'PLq') });
     const ended = h.yt.playerEvent('ended');

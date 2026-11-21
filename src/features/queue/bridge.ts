@@ -32,6 +32,12 @@ export interface PlayerEvent {
   index: number | undefined;
   currentTime: number;
   duration: number;
+  /** Loop (§40.2) was on at this moment. */
+  loop?: boolean;
+  /** This video has wrapped from its end back to the start at least once. */
+  looped?: boolean;
+  /** left: the playlist of the video that started (undefined: none, or the tab closed). */
+  toPlaylistId?: string;
 }
 
 /** What the isolated side tells the page script to do with Add to queue. */

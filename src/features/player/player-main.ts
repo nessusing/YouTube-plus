@@ -3,13 +3,31 @@
 // keeps the size YouTube last gave it; only the page's player API can fix
 // that. Acts only while the isolated side sets html[data-ytpp-mini-sized] and
 // the player is minimized, so YouTube's own sizing is untouched otherwise.
+// Also turns loop on / off for the loop button (loop-button.ts, §40.2): the
+// player API keeps the right-click "Loop" in step, setting video.loop does not.
+
+import { LOOP_OFF_EVENT, LOOP_ON_EVENT } from './consts';
 
 interface PlayerApi extends HTMLElement {
   getPlayerSize?: () => { width: number; height: number };
   setInternalSize?: (w: number, h: number) => void;
+  setLoopVideo?: (on: boolean) => void;
+}
+
+function setLoop(on: boolean): void {
+  const p = document.querySelector<PlayerApi>('#movie_player');
+  if (p?.setLoopVideo) {
+    p.setLoopVideo(on);
+    return;
+  }
+  const v = p?.querySelector('video');
+  if (v) v.loop = on;
 }
 
 export function startPlayerMain(): void {
+  document.addEventListener(LOOP_ON_EVENT, () => setLoop(true));
+  document.addEventListener(LOOP_OFF_EVENT, () => setLoop(false));
+
   let queued = false;
 
   const fit = () => {

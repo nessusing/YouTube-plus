@@ -18,6 +18,8 @@ export interface PlayerSettings {
   freeDrag: boolean;
   stickyPlayer: boolean;
   backToTop: boolean;
+  /** Loop button in the player (§40.2); off by default. */
+  loopButton: boolean;
 }
 
 /** Caps on what we keep in storage.local (design §4.1). */
@@ -51,7 +53,7 @@ export const DEFAULT_SETTINGS: Settings = {
   enabled: true,
   lang: 'en',
   features: { tldr: true, queue: true, player: true },
-  player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true },
+  player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true, loopButton: false },
   tldr: { titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200, batchSize: 5 },
   storage: { logMB: 2, tldrCacheMB: 5 },
 };

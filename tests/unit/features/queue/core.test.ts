@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chunk, decideTakeover, DEFAULT_PROFILE, isQueueCommand, countWith, isWatchedHere, listSignature, panelSnapshot, meetsExpect, mergeExpect, nextAfter, nextRows, notInList, panelView, parseEdit, parseQueueAction, queueView, planClear,
+  chunk, decideTakeover, DEFAULT_PROFILE, isQueueCommand, countWith, isLoopWrap, isWatchedHere, leftCountsAsWatched, listSignature, panelSnapshot, meetsExpect, mergeExpect, nextAfter, nextRows, notInList, panelView, parseEdit, parseQueueAction, queueView, planClear,
   planUndoMoves, playlistPage, playlistTitle, profileWithDefaults, type ListItem, type TakeoverInput,
 } from '@/features/queue/core';
 
@@ -332,5 +332,42 @@ describe('playlistTitle', () => {
   });
   it('none: a list that is gone', () => {
     expect(playlistTitle({ alerts: [{ alertRenderer: { type: 'ERROR' } }] })).toBeUndefined();
+  });
+});
+
+describe('loop (§40.2)', () => {
+  it('a wrap is a jump from the last moments back to the first', () => {
+    expect(isLoopWrap(99.8, 0.1, 100)).toBe(true);
+    expect(isLoopWrap(98.6, 1.4, 100)).toBe(true);
+    // Dragged back to the start from earlier on.
+    expect(isLoopWrap(80, 0.2, 100)).toBe(false);
+    // Moving on normally / a jump into the middle.
+    expect(isLoopWrap(0.1, 0.3, 100)).toBe(false);
+    expect(isLoopWrap(99.8, 50, 100)).toBe(false);
+    expect(isLoopWrap(0, 0, 0)).toBe(false);
+  });
+
+  const at = (o: Partial<Parameters<typeof leftCountsAsWatched>[0]>) =>
+    leftCountsAsWatched({ currentTime: 50, duration: 100, playlistId: 'PLq', ...o });
+
+  it('looped, then another video of the same list: watched', () => {
+    expect(at({ loop: true, looped: true, toPlaylistId: 'PLq' })).toBe(true);
+    // Loop turned off again before moving on: still looped once.
+    expect(at({ loop: false, looped: true, toPlaylistId: 'PLq' })).toBe(true);
+  });
+
+  it('looped, then somewhere else or the tab closed: not watched', () => {
+    expect(at({ loop: true, looped: true, toPlaylistId: 'PLo' })).toBe(false);
+    expect(at({ loop: true, looped: true, toPlaylistId: undefined })).toBe(false);
+    expect(at({ loop: true, looped: true, playlistId: undefined, toPlaylistId: undefined })).toBe(false);
+  });
+
+  it('loop on: never watched by the 10 s rule', () => {
+    expect(at({ loop: true, currentTime: 95, toPlaylistId: 'PLq' })).toBe(false);
+  });
+
+  it('loop off: the 10 s rule as before', () => {
+    expect(at({ currentTime: 95 })).toBe(true);
+    expect(at({ currentTime: 50, toPlaylistId: 'PLq' })).toBe(false);
   });
 });

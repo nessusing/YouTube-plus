@@ -5,7 +5,7 @@
 
 import { isToMain, TAG, type PlayerEvent, type TakeoverState, type ToIso } from './bridge';
 import type { SyncResult } from './rpc';
-import { isQueueCommand, isWatchedHere, meetsExpect, nextRows, panelSnapshot, panelView, parseEdit, parseQueueAction, QUEUE_ICON, type Expect, type ListAction } from './core';
+import { isLoopWrap, isQueueCommand, isWatchedHere, meetsExpect, nextRows, panelSnapshot, panelView, parseEdit, parseQueueAction, QUEUE_ICON, type Expect, type ListAction } from './core';
 import * as it from './innertube';
 
 const post = (m: Omit<ToIso, 'tag' | 'dir'>) => window.postMessage({ tag: TAG, dir: 'toIso', ...m }, location.origin);
@@ -238,6 +238,9 @@ type PlayerApi = HTMLElement & {
   pauseVideo?: () => void;
 };
 
+/** How long a looped video that was left waits to learn where to (§40.2). */
+const LEFT_WAIT_MS = 5000;
+
 /** A removal sent by the page itself on unload, when the tab closes in the last 10 s. */
 let armed: { videoId: string; listId: string; setVideoId: string; req: { url: string; init: RequestInit }; at: number } | undefined;
 let rearming = false;
@@ -254,6 +257,11 @@ function player(): PlayerApi | null {
 function installPlayerWatch(): void {
   let last: PlayerEvent | undefined;
   let nearSent: string | undefined;
+  /** The video playing has wrapped from its end to the start by loop (§40.2). */
+  let loopedId: string | undefined;
+  /** A looped video just left, waiting to learn the new video's list. */
+  let leaving: { e: PlayerEvent; since: number } | undefined;
+  const listInUrl = () => (location.pathname === '/watch' ? new URLSearchParams(location.search).get('list') ?? undefined : undefined);
   const snapshot = (type: PlayerEvent['type'], v: HTMLVideoElement): PlayerEvent | undefined => {
     const p = player();
     const videoId = p?.getVideoData?.()?.video_id;
@@ -261,7 +269,7 @@ function installPlayerWatch(): void {
     const index = p?.getPlaylistIndex?.();
     return {
       type, videoId, playlistId: p?.getPlaylistId?.() ?? undefined, index: typeof index === 'number' && index >= 0 ? index : undefined,
-      currentTime: v.currentTime, duration: v.duration || 0,
+      currentTime: v.currentTime, duration: v.duration || 0, loop: v.loop,
     };
   };
   const isMain = (v: EventTarget | null): v is HTMLVideoElement =>
@@ -272,13 +280,32 @@ function installPlayerWatch(): void {
       if (!isMain(e.target)) return;
       const s = snapshot('left', e.target);
       if (!s) return;
-      if (last && last.videoId !== s.videoId) {
-        // A new video started: report how the previous one was left.
-        post({ event: 'player', payload: last } as ToIso);
-        if (armed && armed.videoId !== s.videoId) armed = undefined;
+      if (leaving) {
+        // Only a looped video waits to learn where it was left for (§40.2).
+        const to = s.playlistId ?? listInUrl();
+        if (to !== undefined || Date.now() - leaving.since > LEFT_WAIT_MS) {
+          post({ event: 'player', payload: { ...leaving.e, toPlaylistId: to } } as ToIso);
+          leaving = undefined;
+        }
       }
+      if (last && last.videoId !== s.videoId) {
+        // A new video started: report how the previous one was left, and where
+        // to. getPlaylistId() is empty for a moment while it loads: a looped
+        // video, whose removal depends on it, waits for it (or the URL's list).
+        const to = s.playlistId ?? listInUrl();
+        if (last.looped && to === undefined) leaving = { e: last, since: Date.now() };
+        else post({ event: 'player', payload: { ...last, toPlaylistId: to } } as ToIso);
+        if (armed && armed.videoId !== s.videoId) armed = undefined;
+        loopedId = undefined;
+      } else if (last && s.loop && isLoopWrap(last.currentTime, s.currentTime, s.duration)) {
+        loopedId = s.videoId;
+        // Next pass may run with loop off: let "near" fire again then.
+        nearSent = undefined;
+      }
+      s.looped = loopedId === s.videoId;
       last = s;
-      if (nearSent !== s.videoId && isWatchedHere(s.currentTime, s.duration, false)) {
+      // On loop the video is being watched on repeat, not finished (§40.2).
+      if (nearSent !== s.videoId && !s.loop && isWatchedHere(s.currentTime, s.duration, false)) {
         nearSent = s.videoId;
         post({ event: 'player', payload: { ...s, type: 'near' } } as ToIso);
       }
@@ -304,7 +331,7 @@ function installPlayerWatch(): void {
   }, true);
   window.addEventListener('pagehide', () => {
     try {
-      if (armed && last?.videoId === armed.videoId && isWatchedHere(last.currentTime, last.duration, false)) {
+      if (armed && last?.videoId === armed.videoId && !last.loop && isWatchedHere(last.currentTime, last.duration, false)) {
         // The isolated side may not get to run any more; send it from here.
         void fetch(armed.req.url, { ...armed.req.init, keepalive: true });
         armed = undefined;

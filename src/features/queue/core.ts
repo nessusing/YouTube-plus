@@ -25,6 +25,32 @@ export function isWatchedHere(currentTime: number, duration: number, ended: bool
   return ended || (duration > 0 && duration - currentTime < WATCHED_REMAINING_S);
 }
 
+/** How close to the end / the start a jump must be to count as a loop wrap. */
+export const LOOP_WRAP_S = 1.5;
+
+/**
+ * Between two time updates the video jumped from its last moments back to its
+ * first: the loop (§40.2) wrapped it. Dragging the progress bar back to the
+ * start from anywhere earlier does not count.
+ */
+export function isLoopWrap(prevTime: number, time: number, duration: number): boolean {
+  return duration > 0 && prevTime >= duration - LOOP_WRAP_S && time < LOOP_WRAP_S && time < prevTime;
+}
+
+/**
+ * Another video started: does the one left count as watched (§24.4, §40.2)?
+ * Looped at least once and moved on inside the same list: yes. Loop still on
+ * otherwise: no, it is being watched on repeat. Else: under 10 s were left.
+ */
+export function leftCountsAsWatched(e: {
+  currentTime: number; duration: number; playlistId: string | undefined;
+  loop?: boolean; looped?: boolean; toPlaylistId?: string;
+}): boolean {
+  if (e.looped && e.toPlaylistId !== undefined && e.toPlaylistId === e.playlistId) return true;
+  if (e.loop) return false;
+  return isWatchedHere(e.currentTime, e.duration, false);
+}
+
 // ---- per-identity queue settings (§22 Q17/Q22, §24.7) ----
 
 export type QueueMode = 'native' | 'playlist';

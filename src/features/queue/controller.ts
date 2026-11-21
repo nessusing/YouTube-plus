@@ -8,7 +8,7 @@ import type { Toggleable } from '@/core/dom';
 import type { Logger } from '@/core/log';
 import type { PlayerEvent } from './bridge';
 import {
-  addActions, countWith, decideTakeover, DEFAULT_PROFILE, isWatchedHere, listSignature, meetsExpect, mergeExpect, nextAfter, notInList,
+  addActions, countWith, decideTakeover, DEFAULT_PROFILE, leftCountsAsWatched, listSignature, meetsExpect, mergeExpect, nextAfter, notInList,
   type Expect, type ListEdit, type ListItem, type ListSnapshot, type QueueMode, type QueueProfile, type Takeover,
 } from './core';
 import { PROTOCOL_ERROR_KEY } from './keys';
@@ -471,7 +471,7 @@ export class QueueController {
         run('after watched', () => this.afterEnded(e, listId));
         break;
       case 'left':
-        if (isWatchedHere(e.currentTime, e.duration, false)) run('remove watched', () => this.removeOnly(e, listId));
+        if (leftCountsAsWatched(e)) run('remove watched', () => this.removeOnly(e, listId));
         break;
     }
   }

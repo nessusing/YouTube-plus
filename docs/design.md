@@ -235,7 +235,7 @@
 
 ## 29. 开发顺序与测试
 
-已完成，2026-11-20 手测通过。测试都在 `tests/`：L1 纯函数和 L2 controller 集成（内存里的假 YouTube，`tests/support/fake-youtube.ts`）跑 `npm test`；L4 在真实 YouTube 上跑（Playwright，`tests/e2e/`），第一次先 `npm run e2e:login`，然后 `npm run test:e2e`，只碰名字以 `YouTube+ e2e` 开头的列表。已知问题见 `docs/queue-test-findings.md`。
+已完成，2026-11-20 手测通过。测试都在 `tests/`：L1 纯函数和 L2 controller 集成（内存里的假 YouTube，`tests/support/fake-youtube.ts`）跑 `npm test`；L4 在真实 YouTube 上跑（Playwright，`tests/e2e/`），第一次先 `npm run e2e:login`，然后 `npm run test:e2e`（`npm run test:all` 依次跑类型检查、L1/L2 和 L4），只碰名字以 `YouTube+ e2e` 开头的列表。已知问题见 `docs/queue-test-findings.md`。
 
 ## 30. 以后再做
 

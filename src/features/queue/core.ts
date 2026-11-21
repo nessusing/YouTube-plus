@@ -353,6 +353,22 @@ export function playlistPage(json: unknown): { items: ListItem[]; token?: string
   return { items: rows.map(entryOf).filter((i): i is ListItem => !!i), token: tokenOf(rows) };
 }
 
+/**
+ * The list's title from a `browse` reply. Since 2026-11 the page has no
+ * playlistHeaderRenderer; the title is in the metadata and the page header
+ * (measured 2026-11-21).
+ */
+export function playlistTitle(json: unknown): string | undefined {
+  const j = obj(json);
+  const meta = obj(obj(j?.metadata)?.playlistMetadataRenderer)?.title;
+  if (typeof meta === 'string' && meta) return meta;
+  const page = obj(obj(j?.header)?.pageHeaderRenderer)?.pageTitle;
+  if (typeof page === 'string' && page) return page;
+  const old = obj(obj(findFirst(json, 'playlistHeaderRenderer'))?.title);
+  const t = typeof old?.simpleText === 'string' ? old.simpleText : arr(old?.runs).map((r) => String(obj(r)?.text ?? '')).join('');
+  return t || undefined;
+}
+
 /** Order-sensitive fingerprint, to tell whether the list changed elsewhere. */
 export function listSignature(items: ListItem[]): string {
   return items.map((i) => i.setVideoId || i.videoId).join(',');

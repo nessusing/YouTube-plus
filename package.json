@@ -13,6 +13,7 @@
     "icons": "bash scripts/icons.sh",
     "postinstall": "node scripts/patch-wxt.mjs && wxt prepare",
     "test:e2e": "wxt build && playwright test -c tests/e2e/playwright.config.ts --project=e2e",
+    "test:all": "npm run typecheck && npm test && npm run test:e2e",
     "e2e:login": "node tests/e2e/tools/login.mjs",
     "e2e:cleanup": "playwright test -c tests/e2e/playwright.config.ts --project=cleanup"
   },

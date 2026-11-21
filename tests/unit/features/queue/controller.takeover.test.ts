@@ -236,8 +236,10 @@ describe('Add (§24.2)', () => {
   it('list deleted meanwhile: forgets it, points to the settings', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     h.yt.deleteList('PLq');
-    await h.ctl.onAdd(['x']);
+    // It reads again before believing the list is gone (findings F16).
+    const add = h.ctl.onAdd(['x']);
     await h.settle();
+    await add;
     expect(h.toasts.at(-1)).toEqual({ text: t('queue.listGone', { name: 'List PLq' }), action: t('queue.toSettings') });
     expect(h.ctl.decision).toBe('noList');
     expect((await h.profile())?.listId).toBeUndefined();

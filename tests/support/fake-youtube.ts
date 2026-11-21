@@ -6,7 +6,9 @@
 //     `removalLagMs` (reads lag behind removals);
 //   - removing an entry that is already gone fails with 400;
 //   - DEDUPE_OPTION_SKIP is ignored: adding a video twice gives two entries;
-//   - the list can be deleted elsewhere; edits elsewhere send no event.
+//   - the list can be deleted elsewhere; edits elsewhere send no event;
+//   - a new list reads as missing for `newListLagMs` (measured 2026-11-21:
+//     1–2 s, findings F16).
 // Events the page script would post (edited, panel) are delivered a tick
 // later, like window.postMessage.
 
@@ -16,7 +18,7 @@ import type { Identity } from '@/features/queue/profiles';
 import type { Playing, PlaylistData, PlaylistRef, Rpc, SyncResult } from '@/features/queue/rpc';
 
 interface Entry { videoId: string; setVideoId: string; removedAt?: number }
-interface List { id: string; title: string; editable: boolean; entries: Entry[] }
+interface List { id: string; title: string; editable: boolean; entries: Entry[]; /** reads see it from this time on */ from?: number }
 
 export interface Player {
   videoId?: string;
@@ -77,6 +79,9 @@ export class FakeYouTube {
   addList(id: string, title: string, videoIds: string[], editable = true): void {
     this.lists.set(id, { id, title, editable, entries: videoIds.map((v) => ({ videoId: v, setVideoId: this.newSet() })) });
   }
+
+  /** A list created through createPrivatePlaylist reads as missing for this long. */
+  newListLagMs = 0;
 
   /** The next edit_playlist answers with this HTTP status and changes nothing. */
   editStatus: number | undefined;
@@ -188,19 +193,24 @@ export class FakeYouTube {
     return impl(...args);
   }
 
+  private seen(l: List): boolean {
+    return l.from === undefined || Date.now() >= l.from;
+  }
+
   private impl: Rpc = {
     editablePlaylists: async (): Promise<PlaylistRef[]> => {
       if (this.protocolBroken) return [];
-      return [...this.lists.values()].filter((l) => l.editable).map((l) => ({ id: l.id, title: l.title, privacy: 'PRIVATE' }));
+      return [...this.lists.values()].filter((l) => l.editable && this.seen(l)).map((l) => ({ id: l.id, title: l.title, privacy: 'PRIVATE' }));
     },
     createPrivatePlaylist: async (title: string) => {
       const id = `PL${++this.seq}`;
       this.addList(id, title, []);
+      this.lists.get(id)!.from = Date.now() + this.newListLagMs;
       return id;
     },
     readPlaylist: async (id: string): Promise<PlaylistData> => {
       const l = this.lists.get(id);
-      if (!l) return { exists: false, editable: false, title: '', items: [] };
+      if (!l || !this.seen(l)) return { exists: false, editable: false, title: '', items: [] };
       return { exists: true, editable: l.editable, title: l.title, items: this.visible(id) };
     },
     editPlaylist: async (id: string, actions: ListAction[]) => {

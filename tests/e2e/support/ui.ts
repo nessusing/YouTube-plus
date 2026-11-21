@@ -125,3 +125,39 @@ export async function startNativeQueue(page: Page, first: string): Promise<strin
   await expect.poll(() => miniInfo(page)).toMatch(/1 \/ 3/);
   return [first, ...added];
 }
+
+// ---------- our closed shadow roots (toast, back to top) ----------
+
+/**
+ * Box and class of the element matching `selector` inside the closed shadow
+ * root of `host`, which locators cannot enter; found through the DevTools
+ * protocol, which pierces it. Undefined if there is no such element.
+ */
+export async function inClosedShadow(page: Page, host: string, selector: string): Promise<{ x: number; y: number; w: number; h: number; className: string } | undefined> {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { root } = (await cdp.send('DOM.getDocument', { depth: -1, pierce: true })) as { root: { nodeId: number } };
+    const { nodeId: hostId } = (await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: host })) as { nodeId: number };
+    if (!hostId) return undefined;
+    const { node } = (await cdp.send('DOM.describeNode', { nodeId: hostId, depth: 1, pierce: true })) as { node: { shadowRoots?: { backendNodeId: number }[] } };
+    const shadow = node.shadowRoots?.[0];
+    if (!shadow) return undefined;
+    const { nodeIds } = (await cdp.send('DOM.pushNodesByBackendIdsToFrontend', { backendNodeIds: [shadow.backendNodeId] })) as { nodeIds: number[] };
+    const { nodeId } = (await cdp.send('DOM.querySelector', { nodeId: nodeIds[0]!, selector })) as { nodeId: number };
+    if (!nodeId) return undefined;
+    const { model } = (await cdp.send('DOM.getBoxModel', { nodeId })) as { model: { content: number[] } };
+    const [x1, y1, , , x3, y3] = model.content as [number, number, number, number, number, number];
+    const { attributes } = (await cdp.send('DOM.getAttributes', { nodeId })) as { attributes: string[] };
+    const ci = attributes.indexOf('class');
+    return { x: x1, y: y1, w: x3 - x1, h: y3 - y1, className: ci >= 0 ? attributes[ci + 1]! : '' };
+  } finally {
+    await cdp.detach();
+  }
+}
+
+/** Click the toast's action ("Undo", "View"…). */
+export async function clickToastAction(page: Page): Promise<void> {
+  const b = await inClosedShadow(page, 'ytpp-toast', '.link');
+  if (!b) throw new Error('the toast has no action');
+  await page.mouse.click(b.x + b.w / 2, b.y + b.h / 2);
+}

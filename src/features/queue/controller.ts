@@ -23,6 +23,8 @@ const RECHECK_MS = 5_000;
 const EDIT_BATCH_MS = 300;
 /** Removals can take a few seconds to show in reads (§21.4). */
 const READ_WAITS = [0, 1500, 3000, 5000];
+/** A list reads as missing for its first second or two (findings F16): read again before believing it is gone. */
+const GONE_WAITS = [1500, 3000];
 /** How long our own knowledge of an edit outranks what reads say (they lag behind). */
 const OVERLAY_MS = 30_000;
 
@@ -133,8 +135,14 @@ export class QueueController {
         return;
       }
       const data = await this.rpc.readPlaylist(id);
-      if (!data.exists) await this.listGone();
-      else this.editable = false;
+      if (data.exists) {
+        this.editable = false;
+        return;
+      }
+      const now = await this.goneForSure(id);
+      if (now === 'gone') await this.listGone();
+      else if (now === 'there') return await this.checkList();
+      else this.editable = undefined;
     } catch (e) {
       this.log.warn('could not check the queue playlist', e);
       this.editable = undefined;
@@ -145,6 +153,20 @@ export class QueueController {
     this.protocolError = true;
     this.log.error(`protocol error, playlist mode paused on this page: ${detail}`);
     await browser.storage.local.set({ [PROTOCOL_ERROR_KEY]: { time: Date.now(), detail } });
+  }
+
+  /**
+   * Reads say `id` does not exist: read again a little later. 'gone' if they
+   * keep saying so, 'there' once they show it, 'unknown' if a read fails.
+   */
+  private async goneForSure(id: string): Promise<'gone' | 'there' | 'unknown'> {
+    for (const wait of GONE_WAITS) {
+      await new Promise((r) => setTimeout(r, wait));
+      const d = await this.rpc.readPlaylist(id).catch(() => undefined);
+      if (!d) return 'unknown';
+      if (d.exists) return 'there';
+    }
+    return 'gone';
   }
 
   /** The list was deleted elsewhere: forget it for this identity (§24.5). */
@@ -305,7 +327,13 @@ export class QueueController {
     try {
       // The server ignores DEDUPE_OPTION_SKIP and appends a duplicate, so check first.
       const data = await this.rpc.readPlaylist(listId);
-      if (!data.exists) return await gone();
+      if (!data.exists) {
+        const now = await this.goneForSure(listId);
+        if (now === 'gone') return await gone();
+        if (now === 'there') return await this.onAdd(videoIds);
+        toast(t('queue.addFailed'));
+        return;
+      }
       this.took(data.items);
       const fresh = notInList(data.items, videoIds);
       if (!fresh.length) {

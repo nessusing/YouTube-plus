@@ -96,10 +96,10 @@ export async function setup(init: {
 }
 
 async function startRefresh(h: Harness): Promise<void> {
+  // refresh() may wait on timers itself (re-reads): run the clock, then await it.
   const p = h.ctl.refresh();
-  await vi.advanceTimersByTimeAsync(0);
-  await p;
   await h.settle();
+  await p;
 }
 
 function setVisibility(v: boolean): void {

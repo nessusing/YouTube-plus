@@ -11,6 +11,8 @@ import { toast } from './toast';
 
 const UNDO_MS = 10_000;
 const HEADER = 'ytd-playlist-header-renderer, yt-page-header-renderer';
+/** The new header's row of buttons (Play all, Share, ⋮). */
+const ROW = 'yt-flexible-actions-view-model';
 
 const STYLE = `
   :host { all: initial; }
@@ -19,6 +21,8 @@ const STYLE = `
     height: 36px; min-width: 36px; padding: 0 12px; border-radius: 18px; font-size: 14px; font-weight: 500;
     background: rgba(255,255,255,.1); color: #fff; }
   .btn:hover { background: rgba(255,255,255,.2); }
+  /* Same size as the header's round icon buttons beside it. */
+  .btn.more { width: 40px; height: 40px; min-width: 0; padding: 0; border-radius: 50%; font-size: 18px; }
   .btn:focus-visible { outline: 2px solid #3ea6ff; outline-offset: 2px; }
   .menu { position: fixed; z-index: 2300; background: #282828; color: #f1f1f1; border-radius: 12px; padding: 8px 0;
     box-shadow: 0 4px 32px rgba(0,0,0,.4); min-width: 180px; }
@@ -47,7 +51,6 @@ export function playlistTools(rpc: Rpc, log: Logger, identity: () => string | un
   const ui = () => {
     if (!host) {
       host = document.createElement('ytpp-playlist-tools');
-      host.style.cssText = 'display:inline-flex;margin-left:8px;vertical-align:middle;';
       root = host.attachShadow({ mode: 'open' });
       const style = document.createElement('style');
       style.textContent = STYLE;
@@ -79,9 +82,18 @@ export function playlistTools(rpc: Rpc, log: Logger, identity: () => string | un
       (scrim.querySelector('.ok') as HTMLElement).focus();
     });
 
-  const removeRows = (setIds: Set<string>) => {
-    for (const el of document.querySelectorAll<HTMLElement & { data?: { setVideoId?: string } }>('ytd-playlist-video-renderer')) {
-      if (el.data?.setVideoId && setIds.has(el.data.setVideoId)) el.remove();
+  /**
+   * Take the removed rows off the page. This script runs in the isolated
+   * world, where the rows' Polymer `data` (setVideoId) is not visible, so
+   * match them by the video link; only the list's own rows, not the
+   * recommended videos under it. A video in the list twice goes twice, which
+   * is what both modes remove anyway.
+   */
+  const removeRows = (videoIds: Set<string>) => {
+    for (const el of document.querySelectorAll<HTMLElement>('ytd-playlist-video-list-renderer ytd-playlist-video-renderer')) {
+      const href = el.querySelector<HTMLAnchorElement>('a#video-title, a#thumbnail, a[href*="watch?v="]')?.href;
+      const v = href ? new URL(href).searchParams.get('v') : null;
+      if (v && videoIds.has(v)) el.remove();
     }
   };
 
@@ -107,9 +119,9 @@ export function playlistTools(rpc: Rpc, log: Logger, identity: () => string | un
       const snapshot: Snapshot = { listId, listName: title, time: Date.now(), mode, removed };
       const id = identity();
       if (id) await saveSnapshot(id, snapshot);
-      removeRows(new Set(remove.map((i) => i.setVideoId)));
+      removeRows(new Set(remove.map((i) => i.videoId)));
       log.info(`clear (${mode}) on ${listId}: removed ${remove.length - failed}`);
-      toast(tr('queue.deleted', { n: remove.length - failed }), { label: tr('queue.undo'), run: () => void restoreSnapshot(rpc, log, snapshot).then(() => location.reload()) }, UNDO_MS);
+      toast(tr('queue.deleted', { n: remove.length - failed }), { label: tr('queue.undo'), run: () => void restoreSnapshot(rpc, log, snapshot).then((n) => shownInReads(rpc, listId, data.items.length - remove.length + n)).then(() => location.reload()) }, UNDO_MS);
     } catch (e) {
       log.error('clear failed', e);
       toast(tr('queue.failed'), undefined, 6000);
@@ -150,17 +162,56 @@ export function playlistTools(rpc: Rpc, log: Logger, identity: () => string | un
     (menu.querySelector('button') as HTMLElement).focus();
   };
 
-  /** Place the button next to Play all / Shuffle, if this list is ours. */
+  /** The list on this page, once known to be ours. */
+  let editableList: string | undefined;
+  let timer: ReturnType<typeof setInterval> | undefined;
+
+  const button = () => {
+    const r = ui();
+    if (!r.querySelector('.btn.more')) {
+      const btn = document.createElement('button');
+      btn.className = 'btn more';
+      btn.type = 'button';
+      btn.title = tr('queue.toolsTitle');
+      btn.setAttribute('aria-label', tr('queue.toolsLabel'));
+      btn.setAttribute('aria-haspopup', 'menu');
+      btn.textContent = '⋯';
+      btn.addEventListener('click', () => openMenu(btn));
+      r.append(btn);
+    }
+  };
+
+  /**
+   * Put the button in the header on screen. The page keeps hidden copies of
+   * the header (a 0x0 one in the tabbed header, the old sidebar) and redraws
+   * it after loading, which drops our button: so this runs every second and
+   * puts it back when it is gone or hidden (measured 2026-11-21).
+   */
+  const place = () => {
+    if (!editableList || editableList !== listIdFromUrl()) return;
+    if (host?.isConnected && shown(host)) return;
+    const header = firstShown(HEADER);
+    if (!header) return;
+    // New header: a line of its own under the action row, which has no room
+    // to spare (YouTube squeezes "Play all" when a button is added to it).
+    // Old header: next to Shuffle.
+    const row = header.querySelector(ROW);
+    const shuffle = row ? undefined : [...header.querySelectorAll('button, a')].find((b) => /shuffle|随机/i.test(b.getAttribute('aria-label') ?? b.textContent ?? ''));
+    const anchor = row ?? shuffle?.closest('yt-button-view-model, ytd-button-renderer') ?? shuffle?.parentElement;
+    button();
+    host!.style.cssText = row ? 'display:flex;margin-top:8px;' : 'display:inline-flex;margin-left:8px;vertical-align:middle;';
+    if (anchor?.parentElement) anchor.after(host!);
+    else header.append(host!);
+  };
+
+  /** On a page of a list we can edit, show the button. */
   const mount = async () => {
     const listId = listIdFromUrl();
-    if (!listId) {
-      host?.remove();
-      forList = undefined;
-      return;
-    }
-    if (forList === listId && host?.isConnected) return;
+    if (listId === forList) return place();
     forList = listId;
+    editableList = undefined;
     host?.remove();
+    if (!listId) return;
     let editable = false;
     try {
       editable = (await rpc.readPlaylist(listId)).editable;
@@ -168,23 +219,8 @@ export function playlistTools(rpc: Rpc, log: Logger, identity: () => string | un
       log.warn('playlist tools: could not read list', e);
     }
     if (!editable || forList !== listId) return;
-    const header = await waitFor(HEADER);
-    if (!header || forList !== listId) return;
-    const shuffle = [...header.querySelectorAll('button, a')].find((b) => /shuffle|随机/i.test(b.getAttribute('aria-label') ?? b.textContent ?? ''));
-    const anchor = shuffle?.closest('yt-button-view-model, ytd-button-renderer, yt-flexible-actions-view-model > div') ?? shuffle?.parentElement;
-    const r = ui();
-    r.querySelector('.btn.more')?.remove();
-    const btn = document.createElement('button');
-    btn.className = 'btn more';
-    btn.type = 'button';
-    btn.title = tr('queue.toolsTitle');
-    btn.setAttribute('aria-label', tr('queue.toolsLabel'));
-    btn.setAttribute('aria-haspopup', 'menu');
-    btn.textContent = '⋯';
-    btn.addEventListener('click', () => openMenu(btn));
-    r.append(btn);
-    if (anchor?.parentElement) anchor.after(host!);
-    else header.append(host!);
+    editableList = listId;
+    place();
   };
 
   const onNavigate = () => void mount();
@@ -192,34 +228,36 @@ export function playlistTools(rpc: Rpc, log: Logger, identity: () => string | un
   return {
     enable() {
       document.addEventListener('yt-navigate-finish', onNavigate);
+      timer = setInterval(place, 1000);
       void mount();
     },
     disable() {
       document.removeEventListener('yt-navigate-finish', onNavigate);
+      clearInterval(timer);
       host?.remove();
       host = root = undefined;
-      forList = undefined;
+      forList = editableList = undefined;
     },
   };
 }
 
-function waitFor(selector: string, ms = 8000): Promise<Element | undefined> {
-  return new Promise((resolve) => {
-    const found = document.querySelector(selector);
-    if (found) return resolve(found);
-    const mo = new MutationObserver(() => {
-      const el = document.querySelector(selector);
-      if (el) {
-        mo.disconnect();
-        resolve(el);
-      }
-    });
-    mo.observe(document.documentElement, { childList: true, subtree: true });
-    setTimeout(() => {
-      mo.disconnect();
-      resolve(undefined);
-    }, ms);
-  });
+const shown = (el: Element) => el.getClientRects().length > 0 && el.getBoundingClientRect().width > 0;
+const firstShown = (selector: string) => [...document.querySelectorAll(selector)].find(shown);
+
+/**
+ * Wait (up to ~10 s) until reads show `n` entries: reads lag behind writes by
+ * a few seconds (findings A4), and a page reloaded too early shows the list
+ * as it was before the undo.
+ */
+async function shownInReads(rpc: Rpc, listId: string, n: number): Promise<void> {
+  for (const ms of [0, 1000, 1500, 2500, 5000]) {
+    await new Promise((r) => setTimeout(r, ms));
+    try {
+      if ((await rpc.readPlaylist(listId)).items.length >= n) return;
+    } catch {
+      return;
+    }
+  }
 }
 
 /** Put the removed videos back where they were (design §25 undo). */

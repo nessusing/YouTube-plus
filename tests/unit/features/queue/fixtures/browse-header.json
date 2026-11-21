@@ -1,0 +1,23 @@
+{
+ "header": {
+  "pageHeaderRenderer": {
+   "pageTitle": "YouTube+ e2e list",
+   "content": {
+    "pageHeaderViewModel": {
+     "title": {
+      "dynamicTextViewModel": {
+       "text": {
+        "content": "YouTube+ e2e list"
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "metadata": {
+  "playlistMetadataRenderer": {
+   "title": "YouTube+ e2e list"
+  }
+ }
+}

@@ -2,7 +2,7 @@
 // itself (design §21.5). Missing X-Goog-PageId does not fail: it silently acts
 // as the primary account, so always send it for brand accounts.
 
-import { playlistPage, type ListAction } from './core';
+import { playlistPage, playlistTitle, type ListAction } from './core';
 import type { Identity } from './profiles';
 import type { PlaylistData, PlaylistRef } from './rpc';
 
@@ -103,8 +103,8 @@ export async function readPlaylist(id: string): Promise<PlaylistData> {
   const first = await call('browse', { browseId: `VL${id}` });
   const alerts = walk(first, 'alertRenderer') as { type?: string }[];
   const editableFlag = walk(first, 'isEditable')[0];
-  const header = walk(first, 'playlistHeaderRenderer')[0] as Record<string, unknown> | undefined;
-  if (alerts.some((a) => a.type === 'ERROR') && !header) return { exists: false, editable: false, title: '', items: [] };
+  const title = playlistTitle(first);
+  if (alerts.some((a) => a.type === 'ERROR') && !title) return { exists: false, editable: false, title: '', items: [] };
   // Only the list's own pages, never the recommendations under it (findings F7).
   const page = playlistPage(first);
   const items = page.items;
@@ -114,7 +114,7 @@ export async function readPlaylist(id: string): Promise<PlaylistData> {
     items.push(...more.items);
     token = more.token;
   }
-  return { exists: true, editable: editableFlag === true, title: text(header?.title), items };
+  return { exists: true, editable: editableFlag === true, title: title ?? '', items };
 }
 
 export interface EditResult { ok: boolean; status: number; error?: string; added: string[] }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chunk, decideTakeover, DEFAULT_PROFILE, isQueueCommand, countWith, isWatchedHere, listSignature, panelSnapshot, meetsExpect, mergeExpect, nextAfter, nextRows, notInList, panelView, parseEdit, parseQueueAction, queueView, planClear,
-  planUndoMoves, playlistPage, profileWithDefaults, type ListItem, type TakeoverInput,
+  planUndoMoves, playlistPage, playlistTitle, profileWithDefaults, type ListItem, type TakeoverInput,
 } from '@/features/queue/core';
 
 // Recorded 2026-11-20 on real lists, pruned to the structure.
@@ -10,6 +10,8 @@ import bigMore from './fixtures/browse-big-more.json';
 import bigRecommended from './fixtures/browse-big-recommended.json';
 import smallFirst from './fixtures/browse-small-first.json';
 import smallRecommended from './fixtures/browse-small-recommended.json';
+// Recorded 2026-11-21: the header since YouTube dropped playlistHeaderRenderer.
+import header from './fixtures/browse-header.json';
 
 const L = (v: string, s: string, percent?: number): ListItem => ({ videoId: v, setVideoId: s, percent });
 
@@ -316,5 +318,19 @@ describe('playlistPage (findings F7)', () => {
   it('105 entries in all, each once', () => {
     const all = [...playlistPage(bigFirst).items, ...playlistPage(bigMore).items];
     expect(new Set(all.map((i) => i.setVideoId)).size).toBe(105);
+  });
+});
+
+describe('playlistTitle', () => {
+  it('reads the title from the 2026-11 header and metadata', () => {
+    expect(playlistTitle(header)).toBe('YouTube+ e2e list');
+    expect(playlistTitle({ header: header.header })).toBe('YouTube+ e2e list');
+  });
+  it('still reads the old playlistHeaderRenderer', () => {
+    expect(playlistTitle({ header: { playlistHeaderRenderer: { title: { simpleText: 'Old' } } } })).toBe('Old');
+    expect(playlistTitle({ header: { playlistHeaderRenderer: { title: { runs: [{ text: 'A' }, { text: 'B' }] } } } })).toBe('AB');
+  });
+  it('none: a list that is gone', () => {
+    expect(playlistTitle({ alerts: [{ alertRenderer: { type: 'ERROR' } }] })).toBeUndefined();
   });
 });

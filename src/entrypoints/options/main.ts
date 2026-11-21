@@ -369,11 +369,17 @@ async function createList() {
   listMsg.textContent = t('opt.queue.creating');
   try {
     const id = await ask<string>(who.tab, { op: 'create', title });
-    lists = undefined;
-    await saveProfile((p) => { p.listId = id; p.listName = title; });
+    // Leave "New…", or the select keeps showing it over the new list.
+    listSel.value = '';
     newRow.hidden = true;
+    await saveProfile((p) => { p.listId = id; p.listName = title; });
     listMsg.textContent = t('opt.queue.created', { name: title });
-    await loadLists(true);
+    // A new list shows in the editable lists only a second or two later (findings F16).
+    for (const ms of [0, 1500, 3000]) {
+      await new Promise((r) => setTimeout(r, ms));
+      await loadLists(true);
+      if (lists?.some((l) => l.id === id)) break;
+    }
   } catch (e) {
     listMsg.textContent = t('opt.queue.createFail', { e: e instanceof Error ? e.message : String(e) });
   } finally {

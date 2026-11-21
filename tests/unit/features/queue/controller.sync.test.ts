@@ -194,6 +194,28 @@ describe('changes made elsewhere (other tab, phone)', () => {
   });
 });
 
+describe('a list just created (findings F16)', () => {
+  it('reads as missing for a moment: the choice is kept and the list is used', async () => {
+    const h = await setup({ profile: { mode: 'playlist', removeWatched: true } });
+    h.yt.newListLagMs = 1500;
+    // The settings page creates a list and chooses it.
+    const id = await h.yt.rpc.createPrivatePlaylist('New');
+    await h.setProfile({ listId: id, listName: 'New' });
+    await h.settle();
+    expect((await h.profile())?.listId).toBe(id);
+    expect(h.ctl.decision).toBe('take');
+    expect(h.toasts).toHaveLength(0);
+  });
+
+  it('still gone after the re-reads: the choice is cleared', async () => {
+    const h = await setup({ profile: { mode: 'playlist', removeWatched: true } });
+    await h.setProfile({ listId: 'PLnone', listName: 'Gone' });
+    await h.settle();
+    expect((await h.profile())?.listId).toBeUndefined();
+    expect(h.ctl.decision).toBe('noList');
+  });
+});
+
 describe('sync failures stay quiet', () => {
   it('a failed read during the recount keeps the count from the edit', async () => {
     const h = await setup({ lists: { PLq: ['a', 'b'] }, profile: PLAYLIST });

@@ -99,6 +99,15 @@ export class TestLists {
     return id;
   }
 
+  /** A list the extension created during a test: delete it after the test too. */
+  async adopt(id: string): Promise<void> {
+    // A new list reads as missing for a second or two (findings F16).
+    await expect.poll(async () => (await this.read(id)).exists, { timeout: 15_000 }).toBe(true);
+    const d = await this.read(id);
+    if (!d.title.startsWith(LIST_PREFIX)) throw new Error(`refusing to adopt ${id} ("${d.title}"): not a test list`);
+    this.mine.add(id);
+  }
+
   async read(id: string): Promise<PlaylistData> {
     return rpc<PlaylistData>(this.helper, 'readPlaylist', id);
   }
@@ -163,6 +172,11 @@ export async function storageSet(ctx: BrowserContext, area: 'sync' | 'local', it
 export async function storageGet(ctx: BrowserContext, area: 'sync' | 'local', key: string): Promise<unknown> {
   const sw = await serviceWorker(ctx);
   return sw.evaluate(async ([area, key]) => (await (globalThis as unknown as { chrome: { storage: Record<string, { get(k: string): Promise<Record<string, unknown>> }> } }).chrome.storage[area as string]!.get(key as string))[key as string], [area, key] as const);
+}
+
+export async function storageRemove(ctx: BrowserContext, area: 'sync' | 'local', key: string): Promise<void> {
+  const sw = await serviceWorker(ctx);
+  await sw.evaluate(([area, key]) => (globalThis as unknown as { chrome: { storage: Record<string, { remove(k: string): Promise<void> }> } }).chrome.storage[area as string]!.remove(key as string), [area, key] as const);
 }
 
 export interface QueueProfile { mode: 'native' | 'playlist'; listId?: string; listName?: string; removeWatched: boolean }

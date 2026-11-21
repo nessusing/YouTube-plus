@@ -76,8 +76,8 @@ describe('native → playlist, what is playing afterwards', () => {
     expect(h.yt.panel).toMatchObject({ playlistId: 'PLq', top: 'v1' });
   });
 
-  // F8: docs/queue-test-findings.md
-  it.fails('③ native queue: Add leaves the native queue playing', async () => {
+  // Findings F8, fixed 2026-11-21.
+  it('③ native queue: Add leaves the native queue playing', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE, before: STATES['③ the native queue in the miniplayer'] });
     await switchTo(h, { mode: 'playlist' });
     await h.ctl.onAdd(['x']);
@@ -131,8 +131,8 @@ describe('playlist → native while our list plays (④): the extension keeps ou
     expect(h.yt.armed).toBeUndefined();
   });
 
-  // F1: docs/queue-test-findings.md
-  it.fails('an unload removal armed before the switch is disarmed', async () => {
+  // Findings F1, fixed 2026-11-21.
+  it('an unload removal armed before the switch is disarmed', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: STATES['④ our list playing'] });
     h.ctl.onPlayer(h.yt.playerEvent('near'));
     await h.settle();
@@ -163,8 +163,8 @@ describe('back to playlist mode after edits made meanwhile', () => {
     expectTaking(h, 4);
   });
 
-  // F4: docs/queue-test-findings.md
-  it.fails('a removal made while native shows in the count when switching back, even while reads lag', async () => {
+  // Findings F4, fixed 2026-11-21.
+  it('a removal made while native shows in the count when switching back, even while reads lag', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => { STATES['④ our list playing']!(yt); yt.removalLagMs = 4000; } });
     await switchTo(h, { mode: 'native' });
     const b = h.yt.entries('PLq').find((e) => e.videoId === 'b')!;
@@ -175,8 +175,8 @@ describe('back to playlist mode after edits made meanwhile', () => {
     expect(h.button.count).toBe(2);
   });
 
-  // F3: docs/queue-test-findings.md
-  it.fails('edits made in playlist mode do not linger into a later switch back', async () => {
+  // Findings F3, fixed 2026-11-21.
+  it('edits made in playlist mode do not linger into a later switch back', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await h.ctl.onAdd(['x']);
     await vi.advanceTimersByTimeAsync(500);
@@ -206,8 +206,8 @@ describe('list A → list B', () => {
     expect(h.yt.navigations).toEqual([]);
   });
 
-  // F2: docs/queue-test-findings.md
-  it.fails('edits and panel updates of A do not touch B\'s count', async () => {
+  // Findings F2, fixed 2026-11-21.
+  it('edits and panel updates of A do not touch B\'s count', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: STATES['④ our list playing'] });
     await h.ctl.onAdd(['x']);
     await vi.advanceTimersByTimeAsync(100);

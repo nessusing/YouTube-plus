@@ -36,7 +36,6 @@ test.describe('native → playlist', () => {
   });
 
   test('③ native queue in the miniplayer: Add goes into the list, the native queue stays', async ({ page, open, lists, setProfile }) => {
-    test.fail(true, 'F8: docs/queue-test-findings.md');
     const id = await lists.create([VIDEOS.b], 'mode-3');
     const p: QueueProfile = { mode: 'native', listId: id, listName: 'x', removeWatched: true };
     await setProfile(p);

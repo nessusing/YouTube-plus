@@ -139,8 +139,8 @@ describe('remove after playing on', () => {
     expect(h.toasts.at(-1)?.text).toBe(t('queue.removeFailed'));
   });
 
-  // F6: docs/queue-test-findings.md
-  it.fails('removal request lost (no answer / network error): says so', async () => {
+  // Findings F6, fixed 2026-11-21.
+  it('removal request lost (no answer / network error): says so', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('a', 'PLq') });
     h.yt.fail('editPlaylist', new Error('a.editPlaylist: no answer from the page script'));
     h.ctl.onPlayer(h.yt.playerEvent('ended'));

@@ -181,8 +181,8 @@ describe('changes made elsewhere (other tab, phone)', () => {
     expect(h.yt.callsOf('syncList')).toHaveLength(syncs);
   });
 
-  // F5: docs/queue-test-findings.md
-  it.fails('the list deleted elsewhere: noticed on the way back to the tab', async () => {
+  // Findings F5, fixed 2026-11-21.
+  it('the list deleted elsewhere: noticed on the way back to the tab', async () => {
     const h = await setup({ lists: { PLq: ['a', 'b'] }, profile: PLAYLIST });
     h.yt.deleteList('PLq');
     await vi.advanceTimersByTimeAsync(6000);

@@ -243,14 +243,21 @@ export class FakeYouTube {
     },
     syncList: (listId: string, expect: Expect | undefined, attach: boolean) => this.syncList(listId, expect, attach),
     health: async () => ({ app: true, ytcfg: true, takeover: true }),
-    playing: async (): Promise<Playing> => ({ videoId: this.player.videoId, playlistId: this.player.playlistId, index: this.player.index }),
+    playing: async (): Promise<Playing> => ({ videoId: this.player.videoId, playlistId: this.playingList(), index: this.player.index }),
   };
+
+  /** Mirrors main-world.ts playingList(): the player's list, else a native queue in the panel. */
+  private playingList(): string | undefined {
+    if (this.player.playlistId) return this.player.playlistId;
+    const id = this.panel?.playlistId;
+    return id?.startsWith('TLPQ') ? id : undefined;
+  }
 
   /** Mirrors main-world.ts syncList (design §24.8, §24.2). */
   private async syncList(listId: string, expect: Expect | undefined, attach: boolean): Promise<SyncResult> {
     const { videoId, ad, mini, onWatch } = this.player;
     if (!videoId || ad) return { how: 'none' };
-    const playing = this.player.playlistId;
+    const playing = this.playingList();
     if (playing ? playing !== listId : !attach) return { how: 'none' };
     if (!mini && !onWatch) return { how: 'none' };
     if (this.playlistManager) {
@@ -258,7 +265,7 @@ export class FakeYouTube {
         if (wait) await sleep(wait);
         const rows = this.visible(listId);
         if (!meetsExpect(rows, expect) && i < SYNC_WAITS.length - 1) continue;
-        if (this.player.videoId !== videoId || this.player.playlistId !== playing) return { how: 'none' };
+        if (this.player.videoId !== videoId || this.playingList() !== playing) return { how: 'none' };
         const inList = rows.some((r) => r.videoId === videoId);
         this.showPanel({ playlistId: listId, rows, top: inList ? undefined : videoId });
         if (!playing && this.attachSetsPlaylistId) this.player = { ...this.player, playlistId: listId, index: 0 };

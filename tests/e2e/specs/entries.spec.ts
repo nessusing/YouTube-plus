@@ -54,7 +54,6 @@ test('hover button on a thumbnail: adds to the list and says so', async ({ page,
 });
 
 test('hover button label says where it goes', async ({ page, open, lists, setProfile }) => {
-  test.fail(true, 'F11: docs/queue-test-findings.md');
   const id = await lists.create([VIDEOS.zoo], 'hover-label');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open('/@RickAstleyYT/videos');

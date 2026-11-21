@@ -6,19 +6,21 @@
 
 ## 一览（2026-11-21）
 
+除 F12（观察中）外都已修或已定；结论已写进 `design.md`。
+
 | # | 问题 | 严重程度 | 建议 | 状态 |
 |---|---|---|---|---|
-| F1 | 切走后关标签页，仍会删掉正在看的视频 | 中 | bug | 待修 |
-| F2 | 换列表后，旧列表的修改算进新列表的数字（最长 30 秒） | 低 | bug | 待修 |
-| F3 | 来回切模式后，之前的修改残留在数字里（最长 30 秒） | 低 | bug | 待修 |
-| F4 | 自带队列模式下删的条目，切回后数字多 1，直到切回标签页 | 低 | bug | 待修 |
-| F5 | 列表在别处被删，切回标签页时发现不了 | 中 | bug | 待修 |
-| F6 | 看完后删除的请求丢了，不提示 | 低 | bug | 待修 |
+| F1 | 切走后关标签页，仍会删掉正在看的视频 | 中 | bug | **已修** |
+| F2 | 换列表后，旧列表的修改算进新列表的数字（最长 30 秒） | 低 | bug | **已修** |
+| F3 | 来回切模式后，之前的修改残留在数字里（最长 30 秒） | 低 | bug | **已修** |
+| F4 | 自带队列模式下删的条目，切回后数字多 1，直到切回标签页 | 低 | bug | **已修** |
+| F5 | 列表在别处被删，切回标签页时发现不了 | 中 | bug | **已修** |
+| F6 | 看完后删除的请求丢了，不提示 | 低 | bug | **已修** |
 | F7 | 读列表把推荐视频也算进去（2 条显示成 7 条） | **高** | bug | **已修** |
-| F8 | 官方队列在播时切到播放列表模式再加入，官方队列被顶掉 | 中 | bug | 待修 |
+| F8 | 官方队列在播时切到播放列表模式再加入，官方队列被顶掉 | 中 | bug | **已修** |
 | F9 | 最后一条放完后 YouTube 自动播推荐视频（设计说停在结束画面） | — | 改设计 | **已定**（接受 YouTube 的行为） |
 | F10 | 迷你播放器里没有上一个 / 下一个（YouTube 改版） | — | 改设计 | **已定**（不要了，逻辑已删） |
-| F11 | 悬停按钮没改文字（点击是对的） | 低 | bug 或改设计 | 待修 |
+| F11 | 悬停按钮没改文字（点击是对的） | 低 | bug | **已修** |
 | F12 | 偶发：迷你播放器面板缺刚加的视频 | 低 | 观察 | 观察中 |
 | F13 | 列表页的「⋯」（清空全部 / 移除已看完）看不到 | **高** | bug | **已修** |
 | F14 | 读不到列表标题：确认框、快照里显示成列表 ID | 中 | bug | **已修** |
@@ -35,6 +37,7 @@
 - **原因**：`armed` 只在换视频时清；controller 切换模式时不调用 `rpc.disarm()`，也不清 `pending`。
 - **测试**：`controller.modes` › an unload removal armed before the switch is disarmed
 - **建议**：bug。`apply()` 发现不再是 `take`（或者列表 ID 变了）时，调用 `disarm()` 并清掉 `pending`。
+- **已修（2026-11-21）**：controller 记下预签删除对应的列表；`apply()` 决定不再接管、或者换了列表时，调用 `disarm()` 并清掉 `pending`。
 
 ### F2　换列表以后，旧列表最近的修改算进了新列表的数字
 
@@ -44,6 +47,7 @@
 - **原因**：`onProfile()` 先执行 `this.profile = p`，再调用 `refresh()`。所以 `refresh()` 里的「列表 ID 变了就清掉 `snap` 和 `overlay`」这个判断永远不成立，A 的 overlay 叠加到了 B 的读取结果上。
 - **测试**：`controller.modes` › edits and panel updates of A do not touch B's count
 - **建议**：bug。在 `onProfile` 里比较新旧列表 ID，不一样就清掉；或者 `onProfile` 不再提前改 `this.profile`。
+- **已修（2026-11-21）**：`onProfile()` 发现列表 ID 变了，先清掉 `snap`、`overlay` 和待删计划。
 
 ### F3　来回切换模式后，切走前的修改还残留在数字里
 
@@ -53,6 +57,7 @@
 - **原因**：overlay 不随模式切换清掉，`refresh()` 读到的新数据也不会覆盖它。
 - **测试**：`controller.modes` › edits made in playlist mode do not linger into a later switch back
 - **建议**：bug。离开 `take` 时清掉 overlay（F2、F3 可以一起修）。
+- **已修（2026-11-21）**：离开接管（`take` → 别的）时清掉 overlay 和 snapshot。
 
 ### F4　自带队列模式下删掉的条目，切回播放列表模式后数字多 1
 
@@ -62,6 +67,7 @@
 - **原因**：不接管时 `onEdited` 直接忽略修改，所以切回来时 `refresh()` 只读一次。读到的是旧数据，之后也不再重读。
 - **测试**：`controller.modes` › a removal made while native shows in the count when switching back, even while reads lag
 - **建议**：bug，影响小。两种修法任选：不接管时也记下对选中列表的修改（只记，不刷新面板）；或者 `refresh()` 读完后，如果离最近一次已知修改不到 10 秒，就照 1.5、3、5 秒再读几次。
+- **已修（2026-11-21）**：不接管时也把这个标签页里对选中列表的修改记进 overlay（只记，不刷新数字和面板），切回来时叠在读到的数据上。
 
 ### F5　列表在别处被删掉，切回标签页时发现不了
 
@@ -71,6 +77,7 @@
 - **原因**：`readItems()` 不检查 `exists`，`recheck()` 和 `recountUntil()` 都把「列表不存在」当成「空列表」处理。
 - **测试**：`controller.sync` › the list deleted elsewhere: noticed on the way back to the tab
 - **建议**：bug。`readItems()` 读到 `exists: false` 时，走 `listGone()` 再 `apply()`，并提示 `queue.listGone`。
+- **已修（2026-11-21）**：`readItems()` 读到「不存在」时，按 F16 的办法复查，确认后清空选择、停止接管，并提示「列表已不存在 · 去设置」。
 
 ### F6　看完以后删除失败（网络错误、页面脚本没应答）时没有提示
 
@@ -80,6 +87,7 @@
 - **原因**：`remove()` 只处理返回的 `ok:false`；抛出的异常被 `onPlayer` 里的 `run()` 接住，只写日志。
 - **测试**：`controller.watched` › removal request lost (no answer / network error): says so
 - **建议**：bug，影响小。`remove()` 捕获异常时也弹提示。
+- **已修（2026-11-21）**：`remove()` 捕获异常，提示「删除失败」并写日志。
 
 ## 假服务器的假设（需要在 L4 里确认）
 
@@ -99,6 +107,7 @@ L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测�
 - **实际**：`attachIfIdle()` 用 `playing().playlistId` 判断有没有在播列表，但官方队列播放时它是空的（A5）。于是扩展把当前视频当成「不在任何列表里」，调用 `syncList(attach)`，用我们的列表替换了面板，官方队列里后面的视频就没了。main-world 的 `syncList()` 也是只看 `getPlaylistId()`。
 - **测试**：`controller.takeover` › the native queue playing in the miniplayer: leaves it；`controller.modes` › ③ native queue: Add leaves the native queue playing（L2，用改过的假服务器）。L4 `modes.spec.ts` › ③ native queue in the miniplayer 在真实页面上复现：官方队列 `[a, DXK2…, qmI0…]` 点「加入」后变成 `[a, 9bZk…(我们的列表), sizw…(刚加的)]`。
 - **建议**：bug。main-world 判断「正在播列表」时，`getPlaylistId()` 为空的话再看 `yt-playlist-manager.getPlaylistData().playlistId`；`playing()` 也一起改，这样 controller 能看到 `TLPQ…`。
+- **已修（2026-11-21）**：main-world 新增 `playingList()`：`getPlaylistId()` 为空时，看 `yt-playlist-manager` 里的列表，是 `TLPQ…` 就算在播官方队列。`playing()`、`syncList()` 都用它。L2 两条、L4 一条都通过。
 
 ### F7　读列表时把列表下面的「推荐视频」也算进去了（严重，2026-11-20 已修）
 
@@ -147,6 +156,7 @@ L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测�
 - **原因**：`onHover()` 只认旧的 `ytd-thumbnail-overlay-toggle-button-renderer`，改它的 `data.untoggledTooltip`；现在这个按钮是新版的 view model（`…ThumbnailHoverOverlayToggleActions…` 里面的 `button`），不经过那段代码。
 - **测试**：`entries.spec.ts` › hover button label says where it goes（用 `test.fail` 标出）。点击加入的测试（hover button on a thumbnail: adds to the list and says so）是通过的。
 - **建议**：bug，影响小（只是文字不对）。§28.1 第 1 条本来就是推测的写法；照新版按钮改文字，或者接受「悬停按钮不改文字」，把 §24.3 写清楚。
+- **已修（2026-11-21）**：新版按钮是 `toggle-button-view-model`，`data.defaultButtonViewModel.buttonViewModel` 里 `iconName` 为 `ADD_TO_QUEUE_TAIL`，文字是 `accessibilityText`，渲染成内层 button 的 `aria-label`。悬停时把 `aria-label` 改成「加入 <列表名>」并加 `title`，不接管时改回。旧版按钮的处理保留。
 
 ### F12　偶发：挂到迷你播放器上的列表面板里，缺了刚加入的那个视频
 

@@ -43,6 +43,8 @@ export class QueueController {
   private unsubProfile: (() => void) | undefined;
   private modeToast: QueueMode | undefined;
   private pending: Plan | undefined;
+  /** The list a removal is armed for (unload, §28.1), if any. */
+  private armedFor: string | undefined;
   private toolsOn = false;
   /** The video reloaded inside the list by the fallback attach (§24.2), until it ends. */
   private attached: string | undefined;
@@ -186,9 +188,23 @@ export class QueueController {
   }
 
   private async readItems(): Promise<ListItem[]> {
-    const data = await this.rpc.readPlaylist(this.profile.listId!);
+    const listId = this.profile.listId!;
+    const data = await this.rpc.readPlaylist(listId);
+    if (!data.exists) {
+      await this.noticeGone(listId);
+      return this.items;
+    }
     this.took(data.items);
     return this.items;
+  }
+
+  /** A read says the list is not there (deleted elsewhere): check, then forget it and say so (§24.5, findings F5). */
+  private async noticeGone(listId: string): Promise<void> {
+    if (await this.goneForSure(listId) !== 'gone' || this.listId !== listId) return;
+    const name = this.listName();
+    await this.listGone();
+    await this.apply();
+    toast(t('queue.listGone', { name }), { label: t('queue.toSettings'), run: openSettings });
   }
 
   /** A fresh read of the list. */
@@ -235,13 +251,11 @@ export class QueueController {
   /** Any successful edit of a list, by the page or by us. */
   onEdited(e: ListEdit): void {
     const listId = this.listId;
-    if (this.decision !== 'take' || e.playlistId !== listId) return;
+    if (e.playlistId !== listId) return;
     // The count changes now; reads and the panel follow.
-    const prev = this.activeOverlay();
-    // Added a moment ago and now removed by entry: no longer expected.
-    const removed = new Set((e.gone ?? []).map((sid) => [...this.items, ...(this.snap?.rows ?? [])].find((i) => i.setVideoId === sid)?.videoId).filter(Boolean));
-    const kept = prev ? { ...prev, has: (prev.has ?? []).filter((v) => !removed.has(v)) } : undefined;
-    this.overlay = { expect: mergeExpect(kept, e), until: Date.now() + OVERLAY_MS };
+    this.remember(e);
+    // Not taking over: only remember it, for a switch back while reads lag (findings F4).
+    if (this.decision !== 'take') return;
     this.showButton();
     const expect = mergeExpect(this.edits?.expect, e);
     if (this.edits) clearTimeout(this.edits.timer);
@@ -252,6 +266,15 @@ export class QueueController {
         void this.afterEdit(listId, expect);
       }, EDIT_BATCH_MS),
     };
+  }
+
+  /** Put an edit in the overlay, on top of what reads say, for a while. */
+  private remember(e: ListEdit): void {
+    const prev = this.activeOverlay();
+    // Added a moment ago and now removed by entry: no longer expected.
+    const removed = new Set((e.gone ?? []).map((sid) => [...this.items, ...(this.snap?.rows ?? [])].find((i) => i.setVideoId === sid)?.videoId).filter(Boolean));
+    const kept = prev ? { ...prev, has: (prev.has ?? []).filter((v) => !removed.has(v)) } : undefined;
+    this.overlay = { expect: mergeExpect(kept, e), until: Date.now() + OVERLAY_MS };
   }
 
   /** Top bar count, and the panel if this list is playing, once reads show the edit. */
@@ -283,6 +306,7 @@ export class QueueController {
   }
 
   private async apply(): Promise<void> {
+    const before = this.decision;
     this.decision = decideTakeover({
       featureOn: this.featureOn(),
       profile: this.profile,
@@ -290,13 +314,35 @@ export class QueueController {
       editable: this.editable,
       protocolError: this.protocolError,
     });
+    if (this.decision !== 'take') {
+      // Not ours any more: forget the plan and what we knew of the list (findings F1, F3).
+      await this.dropPlan();
+      if (before === 'take') {
+        this.snap = undefined;
+        this.overlay = undefined;
+      }
+    }
     await this.rpc.setTakeover({ decision: this.decision, label: t('queue.addTo', { name: this.listName() }) });
     this.showButton();
+  }
+
+  /** Forget the next-entry plan and disarm the removal armed for closing the tab. */
+  private async dropPlan(): Promise<void> {
+    this.pending = undefined;
+    if (!this.armedFor) return;
+    this.armedFor = undefined;
+    await this.rpc.disarm().catch((e) => this.log.debug(`disarm: ${String(e)}`));
   }
 
   private onProfile(p: QueueProfile): void {
     const old = this.profile;
     if (old.mode !== p.mode) this.showModeToast(p.mode);
+    if (old.listId !== p.listId) {
+      // Another list: nothing known of the old one counts for it (findings F1, F2).
+      this.snap = undefined;
+      this.overlay = undefined;
+      void this.dropPlan();
+    }
     this.profile = p;
     if (old.mode === p.mode && old.listId === p.listId) void this.apply(); // name or remove-after-playing only
     else void this.refresh();
@@ -432,12 +478,16 @@ export class QueueController {
   private async prepare(e: PlayerEvent, listId: string): Promise<void> {
     const p = await this.plan(e);
     this.pending = p;
-    if (p.watched) await this.rpc.armRemoval(listId, p.watched.setVideoId, e.videoId);
+    if (p.watched) {
+      await this.rpc.armRemoval(listId, p.watched.setVideoId, e.videoId);
+      this.armedFor = listId;
+    }
   }
 
   private async takePlan(e: PlayerEvent): Promise<Plan> {
     const p = this.pending?.videoId === e.videoId ? this.pending : undefined;
     this.pending = undefined;
+    this.armedFor = undefined;
     await this.rpc.disarm();
     // Something may have been added in the last seconds after the last entry.
     return p && p.next ? p : this.plan(e);
@@ -462,7 +512,15 @@ export class QueueController {
   }
 
   private async remove(listId: string, item: ListItem): Promise<void> {
-    const r = await this.rpc.editPlaylist(listId, [{ action: 'ACTION_REMOVE_VIDEO', setVideoId: item.setVideoId }]);
+    let r: Awaited<ReturnType<Rpc['editPlaylist']>>;
+    try {
+      r = await this.rpc.editPlaylist(listId, [{ action: 'ACTION_REMOVE_VIDEO', setVideoId: item.setVideoId }]);
+    } catch (e) {
+      // No answer from the page script, or a network error (findings F6).
+      this.log.warn(`watched ${item.videoId}: removing from ${listId} failed`, e);
+      toast(t('queue.removeFailed'));
+      return;
+    }
     if (r.ok) {
       this.log.info(`watched ${item.videoId}: removed from ${listId}`);
     } else if (r.status === 400) {

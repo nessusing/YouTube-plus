@@ -152,13 +152,42 @@ function scheduleRelabel(): void {
   });
 }
 
-/** Hover button on thumbnails: relabel its tooltip when the pointer reaches it (unverified, §28). */
+/** New-style hover buttons: what their label said before we changed it. */
+const hoverLabels = new WeakMap<HTMLElement, { aria: string | null; title: string | null }>();
+
+/**
+ * Hover button on thumbnails: relabel it when the pointer reaches it (§24.3).
+ * Old style: the tooltip in the renderer's data. New style (2026-11,
+ * toggle-button-view-model; findings F11): the inner button's aria-label,
+ * which is the label it shows, plus a title so the pointer gets a tooltip.
+ */
 function onHover(e: Event): void {
   try {
-    const el = (e.target as Element | null)?.closest?.('ytd-thumbnail-overlay-toggle-button-renderer') as AnyEl | null;
+    const target = e.target as Element | null;
+    const take = state.decision === 'take' && !!state.label;
+    const vm = target?.closest?.('toggle-button-view-model') as (HTMLElement & { data?: unknown }) | null;
+    if (vm) {
+      const d = vm.data as { defaultButtonViewModel?: { buttonViewModel?: { iconName?: string } } } | undefined;
+      const btn = vm.querySelector<HTMLElement>('button');
+      if (!btn || d?.defaultButtonViewModel?.buttonViewModel?.iconName !== QUEUE_ICON) return;
+      if (take) {
+        if (!hoverLabels.has(btn)) hoverLabels.set(btn, { aria: btn.getAttribute('aria-label'), title: btn.getAttribute('title') });
+        btn.setAttribute('aria-label', state.label!);
+        btn.title = state.label!;
+      } else {
+        const was = hoverLabels.get(btn);
+        if (!was) return;
+        hoverLabels.delete(btn);
+        for (const [k, v] of [['aria-label', was.aria], ['title', was.title]] as const) {
+          if (v === null) btn.removeAttribute(k);
+          else btn.setAttribute(k, v);
+        }
+      }
+      return;
+    }
+    const el = target?.closest?.('ytd-thumbnail-overlay-toggle-button-renderer') as AnyEl | null;
     const data = el?.data as { untoggledIcon?: { iconType?: string }; untoggledTooltip?: unknown } | undefined;
     if (!el || !data || data.untoggledIcon?.iconType !== QUEUE_ICON) return;
-    const take = state.decision === 'take' && !!state.label;
     if (take && data.untoggledTooltip !== state.label) {
       if (!tips.has(el)) tips.set(el, data.untoggledTooltip);
       el.data = { ...data, untoggledTooltip: state.label };
@@ -328,6 +357,18 @@ type PlaylistManager = HTMLElement & {
   setPlayerPlaybackControlData?: (d: unknown) => void;
 };
 
+/**
+ * The list playing: the player's own, or the native queue (TLPQ…), which the
+ * player does not report while it plays in the miniplayer (findings A5, F8).
+ */
+function playingList(p: PlayerApi | null): string | undefined {
+  const own = p?.getPlaylistId?.();
+  if (own) return own;
+  const pm = document.querySelector<PlaylistManager>('yt-playlist-manager');
+  const id = (pm?.getPlaylistData?.() as { playlistId?: unknown } | undefined)?.playlistId;
+  return typeof id === 'string' && id.startsWith('TLPQ') ? id : undefined;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Removals can take a few seconds to show in reads (§21.4). */
 const SYNC_WAITS = [0, 1500, 3000, 5000];
@@ -344,7 +385,7 @@ async function syncList(listId: string, expect: Expect | undefined, attach: bool
   const data = p?.getVideoData?.();
   const videoId = data?.video_id;
   if (!p || !videoId || p.classList.contains('ad-showing')) return { how: 'none' };
-  const playing = p.getPlaylistId?.() || undefined;
+  const playing = playingList(p);
   if (playing ? playing !== listId : !attach) return { how: 'none' };
   const mini = app().hasAttribute('miniplayer-is-active');
   const onWatch = location.pathname === '/watch' && new URLSearchParams(location.search).get('v') === videoId;
@@ -359,7 +400,7 @@ async function syncList(listId: string, expect: Expect | undefined, attach: bool
         if (!meetsExpect(nextRows(next), expect) && i < SYNC_WAITS.length - 1) continue;
         // Moved on meanwhile: the page has loaded what goes with the new video.
         const now = player();
-        if (now?.getVideoData?.()?.video_id !== videoId || (now.getPlaylistId?.() || undefined) !== playing) return { how: 'none' };
+        if (now?.getVideoData?.()?.video_id !== videoId || playingList(now) !== playing) return { how: 'none' };
         const view = panelView(next, { videoId, title: data.title ?? '', author: data.author ?? '', duration: p.getDuration?.() ?? 0 });
         if (!view) break;
         pm.setAutoplayRenderer(view.autoplay);
@@ -489,7 +530,7 @@ const methods: Record<string, (...args: never[]) => unknown> = {
   playing: () => {
     const p = player();
     const index = p?.getPlaylistIndex?.();
-    return { videoId: p?.getVideoData?.()?.video_id, playlistId: p?.getPlaylistId?.(), index: typeof index === 'number' && index >= 0 ? index : undefined };
+    return { videoId: p?.getVideoData?.()?.video_id, playlistId: playingList(p), index: typeof index === 'number' && index >= 0 ? index : undefined };
   },
 };
 

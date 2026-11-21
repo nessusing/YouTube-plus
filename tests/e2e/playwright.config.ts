@@ -5,6 +5,7 @@ import { defineConfig } from '@playwright/test';
 // is one account and the lists are shared.
 export default defineConfig({
   testDir: '.',
+  globalSetup: './support/global-setup.ts',
   outputDir: './.out/results',
   workers: 1,
   fullyParallel: false,

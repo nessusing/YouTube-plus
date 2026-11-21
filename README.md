@@ -1,6 +1,6 @@
 # YouTube+
 
-A personal YouTube toolkit Chrome extension (MV3): TL;DR summaries on thumbnails, an Add to queue that can go into a playlist (so it survives tabs and devices), and player tweaks. Design: [docs/design.md](docs/design.md).
+A personal YouTube toolkit Chrome extension (MV3): TL;DR summaries on thumbnails, an Add to queue that can go into a playlist (so it survives tabs and devices), and player tweaks. Design of what is built: [docs/design.md](docs/design.md); plans and progress: [docs/plans.md](docs/plans.md).
 
 ## Develop
 

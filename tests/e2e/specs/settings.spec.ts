@@ -67,3 +67,26 @@ test('New…: creates a private playlist with the name given and chooses it', as
     await opts.close();
   }
 });
+
+test('the settings page opens on General, whichever tab was open last (design §3)', async ({ ctx }) => {
+  const extId = new URL((await serviceWorker(ctx)).url()).host;
+  const general = (p: Page) => p.getByRole('tab', { name: 'General' });
+  const opts = await ctx.newPage();
+  try {
+    await opts.goto(`chrome-extension://${extId}/options.html`);
+    await expect(general(opts)).toHaveAttribute('aria-selected', 'true');
+    await opts.getByRole('tab', { name: 'Queue' }).click();
+    await opts.reload();
+    await expect(general(opts)).toHaveAttribute('aria-selected', 'true');
+  } finally {
+    await opts.close();
+  }
+  // An explicit #<tab> still wins.
+  const byHash = await ctx.newPage();
+  try {
+    await byHash.goto(`chrome-extension://${extId}/options.html#queue`);
+    await expect(byHash.getByRole('tab', { name: 'Queue' })).toHaveAttribute('aria-selected', 'true');
+  } finally {
+    await byHash.close();
+  }
+});

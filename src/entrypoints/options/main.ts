@@ -105,7 +105,6 @@ const buttons = new Map<TabId, HTMLButtonElement>();
 function selectTab(id: TabId) {
   for (const [k, s] of sections) s.hidden = k !== id;
   for (const [k, b] of buttons) b.setAttribute('aria-selected', String(k === id));
-  try { localStorage.setItem('tab', id); } catch { /* ignore */ }
   void renderTldr();
   if (id === 'storage') void renderStorage();
   window.scrollTo(0, 0);
@@ -741,15 +740,11 @@ browser.storage.onChanged.addListener((changes, area) => {
 
 // ---------- start ----------
 
-// #install (first run), #log=<feature>, or #<tab>.
+// #install (first run), #log=<feature>, or #<tab>; otherwise always General (design §3).
 const hash = location.hash.slice(1);
 const logFilter = new URLSearchParams(hash).get('log');
 if (logFilter) featureSel.value = logFilter;
 let initial: TabId = 'general';
-try {
-  const saved = localStorage.getItem('tab');
-  if (isTab(saved)) initial = saved;
-} catch { /* ignore */ }
 if (hash === 'install' || logFilter) initial = 'diag';
 else if (isTab(hash)) initial = hash;
 selectTab(initial);

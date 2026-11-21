@@ -96,6 +96,8 @@ const zh = {
   'backToTop': '回到顶部',
   'player.loopOn': '循环播放',
   'player.loopOff': '关闭循环播放',
+  'player.miniMinimize': '最小化',
+  'player.miniRestore': '还原迷你播放器',
   'queue.cancel': '取消',
   'queue.noneWatched': '没有已看完的视频',
   'queue.empty': '列表是空的',
@@ -268,6 +270,7 @@ const zh = {
   'opt.player.stickyPlayer': '观看页往下滚时播放器置顶',
   'opt.player.backToTop': '「回到顶部」按钮',
   'opt.player.loopButton': '循环播放按钮（▶ 右边）',
+  'opt.player.miniMinimize': '迷你播放器最小化按钮（✕ 左边）',
   'opt.player.resetPos': '重置迷你播放器位置',
   'opt.player.resetDone': '已重置（下次出现时用官方默认位置）',
 };
@@ -357,6 +360,8 @@ const en: Record<MsgKey, string> = {
   'backToTop': 'Back to top',
   'player.loopOn': 'Loop',
   'player.loopOff': 'Turn off loop',
+  'player.miniMinimize': 'Minimize',
+  'player.miniRestore': 'Restore miniplayer',
   'queue.cancel': 'Cancel',
   'queue.noneWatched': 'No watched videos',
   'queue.empty': 'The playlist is empty',
@@ -528,6 +533,7 @@ const en: Record<MsgKey, string> = {
   'opt.player.stickyPlayer': 'Keep the player on screen when scrolling a watch page',
   'opt.player.backToTop': '"Back to top" button',
   'opt.player.loopButton': 'Loop button (next to ▶)',
+  'opt.player.miniMinimize': 'Minimize button in the miniplayer (left of ✕)',
   'opt.player.resetPos': 'Reset miniplayer position',
   'opt.player.resetDone': 'Reset (the default position is used next time)',
 };

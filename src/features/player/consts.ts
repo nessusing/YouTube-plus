@@ -4,3 +4,5 @@ export const MINI_POS_KEY = 'player/miniPos';
 /** Events the isolated side sends the page script to turn loop on / off (§40.2). */
 export const LOOP_ON_EVENT = 'ytpp-loop-on';
 export const LOOP_OFF_EVENT = 'ytpp-loop-off';
+/** storage.local key: the miniplayer is minimized to the bar (§44). */
+export const MINI_MIN_KEY = 'player/miniMinimized';

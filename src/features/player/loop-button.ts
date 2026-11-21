@@ -10,6 +10,7 @@ import { injectStyle, whenElement, type Toggleable } from '@/core/dom';
 import { t } from '@/core/i18n';
 import { LOOP_OFF_EVENT, LOOP_ON_EVENT } from './consts';
 import { SEL } from './selectors';
+import { playerTooltip, type PlayerTooltip } from './tooltip';
 
 const NS = 'http://www.w3.org/2000/svg';
 /** 24×24: a ring arrow round a ▶; 2 px strokes with round caps, like the player's own 2026 icons. */
@@ -71,25 +72,6 @@ function icon(): SVGSVGElement {
   return svg;
 }
 
-/** The player's own tooltip markup, so its styles apply; the player never shows tooltips for our buttons. */
-function tooltip(): { el: HTMLElement; text: HTMLElement } {
-  const el = document.createElement('div');
-  el.className = 'ytp-tooltip ytp-bottom ytpp-loop-tip';
-  el.style.maxWidth = '300px';
-  el.style.display = 'none';
-  const wrap = document.createElement('div');
-  wrap.className = 'ytp-tooltip-text-wrapper';
-  wrap.setAttribute('aria-hidden', 'true');
-  const bottom = document.createElement('div');
-  bottom.className = 'ytp-tooltip-bottom-text';
-  const text = document.createElement('span');
-  text.className = 'ytp-tooltip-text';
-  bottom.append(text);
-  wrap.append(bottom);
-  el.append(wrap);
-  return { el, text };
-}
-
 export function loopButton(): LoopButton {
   let removeStyle: (() => void) | undefined;
   let cancelWait: (() => void) | undefined;
@@ -98,7 +80,7 @@ export function loopButton(): LoopButton {
   let video: HTMLVideoElement | null = null;
   let bar: HTMLButtonElement | undefined;
   let mini: HTMLButtonElement | undefined;
-  let tip: ReturnType<typeof tooltip> | undefined;
+  let tip: PlayerTooltip | undefined;
   let hovered: HTMLButtonElement | undefined;
 
   const isOn = () => !!video?.loop;
@@ -111,7 +93,7 @@ export function loopButton(): LoopButton {
   const showTip = (b: HTMLButtonElement) => {
     const player = b.closest<HTMLElement>(SEL.moviePlayer);
     if (!player) return;
-    tip ??= tooltip();
+    tip ??= playerTooltip('ytpp-loop-tip');
     if (tip.el.parentElement !== player) player.append(tip.el);
     tip.text.textContent = label();
     tip.el.style.display = '';

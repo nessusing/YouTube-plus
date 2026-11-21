@@ -9,6 +9,7 @@ import { backToTop } from './back-to-top';
 import { loopButton } from './loop-button';
 import { miniControls } from './mini-controls';
 import { miniDrag } from './mini-drag';
+import { miniMinimize } from './mini-minimize';
 import { SEL, THEATER_COOKIE } from './selectors';
 import { stickyPlayer } from './sticky';
 
@@ -18,18 +19,21 @@ export async function startPlayer(): Promise<void> {
   // The back-to-top label is baked in when the button is built: rebuild it.
   await initLang(() => {
     loop.relabel();
+    minimize.relabel();
     if (!on.has('backToTop')) return;
     parts.backToTop.disable();
     parts.backToTop.enable();
   });
   const log = createLogger('player');
   const loop = loopButton();
+  const minimize = miniMinimize(log);
   const parts: Record<keyof PlayerSettings, Toggleable> = {
     miniControls: miniControls(),
     freeDrag: miniDrag(log),
     stickyPlayer: stickyPlayer(log),
     backToTop: backToTop(),
     loopButton: loop,
+    miniMinimize: minimize,
   };
   const on = new Set<keyof PlayerSettings>();
 

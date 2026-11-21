@@ -19,6 +19,10 @@ export const SEL = {
   barPlay: '.ytp-left-controls > .ytp-play-button',
   /** Holds the big ▶ in the middle of the miniplayer (shown without our miniplayer controls). */
   miniPlayHolder: '.ytp-miniplayer-play-button-container',
+  /** The ✕ at the top right of the miniplayer; the minimize button goes left of it (§44). */
+  miniClose: '.ytp-miniplayer-scrim > .ytp-miniplayer-close-button',
+  /** Video title in the miniplayer's info bar. */
+  miniTitle: 'ytd-miniplayer-info-bar [class*="ytdMiniplayerInfoBarTitle"]',
   /** Inside the miniplayer, pressing on these must not start a window drag. */
   noDrag: 'button, a, input, .ytp-chrome-bottom, .ytp-settings-menu, .ytp-popup, .ytp-miniplayer-controls, [class*="Resizer"]',
 } as const;

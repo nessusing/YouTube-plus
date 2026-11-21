@@ -18,7 +18,7 @@ await initLang(() => location.reload());
 document.documentElement.lang = getLang() === 'zh' ? 'zh-CN' : 'en';
 document.title = t('opt.title');
 
-const PLAYER_KEYS: (keyof PlayerSettings)[] = ['miniControls', 'freeDrag', 'stickyPlayer', 'backToTop', 'loopButton'];
+const PLAYER_KEYS: (keyof PlayerSettings)[] = ['miniControls', 'freeDrag', 'stickyPlayer', 'backToTop', 'loopButton', 'miniMinimize'];
 
 const send = <T>(m: Message) => browser.runtime.sendMessage(m) as Promise<T>;
 

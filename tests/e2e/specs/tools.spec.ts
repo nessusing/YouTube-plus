@@ -13,7 +13,7 @@ const TOOLS = 'ytpp-playlist-tools';
 const pageRows = (page: Page) => page.locator('ytd-playlist-video-renderer').evaluateAll(
   (els) => els.map((e) => (e as HTMLElement & { data?: { videoId?: string; setVideoId?: string } }).data)
     .filter((d) => d?.setVideoId).map((d) => d!.videoId ?? ''),
-);
+).catch(() => [] as string[]); // the page may be reloading (after Undo)
 
 async function openList(page: Page, open: (p: string) => Promise<Page>, id: string, n: number): Promise<void> {
   // The page can come with the list as it was a few seconds ago (findings A4): load it again.

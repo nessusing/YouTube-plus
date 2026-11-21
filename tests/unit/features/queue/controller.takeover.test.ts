@@ -280,6 +280,30 @@ describe('Play button (§24.4)', () => {
     expect(h.yt.navigations).toEqual(['/watch?v=a&list=PLq']);
   });
 
+  it('the list playing in the miniplayer: carries on with the entry playing there (§24.4)', async () => {
+    const h = await setup({ lists: LISTS, profile: PLAYLIST });
+    h.yt.load('b', 'PLq', { mini: true });
+    await h.ctl.play();
+    await h.settle();
+    expect(h.yt.navigations).toEqual(['/watch?v=b&list=PLq']);
+  });
+
+  it('already on the watch page of an entry in the list: stays put (§24.4)', async () => {
+    const h = await setup({ lists: LISTS, profile: PLAYLIST });
+    h.yt.load('b', 'PLq');
+    await h.ctl.play();
+    await h.settle();
+    expect(h.yt.navigations).toEqual([]);
+  });
+
+  it('a video outside the list in the miniplayer: plays the list from its first entry', async () => {
+    const h = await setup({ lists: LISTS, profile: PLAYLIST });
+    h.yt.load('x', undefined, { mini: true });
+    await h.ctl.play();
+    await h.settle();
+    expect(h.yt.navigations).toEqual(['/watch?v=a&list=PLq']);
+  });
+
   it('an empty list: nothing to play, the count is 0', async () => {
     const h = await setup({ lists: { PLq: [] }, profile: PLAYLIST });
     expect(h.button.count).toBe(0);

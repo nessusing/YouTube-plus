@@ -226,14 +226,20 @@ describe('keeping the UI in step (§24.8)', () => {
 
   it('keeps the server view when the video playing is in the list', () => {
     const n = next([row('a', 'S1'), row('b', 'S2')]);
-    const v = panelView(n, { videoId: 'b', title: '', author: '', duration: 0 })!;
+    const v = panelView(n, { videoId: 'b', title: '', author: '', duration: 0 }, false)!;
     expect((v.list.contents as unknown[]).length).toBe(2);
-    expect(v.autoplay.sets).toEqual([{ autoplayVideo: { watchEndpoint: { videoId: 'srv' } } }]);
+    expect(v.autoplay!.sets).toEqual([{ autoplayVideo: { watchEndpoint: { videoId: 'srv' } } }]);
   });
 
-  it('puts a video from outside the list on top', () => {
-    const v = panelView(next([row('a', 'S1')]), { videoId: 'x', title: 'X', author: '', duration: 0 })!;
+  it('puts a video from outside the list on top when attaching', () => {
+    const v = panelView(next([row('a', 'S1')]), { videoId: 'x', title: 'X', author: '', duration: 0 }, true)!;
     expect((v.list.contents as { playlistPanelVideoRenderer: { videoId: string } }[]).map((c) => c.playlistPanelVideoRenderer.videoId)).toEqual(['x', 'a']);
+  });
+
+  it('does not bring back the entry just watched and removed (§24.4)', () => {
+    const v = panelView(next([row('a', 'S1'), row('b', 'S2')]), { videoId: 'c', title: 'C', author: '', duration: 0 }, false)!;
+    expect((v.list.contents as { playlistPanelVideoRenderer: { videoId: string } }[]).map((c) => c.playlistPanelVideoRenderer.videoId)).toEqual(['a', 'b']);
+    expect(v.autoplay).toBeUndefined();
   });
 });
 

@@ -231,14 +231,20 @@ export function nextRows(next: unknown): ListItem[] {
 
 /**
  * What to hand the playlist manager for the video playing now: the list as
- * the server has it when that video is in it, else the queue view above.
+ * the server has it when that video is in it. A video from outside the list
+ * (`attach`, §24.2) gets the queue view above. Playing the list but no longer
+ * in it (just watched and removed, §24.4): the list as the server has it, and
+ * no autoplay, so what plays next stays YouTube's call.
  */
-export function panelView(next: unknown, now: { videoId: string; title: string; author: string; duration: number }): { list: Obj; autoplay: Obj } | undefined {
-  if (!nextRows(next).some((r) => r.videoId === now.videoId)) return queueView(next, now);
+export function panelView(next: unknown, now: { videoId: string; title: string; author: string; duration: number }, attach: boolean): { list: Obj; autoplay?: Obj } | undefined {
+  const inList = nextRows(next).some((r) => r.videoId === now.videoId);
+  if (!inList && attach) return queueView(next, now);
   const two = obj(obj(next)?.contents)?.twoColumnWatchNextResults as Obj | undefined;
   const list = obj(obj(two?.playlist)?.playlist);
+  if (!list) return undefined;
+  if (!inList) return { list: { ...list } };
   const autoplay = obj(obj(two?.autoplay)?.autoplay);
-  return list && autoplay ? { list: { ...list }, autoplay: { ...autoplay } } : undefined;
+  return autoplay ? { list: { ...list }, autoplay: { ...autoplay } } : undefined;
 }
 
 // ---- keeping the UI in step with the list (§24.8) ----

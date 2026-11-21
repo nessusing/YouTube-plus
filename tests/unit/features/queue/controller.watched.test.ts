@@ -24,6 +24,15 @@ describe('remove after playing on', () => {
     expect(h.yt.panel?.rows.map((r) => r.videoId)).toEqual(['a', 'c']);
   });
 
+  it('ended in the miniplayer: the next entry plays there, no watch page (§24.4)', async () => {
+    const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('b', 'PLq', { mini: true }) });
+    h.ctl.onPlayer(h.yt.playerEvent('ended'));
+    await h.settle();
+    expect(h.yt.navigations).toEqual([]);
+    expect(h.yt.player).toMatchObject({ videoId: 'c', mini: true });
+    expect(h.yt.truth('PLq')).toEqual(['a', 'c']);
+  });
+
   it('under 10 s left: arms the unload removal for the entry playing', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('a', 'PLq') });
     h.ctl.onPlayer(h.yt.playerEvent('near'));

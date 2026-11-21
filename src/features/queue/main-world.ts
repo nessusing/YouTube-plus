@@ -232,6 +232,9 @@ type PlayerApi = HTMLElement & {
   getDuration?: () => number;
   getPlaylistId?: () => string | undefined;
   getPlaylistIndex?: () => number;
+  /** The video IDs of the list the player holds. */
+  getPlaylist?: () => string[] | null | undefined;
+  playVideoAt?: (index: number) => void;
   getCurrentTime?: () => number;
   /** 2 = paused */
   getPlayerState?: () => number;
@@ -366,9 +369,48 @@ function navigate(url: string, endpoint: Record<string, unknown>, meta: Record<s
   }, 1500);
 }
 
-function playVideo(videoId: string, listId: string): void {
-  const url = `/watch?v=${encodeURIComponent(videoId)}&list=${encodeURIComponent(listId)}`;
-  navigate(url, { watchEndpoint: { videoId, playlistId: listId } }, { webPageType: 'WEB_PAGE_TYPE_WATCH', rootVe: 3832 });
+/**
+ * Play `videoId` inside the list. With `keepPlace` and that video already in
+ * the player: in the miniplayer, open it on the watch page at the same second
+ * (§24.4); already on its watch page, leave it be.
+ */
+function playVideo(videoId: string, listId: string, keepPlace = false): void {
+  const p = player();
+  const here = keepPlace && p?.getVideoData?.()?.video_id === videoId;
+  if (here && !app().hasAttribute('miniplayer-is-active') && location.pathname === '/watch'
+    && new URLSearchParams(location.search).get('v') === videoId) return;
+  const t = here ? Math.floor(p!.getCurrentTime?.() ?? 0) : 0;
+  const url = `/watch?v=${encodeURIComponent(videoId)}&list=${encodeURIComponent(listId)}${t ? `&t=${t}s` : ''}`;
+  navigate(url, { watchEndpoint: { videoId, playlistId: listId, ...(t ? { startTimeSeconds: t } : {}) } }, { webPageType: 'WEB_PAGE_TYPE_WATCH', rootVe: 3832 });
+}
+
+/** How long to wait for the miniplayer to switch to the next entry before navigating anyway. */
+const MINI_NEXT_WAITS = [300, 700, 1000, 1000];
+
+/**
+ * After an entry ends, play the next one in the form the player is in (§24.4).
+ * In the miniplayer, through the player's own list so it stays a miniplayer
+ * (a navigation would open the watch page); elsewhere, or if the player does
+ * not have that entry, navigate like playVideo.
+ */
+async function playNext(videoId: string, listId: string): Promise<'mini' | 'page'> {
+  const p = player();
+  if (p?.playVideoAt && app().hasAttribute('miniplayer-is-active')) {
+    const list = p.getPlaylist?.() ?? [];
+    const at = p.getPlaylistIndex?.() ?? -1;
+    // A duplicate: take the one after the entry that just ended.
+    let j = list.indexOf(videoId, at + 1);
+    if (j < 0) j = list.indexOf(videoId);
+    if (j >= 0) {
+      p.playVideoAt(j);
+      for (const wait of MINI_NEXT_WAITS) {
+        await sleep(wait);
+        if (player()?.getVideoData?.()?.video_id === videoId) return 'mini';
+      }
+    }
+  }
+  playVideo(videoId, listId);
+  return 'page';
 }
 
 function openPlaylist(listId: string): void {
@@ -428,9 +470,10 @@ async function syncList(listId: string, expect: Expect | undefined, attach: bool
         // Moved on meanwhile: the page has loaded what goes with the new video.
         const now = player();
         if (now?.getVideoData?.()?.video_id !== videoId || playingList(now) !== playing) return { how: 'none' };
-        const view = panelView(next, { videoId, title: data.title ?? '', author: data.author ?? '', duration: p.getDuration?.() ?? 0 });
+        // Playing the list already: a video not in it was just removed, not one to attach.
+        const view = panelView(next, { videoId, title: data.title ?? '', author: data.author ?? '', duration: p.getDuration?.() ?? 0 }, !playing);
         if (!view) break;
-        pm.setAutoplayRenderer(view.autoplay);
+        if (view.autoplay) pm.setAutoplayRenderer(view.autoplay);
         pm.setPlaylistData(view.list);
         pm.setPlayerPlaybackControlData({ playlistPanelRenderer: view.list });
         return { how: 'panel', videoId };
@@ -547,6 +590,7 @@ const methods: Record<string, (...args: never[]) => unknown> = {
     armed = undefined;
   },
   playVideo,
+  playNext,
   openPlaylist,
   syncList,
   health: () => ({

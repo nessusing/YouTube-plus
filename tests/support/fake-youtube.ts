@@ -234,9 +234,22 @@ export class FakeYouTube {
     disarm: async () => {
       this.armed = undefined;
     },
-    playVideo: async (videoId: string, listId: string) => {
+    playVideo: async (videoId: string, listId: string, keepPlace = false) => {
+      // Mirrors main-world.ts: already on that video's watch page, nothing to do.
+      const { videoId: v, mini, onWatch } = this.player;
+      if (keepPlace && v === videoId && onWatch && !mini) return;
       this.navigations.push(`/watch?v=${videoId}&list=${listId}`);
       this.load(videoId, listId, { mini: false });
+    },
+    playNext: async (videoId: string, listId: string): Promise<'mini' | 'page'> => {
+      // Mirrors main-world.ts: in the miniplayer the player switches by itself, no navigation.
+      if (this.player.mini && this.player.playlistId === listId && this.visible(listId).some((i) => i.videoId === videoId)) {
+        this.load(videoId, listId, { mini: true });
+        return 'mini';
+      }
+      this.navigations.push(`/watch?v=${videoId}&list=${listId}`);
+      this.load(videoId, listId, { mini: false });
+      return 'page';
     },
     openPlaylist: async (listId: string) => {
       this.navigations.push(`/playlist?list=${listId}`);

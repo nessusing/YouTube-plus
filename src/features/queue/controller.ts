@@ -446,9 +446,13 @@ export class QueueController {
     const listId = this.listId;
     if (!listId) return;
     try {
-      const first = (await this.readItems())[0];
+      const items = await this.readItems();
       this.showButton();
-      if (first) await this.rpc.playVideo(first.videoId, listId);
+      // The list already playing (say in the miniplayer): carry on with that entry (§24.4).
+      const now = await this.rpc.playing();
+      const current = now.playlistId === listId ? items.find((i) => i.videoId === now.videoId) : undefined;
+      const target = current ?? items[0];
+      if (target) await this.rpc.playVideo(target.videoId, listId, !!current);
     } catch (e) {
       this.log.error('play failed', e);
       toast(t('queue.failed'));
@@ -506,7 +510,10 @@ export class QueueController {
     if (p.next) {
       const now = await this.rpc.playing();
       const stillHere = now.videoId === e.videoId || now.playlistId === listId;
-      if (stillHere && now.videoId !== p.next.videoId) await this.rpc.playVideo(p.next.videoId, listId);
+      if (stillHere && now.videoId !== p.next.videoId) {
+        const where = await this.rpc.playNext(p.next.videoId, listId);
+        this.log.debug(`next ${p.next.videoId} (${where})`);
+      }
     }
     if (e.videoId === this.attached) this.attached = undefined;
     if (p.watched && this.profile.removeWatched) await this.remove(listId, p.watched);

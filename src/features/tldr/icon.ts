@@ -7,6 +7,10 @@ import type { BadgeState } from './types';
 // A small "summary" glyph: a speech-bubble with three lines.
 const GLYPH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H10l-4 3.5V17H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="currentColor" opacity=".22"/><path d="M6.5 8h11M6.5 11h11M6.5 14h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>';
 
+/** The button's size, and the space between it and the duration badge under it. */
+const ICON_SIZE = 28;
+const BADGE_GAP = 2;
+
 const CSS = `
   :host { all: initial; position: absolute; right: 4px; bottom: 30px; z-index: 1000; }
   button { all: unset; box-sizing: border-box; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
@@ -99,14 +103,20 @@ export class Icon {
     this.alignToBadge(thumb);
   }
 
-  /** Line the icon's right edge up with the duration badge's right edge. */
+  /**
+   * Sit just above the duration badge, right edges lined up. The badge is
+   * placed differently in the grid and in the playlist panel (§14.1), so measure.
+   */
   private alignToBadge(thumb: HTMLElement): void {
     const badge = thumb.querySelector<HTMLElement>('badge-shape, ytd-thumbnail-overlay-time-status-renderer #time-status');
     const box = this.host.offsetParent;
     if (!badge || !box) return;
     const b = badge.getBoundingClientRect();
     if (!b.width) return; // not laid out yet; the next rescan retries
-    const right = Math.round(box.getBoundingClientRect().right - b.right);
+    const r = box.getBoundingClientRect();
+    const right = Math.round(r.right - b.right);
     if (right >= 0 && right < 40) this.host.style.right = `${right}px`;
+    const bottom = Math.round(r.bottom - b.top) + BADGE_GAP;
+    if (bottom >= 0 && bottom + ICON_SIZE <= r.height) this.host.style.bottom = `${bottom}px`;
   }
 }

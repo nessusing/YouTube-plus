@@ -19,7 +19,10 @@ export interface Rpc {
   setTakeover(s: TakeoverState): Promise<void>;
   armRemoval(listId: string, setVideoId: string, videoId: string): Promise<void>;
   disarm(): Promise<void>;
-  playVideo(videoId: string, listId: string): Promise<void>;
+  /** `keepPlace`: the video is the one playing, carry on from where it is (§24.4). */
+  playVideo(videoId: string, listId: string, keepPlace?: boolean): Promise<void>;
+  /** After an entry ends: the next one, staying in the miniplayer if that is where it played (§24.4). */
+  playNext(videoId: string, listId: string): Promise<'mini' | 'page'>;
   openPlaylist(listId: string): Promise<void>;
   /**
    * Bring the playlist panel (side panel / under the miniplayer) up to date

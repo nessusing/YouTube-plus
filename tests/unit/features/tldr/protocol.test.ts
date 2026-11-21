@@ -1,5 +1,9 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { buildBatchPrompt, buildInner, buildPrompt, extractTokens, mapErrorCode, parseBatch, parseStream, parseSummary } from '@/features/tldr/protocol';
+import {
+  buildBatchPrompt, buildInner, buildPrompt, CHANNEL_CLOSE, channelHeaders, channelOpen, channelPrompt, channelSid, classifyChannel,
+  extractTokens, mapChannelStatus, mapErrorCode, parseBatch, parseChannel, parseStream, parseSummary, sapisidHash, splitChannelFrames,
+} from '@/features/tldr/protocol';
 
 /** Build a response shaped like the one recorded on 2026-11-18. */
 function frame(inner: unknown): string {
@@ -52,8 +56,85 @@ describe('request building', () => {
     expect(buildPrompt({ videoId: 'abc', title: 't', lang: 'en', titleCheck: true })).toContain('titleMatch');
   });
   it('extracts tokens from the app HTML', () => {
-    expect(extractTokens('x"SNlM0e":"AT1"y"cfb2h":"boq_1"z"FdrFJe":"-42"')).toEqual({ at: 'AT1', bl: 'boq_1', sid: '-42' });
+    expect(extractTokens('x"SNlM0e":"AT1"y"cfb2h":"boq_1"z"FdrFJe":"-42"w"d2zJAe":"AIzaK"')).toEqual({ at: 'AT1', bl: 'boq_1', sid: '-42', key: 'AIzaK' });
     expect(extractTokens('<html>guest</html>').at).toBeUndefined();
+  });
+});
+
+/** A downstream frame as recorded on 2026-11-21: the length does not count the newline. */
+function chFrame(items: unknown[]): string {
+  const f = JSON.stringify(items);
+  return `${f.length}\n${f}`;
+}
+
+/** A content payload around one answer array. */
+function content(answer: unknown, done = false): unknown {
+  return [[null, [7, null, null, null, null, null, [[done ? 1 : 0, ['r_1'], null, [null, null, null, answer]]]]]];
+}
+
+describe('processSession', () => {
+  it('splits frames exactly as recorded and keeps an incomplete tail', () => {
+    expect(splitChannelFrames('14\n[[1,["noop"]]]')).toEqual({ items: [[1, ['noop']]], rest: '' });
+    const two = chFrame([[2, ['noop']]]) + chFrame([[3, ['x 中文 😀']]]);
+    expect(splitChannelFrames(two).items).toEqual([[2, ['noop']], [3, ['x 中文 😀']]]);
+    const cut = two.slice(0, -3);
+    const r = splitChannelFrames(cut);
+    expect(r.items).toEqual([[2, ['noop']]]);
+    expect(splitChannelFrames(r.rest + two.slice(-3)).items).toEqual([[3, ['x 中文 😀']]]);
+  });
+
+  it('reads SID from the handshake body', () => {
+    expect(channelSid(`${chFrame([[0, ['c', 'SID-1', '', 8, 15, 30000]]])}\n`)).toBe('SID-1');
+    expect(channelSid('garbage')).toBeUndefined();
+  });
+
+  it('classifies downstream payloads', () => {
+    expect(classifyChannel(['noop'])).toEqual({ kind: 'noop' });
+    expect(classifyChannel([[[]]])).toEqual({ kind: 'ack' });
+    expect(classifyChannel([[null, null, null, []]])).toEqual({ kind: 'end' });
+    expect(classifyChannel(['close'])).toEqual({ kind: 'end' });
+    expect(classifyChannel(content(['A'], true))).toEqual({ kind: 'content', answer: ['A'], done: true });
+    expect(classifyChannel(content(null))).toEqual({ kind: 'content', answer: null, done: false });
+    expect(classifyChannel({ __sm__: { status: [[[16, 'missing credential']]] } })).toEqual({ kind: 'error', status: 16, message: 'missing credential' });
+    expect(classifyChannel({ __sm__: { status: [[{ error: { code: 400, message: 'Root element' } }]] } })).toEqual({ kind: 'error', status: 400, message: 'Root element' });
+    expect(mapChannelStatus(16)).toEqual({ code: 'auth' });
+    expect(mapChannelStatus(400)).toEqual({ code: 'protocol' });
+  });
+
+  it('builds the three upstream messages', () => {
+    const open = channelOpen('U') as unknown[][][];
+    expect(open[0]![0]).toEqual([1, null, 'en', 'U']);
+    const inner = (open[0]![7] as unknown[])[4] as unknown[];
+    expect((inner[0] as unknown[])[0]).toEqual(['', 0, null, null, null, null, 0]); // prompt slot empty
+    expect((inner[0] as unknown[])[59]).toBe('U');
+    expect(channelPrompt('hi')).toEqual([null, [1, null, null, null, null, null, null, null, ['hi']]]);
+    expect(CHANNEL_CLOSE).toEqual([null, null, null, [1]]);
+  });
+
+  it('signs with SAPISIDHASH and picks the account by header', async () => {
+    const want = createHash('sha1').update('1700000000 abc https://gemini.google.com').digest('hex');
+    expect(await sapisidHash('abc', 1700000000)).toBe(`SAPISIDHASH 1700000000_${want}`);
+    const h = channelHeaders('KEY', 'SAPISIDHASH x', 2);
+    expect(h.split('\r\n')).toEqual([
+      'X-Goog-Api-Key:KEY', 'x-goog-ext-525001261-bin:CAE=', 'X-WebChannel-Content-Type:application/json+protobuf',
+      'Authorization:SAPISIDHASH x', 'X-Goog-AuthUser:2', '',
+    ]);
+  });
+
+  it('parses answers like parseStream: ids, last text, card fallback, errors', () => {
+    const card: unknown[] = ['rc', ['http://googleusercontent.com/card_content/0']];
+    card[22] = ['card text'];
+    const answers = [
+      [null, ['c_abc', 'r_1']],
+      [null, ['c_abc', 'r_1'], null, null, [['rc', ['{"po']]]],
+      [null, ['c_abc', 'r_1'], null, null, [['rc', ['{"points":["中文"]}']]]],
+      [null, null, null, null, [['rc']]], // title-only frame after the answer: keeps the text
+    ];
+    const p = parseChannel(answers, '');
+    expect(p).toEqual({ cid: 'c_abc', rid: 'r_1', text: '{"points":["中文"]}' });
+    expect(parseChannel([[null, ['c_x'], null, null, [card]]], '').text).toBe('card text');
+    expect(parseChannel([JSON.stringify([null, ['c_s'], null, null, [['rc', ['s']]]])], '').text).toBe('s'); // answer as a JSON string
+    expect(parseChannel([], '"BardErrorInfo [1037]"').errorCode).toBe(1037);
   });
 });
 

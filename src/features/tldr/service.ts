@@ -37,7 +37,7 @@ export class TldrService {
   readonly cache: SummaryCache;
 
   constructor(private settings: () => Settings, private log: Logger) {
-    this.client = new GeminiWebClient(() => this.settings().tldr.account);
+    this.client = new GeminiWebClient(() => this.settings().tldr.account, log);
     this.provider = new GeminiWebProvider(this.client, log);
     this.cache = new SummaryCache(async () => this.settings().storage.tldrCacheMB * 1024 * 1024, () => this.settings().lang);
     this.loaded = browser.storage.local.get(STATE_KEY).then((g) => {

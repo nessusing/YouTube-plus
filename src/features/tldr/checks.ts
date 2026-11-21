@@ -49,7 +49,7 @@ export function tldrChecks(svc: TldrService): SelfCheck[] {
         const r = await svc.provider.summarize({ videoId: 'jNQXAC9IVRw', title: 'Me at the zoo', lang: getLang(), titleCheck: true });
         const after = ((await browser.storage.local.get(PENDING_DELETES_KEY))[PENDING_DELETES_KEY] as string[] | undefined)?.length ?? 0;
         deleteOk = after <= before;
-        if (r.kind === 'ok' && r.data.points.length) return { status: 'pass', detail: r.data.points[0] };
+        if (r.kind === 'ok' && r.data.points.length) return { status: 'pass', detail: `[${svc.client.lastChannel}] ${r.data.points[0]}` };
         if (r.kind === 'ok') return { status: 'fail', detail: t('check.tldr.notJson', { s: (r.data.raw ?? '').slice(0, 80) }) };
         if (r.kind === 'unreadable') return { status: 'fail', detail: t('check.tldr.unreadable') };
         return { status: 'fail', detail: `${r.error.code}: ${r.detail ?? ''}` };

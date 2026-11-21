@@ -72,17 +72,35 @@ export function buildInner(prompt: string, uuid: string): unknown[] {
   return inner;
 }
 
-export function extractTokens(html: string): { at?: string; bl?: string; sid?: string } {
+/** `key` (d2zJAe) is the processSession API key; the same for every visitor. */
+export function extractTokens(html: string): { at?: string; bl?: string; sid?: string; key?: string } {
   const pick = (k: string) => new RegExp(`"${k}":"([^"]*)"`).exec(html)?.[1];
-  return { at: pick('SNlM0e'), bl: pick('cfb2h'), sid: pick('FdrFJe') };
+  return { at: pick('SNlM0e'), bl: pick('cfb2h'), sid: pick('FdrFJe'), key: pick('d2zJAe') };
 }
 
 export interface Parsed { text?: string; cid?: string; rid?: string; errorCode?: number }
 
+/** Take ids and answer text from one answer array (the same shape on both channels). */
+function readAnswer(j: unknown, out: Parsed): void {
+  if (!Array.isArray(j)) return;
+  const ids = j[1] as unknown[] | undefined;
+  if (typeof ids?.[0] === 'string') {
+    out.cid = ids[0];
+    out.rid = typeof ids[1] === 'string' ? ids[1] : out.rid;
+  }
+  const cand = (j[4] as unknown[] | undefined)?.[0] as unknown[] | undefined;
+  if (!cand) return;
+  let t = (cand[1] as unknown[] | undefined)?.[0];
+  if (typeof t === 'string' && /googleusercontent\.com\/card_content/.test(t)) t = (cand[22] as unknown[] | undefined)?.[0];
+  if (typeof t === 'string' && t) out.text = t;
+}
+
+const BARD_ERROR = /BardErrorInfo\s*\[(\d+)\]/;
+
 /** Split ")]}'"-prefixed, length-prefixed frames and pull the last full answer. */
 export function parseStream(raw: string): Parsed {
   const out: Parsed = {};
-  const err = /BardErrorInfo\s*\[(\d+)\]/.exec(raw);
+  const err = BARD_ERROR.exec(raw);
   if (err) out.errorCode = Number(err[1]);
   const s = raw.replace(/^\)\]\}'\s*/, '');
   let i = 0;
@@ -102,25 +120,129 @@ export function parseStream(raw: string): Parsed {
     if (!Array.isArray(arr)) continue;
     for (const part of arr) {
       if (!Array.isArray(part) || part[0] !== 'wrb.fr' || typeof part[2] !== 'string') continue;
-      let j: unknown;
-      try {
-        j = JSON.parse(part[2]);
-      } catch {
-        continue;
-      }
-      const jj = j as unknown[][];
-      const ids = jj?.[1] as unknown[] | undefined;
-      if (typeof ids?.[0] === 'string') {
-        out.cid = ids[0];
-        out.rid = typeof ids[1] === 'string' ? ids[1] : out.rid;
-      }
-      const cand = (jj?.[4] as unknown[] | undefined)?.[0] as unknown[] | undefined;
-      if (!cand) continue;
-      let t = (cand[1] as unknown[] | undefined)?.[0];
-      if (typeof t === 'string' && /googleusercontent\.com\/card_content/.test(t)) t = (cand[22] as unknown[] | undefined)?.[0];
-      if (typeof t === 'string' && t) out.text = t;
+      readAnswer(tryParse(part[2]), out);
     }
   }
+  return out;
+}
+
+// ---------- processSession (Google WebChannel), design §10.8 ----------
+// Verified 2026-11-21 in a signed-in page: the YouTube app works; 5 videos in ~12 s.
+
+export const CHANNEL_URL = 'https://geminiweb-pa.clients6.google.com/v1/processSession';
+
+/**
+ * The handshake's `$httpHeaders` value. Without the Authorization header the
+ * session is anonymous even when cookies are sent, and X-Goog-AuthUser alone
+ * does not pick the account (both verified 2026-11-21): the request still
+ * succeeds, it just is not the user's.
+ */
+export function channelHeaders(apiKey: string, authorization: string, account: number): string {
+  return [
+    `X-Goog-Api-Key:${apiKey}`,
+    'x-goog-ext-525001261-bin:CAE=', // model header with only field 1 = 1: the account's default model
+    'X-WebChannel-Content-Type:application/json+protobuf', // without it: 400 "Root element must be a message"
+    `Authorization:${authorization}`,
+    `X-Goog-AuthUser:${account}`, // the new host has no /u/N path
+  ].map((h) => `${h}\r\n`).join('');
+}
+
+/** `SAPISIDHASH <ts>_<sha1("<ts> <SAPISID> <origin>")>`; the origin must be gemini.google.com. */
+export async function sapisidHash(sapisid: string, ts: number): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(`${ts} ${sapisid} https://gemini.google.com`));
+  return `SAPISIDHASH ${ts}_${[...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** `SID` from the handshake body (`[[0,["c",SID,…]]]`). */
+export function channelSid(body: string): string | undefined {
+  for (const [, p] of splitChannelFrames(body).items) {
+    if (Array.isArray(p) && p[0] === 'c' && typeof p[1] === 'string') return p[1];
+  }
+  return undefined;
+}
+
+/** Upstream ofs=0: the request array with the prompt slot empty. */
+export function channelOpen(uuid: string): unknown[] {
+  return [[[1, null, 'en', uuid], 0, null, null, null, null, null, [null, null, null, null, [buildInner('', uuid), null, null, 1]]]];
+}
+
+/** Upstream ofs=1: the prompt. */
+export function channelPrompt(prompt: string): unknown[] {
+  return [null, [1, null, null, null, null, null, null, null, [prompt]]];
+}
+
+/** Upstream ofs=2: "done", sent only after the answer is complete (sent early, the text is cut). */
+export const CHANNEL_CLOSE: unknown[] = [null, null, null, [1]];
+
+/**
+ * Split "<len>\n<JSON>" frames; unlike StreamGenerate the length does NOT count
+ * the newline. Each frame is a list of [id, payload]. Returns what is complete
+ * and the unread rest.
+ */
+export function splitChannelFrames(buf: string): { items: [number, unknown][]; rest: string } {
+  const items: [number, unknown][] = [];
+  let i = 0;
+  for (;;) {
+    while (i < buf.length && /\s/.test(buf[i]!)) i++;
+    const m = /^(\d+)\n/.exec(buf.slice(i, i + 13));
+    if (!m) break;
+    const start = i + m[0].length;
+    const end = start + Number(m[1]);
+    if (buf.length < end) break;
+    const frame = tryParse(buf.slice(start, end));
+    i = end;
+    if (!Array.isArray(frame)) continue;
+    for (const it of frame) {
+      if (Array.isArray(it) && typeof it[0] === 'number') items.push([it[0], it[1]]);
+    }
+  }
+  return { items, rest: buf.slice(i) };
+}
+
+export type ChannelEvent =
+  | { kind: 'noop' }
+  | { kind: 'ack' }
+  /** `answer` is the StreamGenerate answer array; `done` marks the finished answer. */
+  | { kind: 'content'; answer?: unknown; done: boolean }
+  | { kind: 'end' }
+  | { kind: 'error'; status: number; message: string };
+
+/** What one downstream payload means (shapes from zexadev's wcClassify, checked 2026-11-21). */
+export function classifyChannel(p: unknown): ChannelEvent {
+  if (p && typeof p === 'object' && !Array.isArray(p) && '__sm__' in p) return channelStatus(p as { __sm__: unknown });
+  if (!Array.isArray(p) || !p.length) return { kind: 'noop' };
+  if (p[0] === 'noop') return { kind: 'noop' };
+  if (p[0] === 'close') return { kind: 'end' };
+  const msg = p[0] as unknown[];
+  if (!Array.isArray(msg)) return { kind: 'noop' };
+  if (msg.length === 1 && Array.isArray(msg[0]) && !(msg[0] as unknown[]).length) return { kind: 'ack' }; // [[]]
+  if (msg.length === 4 && msg[0] == null && Array.isArray(msg[3]) && !(msg[3] as unknown[]).length) return { kind: 'end' }; // [null,null,null,[]]
+  // [null, [seq, null×5, [[flag, [rid], null, [null, null, null, answer]]]]]
+  const cand = ((msg[1] as unknown[] | undefined)?.[6] as unknown[] | undefined)?.[0] as unknown[] | undefined;
+  if (!Array.isArray(cand)) return { kind: 'noop' };
+  return { kind: 'content', answer: (cand[3] as unknown[] | undefined)?.[3], done: cand[0] === 1 };
+}
+
+/** `{"__sm__":{"status":[[[16,"msg"]]]}}` or `{"__sm__":{"status":[[{"error":{"code":400,…}}]]}}`. */
+function channelStatus(p: { __sm__: unknown }): ChannelEvent {
+  const first = ((p.__sm__ as { status?: unknown[][] } | null)?.status?.[0]?.[0]) as unknown;
+  if (Array.isArray(first)) return { kind: 'error', status: Number(first[0]), message: String(first[1] ?? '') };
+  const e = (first as { error?: { code?: number; message?: string } } | undefined)?.error;
+  if (e?.code) return { kind: 'error', status: e.code, message: String(e.message ?? '') };
+  return { kind: 'error', status: 2, message: JSON.stringify(p).slice(0, 200) };
+}
+
+/** 16 = missing / bad credentials; anything else means we sent something it no longer takes. */
+export function mapChannelStatus(status: number): ProviderError {
+  return status === 16 ? { code: 'auth' } : { code: 'protocol' };
+}
+
+/** Answer arrays in arrival order → the same result as parseStream (the last frame with text wins). */
+export function parseChannel(answers: unknown[], raw: string): Parsed {
+  const out: Parsed = {};
+  const err = BARD_ERROR.exec(raw);
+  if (err) out.errorCode = Number(err[1]);
+  for (const a of answers) readAnswer(typeof a === 'string' ? tryParse(a) : a, out);
   return out;
 }
 

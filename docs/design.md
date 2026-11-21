@@ -73,29 +73,48 @@
 已实现，见 `src/features/tldr/client.ts`、`protocol.ts`。要点：
 
 ### 10.1 抓取 token
-从 `/u/N/app` 页面取 `SNlM0e`（`at`）、`cfb2h`（`bl`）、`FdrFJe`（`f.sid`）；拿不到 `SNlM0e` 即未登录或第三方 cookie 被屏蔽。
+从 `/u/N/app` 页面取 `SNlM0e`（`at`）、`cfb2h`（`bl`）、`FdrFJe`（`f.sid`）、`d2zJAe`（`processSession` 的 API key，跟登录无关）；拿不到 `SNlM0e` 即未登录或第三方 cookie 被屏蔽。
 
 ### 10.2 发起生成
-`StreamGenerate`，不发模型 header。
+两条通道，发的都是 `buildInner()` 那个数组，用账号默认模型：
+- **`processSession`（优先）**：网页前端从 2026-10 起改用的新协议，细节见 §10.8。
+- **`StreamGenerate`（后备）**：旧接口，不发模型 header。
+
+一条通道报 `protocol` 或 `auth` 时换另一条；`quota`、`blocked`、`transient` 不换（额度和封锁按账号算）。哪条成功，之后先用哪条（只记在内存里）。两条都失败时优先报 `auth`。新通道 20 秒内没有回答帧、或 180 秒没结束，算 `protocol`。切换写 warn 日志；自检「实际总结」一项显示走的是哪条。
 
 ### 10.3 解析返回
-按长度前缀切帧（UTF-16 长度），取最后一帧即全文。
+两条通道的回答数组形状相同，取正文共用一段代码（`readAnswer`）；正文在中间某帧，取最后一帧有正文的。`StreamGenerate` 按长度前缀切帧（UTF-16 长度，含换行）；`processSession` 见 §10.8。
 
 ### 10.4 删除对话
 `batchexecute`，RPC `GzXR5e`；失败的进 `PendingDeletes` 重试。
 
 ### 10.5 鉴权
-`credentials:'include'` 带浏览器 cookie；**不轮换 cookie**；Origin/Referer 用 declarativeNetRequest 改成 gemini.google.com。
+`credentials:'include'` 带浏览器 cookie；**不轮换 cookie**；Origin/Referer 用 declarativeNetRequest 改成 gemini.google.com（覆盖 `gemini.google.com` 和 `geminiweb-pa.clients6.google.com`）。`processSession` 另要 `SAPISIDHASH`，靠 `cookies` 权限读 `SAPISID`。
 
 ### 10.6 YouTube 应用的前提条件
 需要开启 Gemini 应用活动记录、在 gemini.google.com/apps 启用 YouTube 应用；没字幕的视频读不了。
 
 ### 10.7 现状（2026-11-21）
 
-- 用 `StreamGenerate`。网页前端从 2026-10 中旬起按账号分批改用 `processSession`，但旧接口没下线：2026-11-18 实测能用，参考项目到 2026-11-21 也都还默认走它。
-- 协议都关在 `GeminiWebClient` 里，接口变了自检会报 `protocol`。
-- 每次请求前都实时抓一次 `/app` 页面取凭证（`generate()` 和 `deleteConversation()` 各抓一次）。
-- 还没有后备：`StreamGenerate` 下线 TL;DR 就整个失效。计划见 plans.md：P2 凭证缓存、P3 官方 API Provider、P4 `processSession`。
+- 默认走 `processSession`，`StreamGenerate` 当后备（§10.2）。2026-11-21 手测：自检和首页批量都走新通道，没有回退。旧接口当天仍能用。
+- 协议都关在 `GeminiWebClient`（I/O）和 `protocol.ts`（纯函数）里，接口变了自检会报 `protocol`。
+- 每次请求前都实时抓一次 `/app` 页面取凭证（plans.md P2 打算缓存）。
+- 两条都是内部接口；都失效时的后备是 plans.md P3（官方 API）。
+
+### 10.8 `processSession`
+
+已实现（2026-11-21 手测通过），见 `client.ts` 的 `viaSession`。参考 zexadev/gemini-web2api-go 的 `internal/app/webchannel.go`；它没测过 YouTube 应用，我们实测能用（用当周新上传的视频验证，回答里有只在视频里讲的细节）。单个视频约 6–7 秒，5 个一批约 12–15 秒。
+
+地址 `geminiweb-pa.clients6.google.com/v1/processSession`，Google WebChannel，JSPB 可读版本。
+
+1. **握手** `POST count=0`。认证放在 URL 的 `$httpHeaders`（`"K:V\r\n"` 拼接）：`X-Goog-Api-Key`（`d2zJAe`）、`x-goog-ext-525001261-bin: CAE=`（只有字段 1=1）、`X-WebChannel-Content-Type: application/json+protobuf`（不加返回 400）、`Authorization: SAPISIDHASH <ts>_<sha1("<ts> <SAPISID> https://gemini.google.com")>`、`X-Goog-AuthUser: N`（新地址没有 `/u/N`）。响应头 `X-HTTP-Session-Id` 是 `gsessionid`，响应体 `["c", SID, …]` 是 `SID`。
+2. **下行** `GET …&RID=rpc&AID=<最后的 id>&CI=0&TYPE=xmlhttp` 长轮询，断了带 `AID` 重连。帧是「长度\n JSON」，**长度不含换行**，按 UTF-16 计。
+3. **上行** 三次 `POST count=1&ofs=<n>&req0___data__=<JSON>`：`ofs=0` 发 inner（prompt 一格清空）；收到确认 `[[]]` 后等 500 ms 用 `ofs=1` 发 prompt（3 秒没确认也照发）；候选 flag=1（生成完毕）后用 `ofs=2` 发收尾，早发拿不到正文。
+4. **下行内容** `[null, [seq, null×5, [[flag, [rid], null, [null, null, null, X]]]]]`，`X` 是旧响应的数组。结束帧 `[null, null, null, []]` 或 `["close"]`。
+5. **错误** 在 `{"__sm__": {"status": …}}` 里，HTTP 仍是 200；16 → `auth`，其余 → `protocol`。
+6. 删对话照旧用 `GzXR5e`。
+
+**坑**：不带 `SAPISIDHASH` 不报错，而是当匿名用户回答，对话不进账号；只带 `X-Goog-AuthUser` 也一样。读不到 `SAPISID` 时报 `auth`（会换到旧通道），但哈希失效这种情况目前检测不到。
 
 ## 11. Prompt 与输出格式
 
@@ -129,7 +148,7 @@
 
 ## 16. 风险
 
-主要风险是 `StreamGenerate` 被下线（现状见 §10.7，应对见 plans.md P3、P4）；其余（封号、额度、YouTube 改版、无字幕、只能用 Flash-Lite）已接受或已有应对。
+主要风险是网页版的内部接口变化（现状见 §10.7；已有两条通道互为后备，都失效时见 plans.md P3）；其余（封号、额度、YouTube 改版、无字幕、只能用 Flash-Lite）已接受或已有应对。
 
 ## 17. 开发顺序与测试
 
@@ -335,6 +354,7 @@
 
 | 完成日期 | 条目 | 章节 |
 |---|---|---|
+| 2026-11-21 | `processSession` 新协议：默认走新通道，`StreamGenerate` 当后备，自动切换；手测通过 | §10.2、§10.8 |
 | 2026-11-21 | 单个视频循环按钮：▶ 右边一个开关，所有播放器形态都有；循环过再切走算看完 | §40.2 |
 | 2026-11-21 | 设置页默认打开「通用」（首次安装和链接里指定了标签的除外） | §3 |
 | 2026-11-21 | 工具栏图标跟总开关走：开着是彩色，关了是灰色，跟当前网站无关；点图标打开设置页 | §2 |

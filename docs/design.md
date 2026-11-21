@@ -204,7 +204,7 @@
 已实现：下拉框列出可编辑列表 + 「新建…」（默认名 `YouTube+`，私密）；存列表 ID；列表不存在时清空该身份的选择。
 
 ### 24.6 切换模式
-已实现：不迁移数据；已开的标签页提示「刷新页面后生效」。
+已实现：不迁移数据。已开的标签页立刻按新模式走（拦截、菜单文字、顶栏按钮、看完删除），并提示「刷新页面后完全生效」：这个标签页里已有的官方队列保持原样。切回自带队列时，正在播的列表扩展不再管；这时原生的「加入队列」会把视频直接加进这个列表，是原生行为，不拦（2026-11-20 定）。
 
 ### 24.7 身份
 已实现：按 `DATASYNC_ID` 的 SHA-256 前 16 位区分；`chrome.storage.sync` 存 `queue/profile/<哈希>`（模式、列表 ID 和名字、看完删除），`chrome.storage.local` 存 `queue/snapshot/<哈希>`。
@@ -235,7 +235,7 @@
 
 ## 29. 开发顺序与测试
 
-已完成，2026-11-20 手测通过。单元测试覆盖接管判断、命令识别、看完后的下一条、清空和撤销；E2E 见 `tests/e2e/`。
+已完成，2026-11-20 手测通过。测试都在 `tests/`：L1 纯函数和 L2 controller 集成（内存里的假 YouTube，`tests/support/fake-youtube.ts`）跑 `npm test`；L4 在真实 YouTube 上跑（Playwright，`tests/e2e/`），第一次先 `npm run e2e:login`，然后 `npm run test:e2e`，只碰名字以 `YouTube+ e2e` 开头的列表。已知问题见 `docs/queue-test-findings.md`。
 
 ## 30. 以后再做
 

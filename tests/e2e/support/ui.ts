@@ -74,9 +74,15 @@ export async function pickItem(items: Locator, skip: string[] = []): Promise<Loc
 // ---------- miniplayer ----------
 
 export async function toMini(page: Page): Promise<void> {
-  await page.locator('#movie_player').hover();
-  await page.keyboard.press('i');
-  await expect.poll(async () => (await player(page)).mini).toBe(true);
+  // The player's own miniplayer button; the "i" shortcut depends on where focus is.
+  await expect(async () => {
+    if ((await player(page)).mini) return;
+    await page.locator('#movie_player').hover();
+    const btn = page.locator('#movie_player .ytp-miniplayer-button:visible');
+    if (await btn.count()) await btn.first().click();
+    else await page.keyboard.press('i');
+    await expect.poll(async () => (await player(page)).mini, { timeout: 3000 }).toBe(true);
+  }).toPass({ timeout: 20_000 });
   await page.mouse.move(5, 300);
 }
 

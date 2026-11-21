@@ -15,10 +15,6 @@ export const SEL = {
   miniResizer: '[class*="ytdMiniplayerComponentResizer"]',
   miniUi: '.ytp-miniplayer-ui',
   miniControlsRow: '.ytp-miniplayer-controls',
-  miniPrev: '.ytp-miniplayer-controls .ytp-prev-button',
-  miniNext: '.ytp-miniplayer-controls .ytp-next-button',
-  prevButton: '.ytp-chrome-bottom .ytp-prev-button',
-  nextButton: '.ytp-chrome-bottom .ytp-next-button',
   /** Inside the miniplayer, pressing on these must not start a window drag. */
   noDrag: 'button, a, input, .ytp-chrome-bottom, .ytp-settings-menu, .ytp-popup, .ytp-miniplayer-controls, [class*="Resizer"]',
 } as const;

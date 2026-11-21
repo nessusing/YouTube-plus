@@ -18,17 +18,15 @@ test('watched to the end: the next entry plays, the watched one is removed', asy
   await expect.poll(() => panelRowsShown(page, 'watch'), { timeout: 20_000 }).toEqual([VIDEOS.a, VIDEOS.b]);
 });
 
-// F9: after the end screen YouTube's own autoplay moves on to a recommended video.
-test('the last entry: removed, stays on the end screen', async ({ page, open, lists, setProfile }) => {
-  test.fail(true, 'F9: docs/queue-test-findings.md');
+// The last entry: removed; what plays next is up to YouTube's own autoplay
+// (with it on, a recommended video after the end screen). Decided 2026-11-21 (F9).
+test('the last entry: removed, the button goes, YouTube decides what plays next', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.zoo], 'last');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.zoo}&list=${id}`);
   await waitForVideo(page, VIDEOS.zoo);
   await seekToEnd(page, 3);
   await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([]);
-  await page.waitForTimeout(12_000);
-  expect((await player(page)).videoId).toBe(VIDEOS.zoo);
   await expect.poll(() => playButton(page).count()).toBe(0);
 });
 

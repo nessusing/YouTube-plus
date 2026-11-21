@@ -37,6 +37,6 @@ export const VIDEOS = {
 /**
  * The browser window while the suite runs (YTPP_E2E_WINDOW):
  * normal: an ordinary window; minimized: minimised as soon as it opens;
- * headless: no window at all.
+ * headless (default): no window at all.
  */
-export const WINDOW = (process.env.YTPP_E2E_WINDOW ?? 'normal') as 'normal' | 'minimized' | 'headless';
+export const WINDOW = (process.env.YTPP_E2E_WINDOW ?? 'headless') as 'normal' | 'minimized' | 'headless';

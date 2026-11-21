@@ -1,5 +1,6 @@
 // Controls in the miniplayer (design §35.1, agreed list Q6), in three states:
-// a single video, the native queue, our list.
+// a single video, the native queue, our list. Item 6 (previous / next) is gone:
+// YouTube's miniplayer has neither since 2026-11, and none are added (F10).
 import type { Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures';
 import { VIDEOS } from '../support/env';
@@ -138,8 +139,7 @@ test('a single video', async ({ page, open }) => {
 test('the native queue', async ({ page, open, setProfile }) => {
   await setProfile({ mode: 'native', removeWatched: true });
   await open('/');
-  const queue = await startNativeQueue(page, VIDEOS.a);
-  void queue;
+  await startNativeQueue(page, VIDEOS.a);
   await checkAll(page);
 });
 
@@ -150,34 +150,4 @@ test('our list', async ({ page, open, lists, setProfile }) => {
   await waitForVideo(page, VIDEOS.a);
   await toMini(page);
   await checkAll(page);
-});
-
-// 6. In a list or the queue: previous / next. YouTube's own miniplayer shows
-// neither (2026-11-21, also with the player feature off): findings F10.
-async function nextWorks(page: Page, next: string): Promise<void> {
-  await hover(page);
-  const btn = page.locator(`${MINI} .ytp-next-button:visible`).first();
-  await expect(btn).toBeVisible({ timeout: 5000 });
-  await expect(page.locator(`${MINI} .ytp-prev-button:visible`).first()).toBeVisible();
-  await btn.click();
-  await waitForVideo(page, next);
-  expect((await player(page)).mini).toBe(true);
-}
-
-test('the native queue: previous / next', async ({ page, open, setProfile }) => {
-  test.fail(true, 'F10: docs/queue-test-findings.md');
-  await setProfile({ mode: 'native', removeWatched: true });
-  await open('/');
-  const queue = await startNativeQueue(page, VIDEOS.a);
-  await nextWorks(page, queue[1]!);
-});
-
-test('our list: previous / next', async ({ page, open, lists, setProfile }) => {
-  test.fail(true, 'F10: docs/queue-test-findings.md');
-  const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c], 'controls-next');
-  await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
-  await open(`/watch?v=${VIDEOS.a}&list=${id}`);
-  await waitForVideo(page, VIDEOS.a);
-  await toMini(page);
-  await nextWorks(page, VIDEOS.b);
 });

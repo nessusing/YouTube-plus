@@ -150,12 +150,21 @@ export class TestLists {
     return TestLists.pool;
   }
 
-  /** A list the extension created during a test: delete it after the test. */
-  async adopt(id: string): Promise<void> {
-    // A new list reads as missing for a second or two (findings F16).
-    await expect.poll(async () => (await this.read(id)).exists, { timeout: 15_000 }).toBe(true);
-    const d = await this.read(id);
-    if (!d.title.startsWith(LIST_PREFIX)) throw new Error(`refusing to adopt ${id} ("${d.title}"): not a test list`);
+  /** A list the extension created during a test, named `title`: delete it after the test. */
+  async adopt(id: string, title: string): Promise<void> {
+    if (!title.startsWith(LIST_PREFIX)) throw new Error(`refusing to adopt ${id} ("${title}"): not a test list`);
+    // A new list reads as missing for a second or two (findings F16), and then
+    // for a while longer with an empty title.
+    let seen = '';
+    try {
+      await expect.poll(async () => {
+        const d = await this.read(id);
+        seen = d.exists ? d.title : '(missing)';
+        return seen;
+      }, { timeout: 15_000 }).toBe(title);
+    } catch {
+      throw new Error(`refusing to adopt ${id}: reads show "${seen}", not the test list "${title}"`);
+    }
     this.adopted.add(id);
   }
 

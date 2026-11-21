@@ -58,7 +58,7 @@ test('New…: creates a private playlist with the name given and chooses it', as
     await expect(opts.locator('section:visible')).toContainText(`Created the private playlist "${name}" and chose it`, { timeout: 30_000 });
     const profile = (await storageGet(ctx, 'sync', `queue/profile/${account.me.key}`)) as { listId?: string; listName?: string };
     expect(profile.listName).toBe(name);
-    await lists.adopt(profile.listId!);
+    await lists.adopt(profile.listId!, name);
     // Ours, editable and private, as the extension's own check sees it (an empty list's page has no isEditable).
     const mine = (await rpc<{ id: string; privacy: string }[]>(account.helper, 'editablePlaylists')).find((l) => l.id === profile.listId);
     expect(mine?.privacy).toBe('PRIVATE');

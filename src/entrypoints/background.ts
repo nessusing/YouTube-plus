@@ -21,10 +21,20 @@ export default defineBackground(() => {
   // Settings cached for synchronous use by the TL;DR service.
   let settings: Settings = withDefaults(undefined);
   void getSettings().then((s) => (settings = s));
+  // Toolbar icon: color while the master switch is on, gray while off (design §2).
+  // Set on every wake, since Chrome forgets setIcon across restarts.
+  const showEnabled = (on: boolean) => {
+    const sizes = [16, 32, 48, 128];
+    const path = Object.fromEntries(sizes.map((n) => [n, `/icon/${on ? '' : 'gray-'}${n}.png`]));
+    browser.action.setIcon({ path }).catch((e) => createLogger('core').warn('setIcon failed', e));
+  };
+  void getSettings().then((s) => showEnabled(s.enabled));
+  browser.action.onClicked.addListener(() => void browser.runtime.openOptionsPage());
   const tldr = new TldrService(() => settings, createLogger('tldr'));
   onSettingsChanged((s) => {
     const limitChanged = s.storage.tldrCacheMB !== settings.storage.tldrCacheMB;
     const accountChanged = s.tldr.account !== settings.tldr.account;
+    showEnabled(s.enabled);
     settings = s;
     void store.trim();
     if (limitChanged) void tldr.cache.trim();

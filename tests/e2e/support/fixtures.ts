@@ -3,7 +3,7 @@
 
 import { existsSync } from 'node:fs';
 import { chromium, test as base, type BrowserContext, type Page } from '@playwright/test';
-import { EXTENSION_DIR, LAUNCH_ARGS, PROFILE_DIR } from './env';
+import { EXTENSION_DIR, LAUNCH_ARGS, PROFILE_DIR, WINDOW } from './env';
 import { rpc, serviceWorker, setQueueProfile, storageGet, storageSet, TestLists, waitForExtension, type Identity, type QueueProfile } from './yt';
 
 export interface Account {
@@ -30,7 +30,22 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   ctx: [async ({}, use) => {
     if (!existsSync(`${EXTENSION_DIR}/manifest.json`)) throw new Error(`no build at ${EXTENSION_DIR}: run wxt build (npm run test:e2e does)`);
     if (!existsSync(PROFILE_DIR)) throw new Error(`no signed-in profile at ${PROFILE_DIR}: run npm run e2e:login first`);
-    const ctx = await chromium.launchPersistentContext(PROFILE_DIR, { headless: false, args: LAUNCH_ARGS, viewport: null });
+    const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
+      // The new headless mode ('chromium' channel) runs extensions.
+      ...(WINDOW === 'headless' ? { headless: true, channel: 'chromium' } : { headless: false }),
+      args: LAUNCH_ARGS,
+      viewport: null,
+    });
+    if (WINDOW === 'minimized') {
+      const minimize = async (page: Page) => {
+        const cdp = await ctx.newCDPSession(page);
+        const { windowId } = (await cdp.send('Browser.getWindowForTarget')) as { windowId: number };
+        await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } });
+        await cdp.detach();
+      };
+      for (const p of ctx.pages()) await minimize(p).catch(() => {});
+      ctx.on('page', (p) => void minimize(p).catch(() => {}));
+    }
     await ctx.tracing.start({ screenshots: true, snapshots: true });
     await use(ctx);
     await ctx.tracing.stop();

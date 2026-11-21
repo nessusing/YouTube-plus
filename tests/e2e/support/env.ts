@@ -15,6 +15,8 @@ export const LAUNCH_ARGS = [
   `--disable-extensions-except=${EXTENSION_DIR}`,
   `--load-extension=${EXTENSION_DIR}`,
   '--autoplay-policy=no-user-gesture-required',
+  // Silent: the browser plays no sound; the player's own mute state and volume are untouched.
+  '--mute-audio',
   '--lang=en-US',
   '--window-size=1400,1000',
 ];
@@ -31,3 +33,10 @@ export const VIDEOS = {
   d: 'JGwWNGJdvx8',
   e: 'OPf0YbXqDm0',
 };
+
+/**
+ * The browser window while the suite runs (YTPP_E2E_WINDOW):
+ * normal: an ordinary window; minimized: minimised as soon as it opens;
+ * headless: no window at all.
+ */
+export const WINDOW = (process.env.YTPP_E2E_WINDOW ?? 'normal') as 'normal' | 'minimized' | 'headless';

@@ -14,22 +14,27 @@ export const related = (page: Page) => page.locator('ytd-watch-flexy #secondary 
 export const homeItems = (page: Page) => page.locator('ytd-rich-item-renderer yt-lockup-view-model');
 
 export async function videoIdOf(lockup: Locator): Promise<string> {
-  const href = await lockup.locator('a[href*="/watch?v="]').first().getAttribute('href');
-  const id = href && new URL(href, 'https://www.youtube.com').searchParams.get('v');
+  const href = await lockup.locator('a[href*="/watch?v="], a[href*="/shorts/"]').first().getAttribute('href');
+  const url = href ? new URL(href, 'https://www.youtube.com') : undefined;
+  const id = url?.searchParams.get('v') ?? url?.pathname.match(/^\/shorts\/([\w-]+)/)?.[1];
   if (!id) throw new Error('no video link in this item');
   return id;
 }
+
+/** New-style (yt-list-item-view-model) and old-style (ytd-menu-service-item-renderer) menu items. */
+const MENU_ITEMS = 'ytd-popup-container yt-list-item-view-model, ytd-popup-container ytd-menu-service-item-renderer';
+const visibleItems = (page: Page) => page.locator(MENU_ITEMS).filter({ visible: true });
 
 /** Open the ⋯ menu of a thumbnail item; returns the visible menu item texts. */
 export async function openMenu(page: Page, lockup: Locator): Promise<string[]> {
   await lockup.scrollIntoViewIfNeeded();
   await lockup.hover();
-  await lockup.locator('button[aria-label]:not([aria-label^="TL;DR"])').last().click();
-  const items = page.locator('ytd-popup-container yt-list-item-view-model');
-  await expect(items.first()).toBeVisible();
+  const old = lockup.locator('ytd-menu-renderer button');
+  await ((await old.count()) ? old.first() : lockup.locator('button[aria-label]:not([aria-label^="TL;DR"])').last()).click();
+  await expect(visibleItems(page).first()).toBeVisible();
   // The relabel runs a frame or two after the menu opens.
   await page.waitForTimeout(500);
-  return (await items.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+  return (await visibleItems(page).allInnerTexts()).map((t) => t.trim()).filter(Boolean);
 }
 
 /** Close it by clicking a blank spot of the top bar (Escape would also close the miniplayer). */
@@ -37,7 +42,7 @@ export async function closeMenu(page: Page): Promise<void> {
   const start = await page.locator('ytd-masthead #start').boundingBox();
   if (!start) throw new Error('no masthead');
   await page.mouse.click(start.x + start.width + 12, start.y + start.height / 2);
-  await expect(page.locator('ytd-popup-container yt-list-item-view-model').first()).toBeHidden().catch(() => {});
+  await expect(visibleItems(page)).toHaveCount(0).catch(() => {});
 }
 
 /**
@@ -49,7 +54,7 @@ export async function addFromMenu(page: Page, lockup: Locator): Promise<{ label:
   const texts = await openMenu(page, lockup);
   const label = texts.find((t) => OUR_ITEM.test(t) || NATIVE_QUEUE_ITEM.test(t));
   if (!label) throw new Error(`no Add to queue item in the menu: ${JSON.stringify(texts)}`);
-  await page.locator('ytd-popup-container yt-list-item-view-model').filter({ hasText: label }).first().click();
+  await visibleItems(page).filter({ hasText: label }).first().click();
   return { label, videoId };
 }
 

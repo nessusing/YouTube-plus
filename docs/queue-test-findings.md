@@ -119,6 +119,14 @@ L2 的假服务器（`tests/support/fake-youtube.ts`）有几处行为是推测�
 
 - 排查 F10 时，把设置里的播放器功能整个关掉，迷你播放器悬停时照样显示了播放、音量、时间、「<」、齿轮这一栏。如果 YouTube 现在自己就会显示，§35.1 的「用 CSS 让 `.ytp-chrome-bottom` 显示出来」可能已经多余了。只看了一次，还要确认：关掉功能是否真的对那个页面生效（设置是在打开页面前改的）。
 
+### F11　缩略图上的悬停按钮「添加到待播列表」没有改文字（点击是对的）
+
+- **场景**：播放列表模式，频道视频页上把鼠标移到缩略图上，右上角出现「稍后观看」「添加到待播列表」两个按钮。
+- **实际**（2026-11-21 实测）：点它**能正确接管**，加进我们的列表，提示「Added to …」。但按钮的 `aria-label` 和提示还是「添加到待播列表」。
+- **原因**：`onHover()` 只认旧的 `ytd-thumbnail-overlay-toggle-button-renderer`，改它的 `data.untoggledTooltip`；现在这个按钮是新版的 view model（`…ThumbnailHoverOverlayToggleActions…` 里面的 `button`），不经过那段代码。
+- **测试**：`entries.spec.ts` › hover button label says where it goes（用 `test.fail` 标出）。点击加入的测试（hover button on a thumbnail: adds to the list and says so）是通过的。
+- **建议**：bug，影响小（只是文字不对）。§28.1 第 1 条本来就是推测的写法；照新版按钮改文字，或者接受「悬停按钮不改文字」，把 §24.3 写清楚。
+
 ### A4（实测）　新建列表加入视频后，立刻读是空的
 
 - 新建的私密列表加入 2 个视频后，立刻 `browse` 读到 0 条，约 3 秒后才读到。这跟 §21.4「加入是立刻可见的」不一致，至少对刚建的列表是这样。还不确定已有的列表是不是也这样，后面的 L4 测试会顺带观察。

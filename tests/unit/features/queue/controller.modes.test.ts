@@ -33,7 +33,8 @@ async function switchTo(h: Harness, p: Partial<QueueProfile>): Promise<void> {
 
 function expectTaking(h: Harness, count: number, name = 'List PLq'): void {
   expect(h.ctl.decision).toBe('take');
-  expect(h.yt.takeover).toEqual({ decision: 'take', label: t('queue.addTo', { name }) });
+  // The chosen list goes along for the ⋮ items and drag out to delete (§47, §48).
+  expect(h.yt.takeover).toEqual({ decision: 'take', label: t('queue.addTo', { name }), listId: name.replace('List ', '') });
   expect(h.button).toMatchObject({ visible: true, name, count });
 }
 

@@ -26,7 +26,7 @@ describe('deciding to take over (§24.1)', () => {
   it('playlist mode with an editable list: takes over, relabels, shows the count', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     expect(h.ctl.decision).toBe('take');
-    expect(h.yt.takeover).toEqual({ decision: 'take', label: t('queue.addTo', { name: 'List PLq' }) });
+    expect(h.yt.takeover).toEqual({ decision: 'take', label: t('queue.addTo', { name: 'List PLq' }), listId: 'PLq' });
     expect(h.button).toMatchObject({ visible: true, name: 'List PLq', count: 3 });
   });
 

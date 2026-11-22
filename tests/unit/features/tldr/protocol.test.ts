@@ -147,6 +147,9 @@ describe('parseSummary', () => {
     expect(parseSummary('```json\n{"status":"ok","points":["a"]}\n```', 'zh')).toMatchObject({ kind: 'ok', data: { points: ['a'], lang: 'zh' } });
     expect(parseSummary('Sure! {"status":"ok","points":["a"]} Hope this helps', 'zh')).toMatchObject({ kind: 'ok', data: { points: ['a'] } });
   });
+  it('takes the first object when the answer is written twice', () => {
+    expect(parseSummary('{"status":"ok","points":["a }"]}{"status":"ok","points":["b"]}', 'en')).toMatchObject({ kind: 'ok', data: { points: ['a }'] } });
+  });
   it('maps no_transcript to unreadable', () => {
     expect(parseSummary('{"status":"no_transcript"}', 'en').kind).toBe('unreadable');
   });
@@ -182,5 +185,23 @@ describe('batch', () => {
   });
   it('returns nothing for text that is not an array', () => {
     expect(parseBatch('sorry, I cannot', ids, 'en').size).toBe(0);
+  });
+  it('takes the first array when the answer is written twice (seen 2026-11-21)', () => {
+    const one = JSON.stringify(ids.map((id, n) => ({ id, status: 'ok', points: [`p${n}`] })));
+    const m = parseBatch(one + one, ids, 'en');
+    expect(ids.map((id) => (m.get(id) as { data: { points: string[] } }).data.points[0])).toEqual(['p0', 'p1', 'p2']);
+  });
+  it('keeps the good objects when one is broken (seen 2026-11-21)', () => {
+    const text = '[{"id":"aaaaaaaaaaa","status":"ok","lang":"zh","yue","points":["x"]},'
+      + '{"id":"bbbbbbbbbbb","status":"ok","points":["y [z] {w}"],"titleMatch":{"verdict":"match","reason":"r"}},'
+      + '{"id":"ccccccccccc","status":"no_transcript"}]';
+    const m = parseBatch(text, ids, 'en');
+    expect(m.has('aaaaaaaaaaa')).toBe(false);
+    expect(m.get('bbbbbbbbbbb')).toMatchObject({ kind: 'ok', data: { points: ['y [z] {w}'], titleMatch: { verdict: 'match' } } });
+    expect(m.get('ccccccccccc')?.kind).toBe('unreadable');
+  });
+  it('skips brackets in prose before the array', () => {
+    const m = parseBatch('Note [1]: done [{"id":"aaaaaaaaaaa","status":"ok","points":["x"]}] bye', ids, 'en');
+    expect(m.get('aaaaaaaaaaa')?.kind).toBe('ok');
   });
 });

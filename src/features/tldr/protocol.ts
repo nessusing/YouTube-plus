@@ -22,13 +22,27 @@ function rules(i: Pick<SummaryInput, 'lang' | 'titleCheck'>): string[] {
   ];
 }
 
+/**
+ * The account's personalization (custom instructions, saved info, past chats)
+ * also reaches these requests; one persona made Gemini answer in character
+ * with no JSON at all (design §45). Say up front that a program reads the reply
+ * and none of that applies; repeat the format at the end, where it weighs most.
+ */
+const PREAMBLE = [
+  'This is an automated request from a browser extension. A program parses your reply; no person reads it.',
+  'Any custom instructions, saved info, persona, nickname, user name or past chats do not apply to this request: ignore them.',
+  'Do not greet or address anyone, no character voice, no emoji, no markdown.',
+];
+
 export function buildPrompt(i: SummaryInput): string {
   return [
+    ...PREAMBLE,
     `Read the YouTube video https://www.youtube.com/watch?v=${i.videoId} (title: ${JSON.stringify(i.title)}) with the YouTube app.`,
     'Output ONLY JSON, no code fences, no other text:',
     schemaOf(i.titleCheck, ''),
     ...rules(i),
     'If you cannot read the video content (no transcript, the tool failed, etc.), output ONLY {"status":"no_transcript"}. Never make up content from the title.',
+    'Your entire reply is that one JSON object: it starts with { and ends with }.',
   ].filter(Boolean).join('\n');
 }
 
@@ -39,12 +53,14 @@ export function buildPrompt(i: SummaryInput): string {
 export function buildBatchPrompt(items: SummaryInput[]): string {
   const first = items[0]!;
   return [
+    ...PREAMBLE,
     'Read each of these YouTube videos with the YouTube app:',
     ...items.map((i, n) => `${n + 1}. https://www.youtube.com/watch?v=${i.videoId} (title: ${JSON.stringify(i.title)})`),
     'Output ONLY a JSON array, one object per video in the same order, no code fences, no other text:',
     `[${schemaOf(first.titleCheck, '"id":"<video id>",')}]`,
     ...rules(first),
     'If you cannot read a video\'s content (no transcript, the tool failed, etc.), its object is ONLY {"id":"<video id>","status":"no_transcript"}. Never make up content from the title.',
+    'Your entire reply is that one JSON array: it starts with [ and ends with ].',
   ].filter(Boolean).join('\n');
 }
 
@@ -272,6 +288,67 @@ function stripFences(text: string): string {
   return text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
 }
 
+/**
+ * Index just past the `]` / `}` that closes the bracket at `start`, skipping
+ * brackets inside strings; -1 when it never closes.
+ */
+function closeOf(s: string, start: number): number {
+  let depth = 0;
+  let inStr = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (c === '\\') i++;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === '[' || c === '{') depth++;
+    else if (c === ']' || c === '}') {
+      if (--depth === 0) return i + 1;
+    }
+  }
+  return -1;
+}
+
+const isObject = (j: unknown): j is object => !!j && typeof j === 'object' && !Array.isArray(j);
+/** An answer array, not a `points` list or a stray `[1]` from prose. */
+const isObjectArray = (j: unknown): j is unknown[] => Array.isArray(j) && j.some(isObject);
+
+/**
+ * The first balanced span starting with `open` that parses and passes `ok`.
+ * Greedy `\[[\s\S]*\]` fails when the model writes the answer twice
+ * (`[…][…]`, seen 2026-11-21, plans P17).
+ */
+function firstJson(s: string, open: '[' | '{', ok: (j: unknown) => boolean): unknown {
+  for (let i = s.indexOf(open); i !== -1; i = s.indexOf(open, i + 1)) {
+    const end = closeOf(s, i);
+    if (end === -1) continue;
+    const j = tryParse(s.slice(i, end));
+    if (ok(j)) return j;
+  }
+  return undefined;
+}
+
+/**
+ * The array is not valid JSON as a whole (one object broken, e.g.
+ * `"lang":"zh","yue",`, seen 2026-11-21): parse its top-level objects one by
+ * one and drop the broken ones.
+ */
+function objectsOf(s: string): unknown[] {
+  const from = s.indexOf('[');
+  if (from === -1) return [];
+  const arrEnd = closeOf(s, from);
+  const stop = arrEnd === -1 ? s.length : arrEnd;
+  const out: unknown[] = [];
+  for (let i = s.indexOf('{', from); i !== -1 && i < stop;) {
+    const end = closeOf(s, i);
+    if (end === -1) break;
+    const j = tryParse(s.slice(i, end));
+    if (isObject(j)) out.push(j);
+    i = s.indexOf('{', end);
+  }
+  return out;
+}
+
 /** One parsed object → result, or undefined when it is not a usable summary. */
 function fromObject(j: unknown, fallbackLang: string): SummaryResult | undefined {
   if (!j || typeof j !== 'object') return undefined;
@@ -292,11 +369,8 @@ function fromObject(j: unknown, fallbackLang: string): SummaryResult | undefined
 /** Model text → result (design §11 parse order). */
 export function parseSummary(text: string, fallbackLang: string): SummaryResult {
   const cleaned = stripFences(text);
-  let j = tryParse(cleaned);
-  if (j === undefined) {
-    const m = /\{[\s\S]*\}/.exec(cleaned);
-    if (m) j = tryParse(m[0]);
-  }
+  const whole = tryParse(cleaned);
+  const j = isObject(whole) ? whole : firstJson(cleaned, '{', isObject);
   return fromObject(j, fallbackLang) ?? { kind: 'ok', data: { points: [], lang: fallbackLang, raw: text } };
 }
 
@@ -307,12 +381,10 @@ export function parseSummary(text: string, fallbackLang: string): SummaryResult 
 export function parseBatch(text: string, ids: string[], fallbackLang: string): Map<string, SummaryResult> {
   const out = new Map<string, SummaryResult>();
   const cleaned = stripFences(text);
-  let j = tryParse(cleaned);
-  if (!Array.isArray(j)) {
-    const m = /\[[\s\S]*\]/.exec(cleaned);
-    j = m ? tryParse(m[0]) : undefined;
-  }
-  if (!Array.isArray(j)) return out;
+  const whole = tryParse(cleaned);
+  const found = isObjectArray(whole) ? whole : firstJson(cleaned, '[', isObjectArray);
+  const j = isObjectArray(found) ? found : objectsOf(cleaned);
+  if (!j.length) return out;
   const want = new Set(ids);
   j.forEach((o, n) => {
     const own = (o as { id?: unknown } | null)?.id;

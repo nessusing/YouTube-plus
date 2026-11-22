@@ -9,7 +9,7 @@ import type { QueueProfile } from '@/features/queue/core';
 import type { FakeYouTube } from '../../../support/fake-youtube';
 import { setup, type Harness } from '../../../support/queue-harness';
 
-vi.mock('@/features/queue/toast', () => import('../../../support/toasts'));
+vi.mock('@/core/notify', () => import('../../../support/toasts'));
 
 beforeEach(() => vi.useFakeTimers({ now: 1_000_000 }));
 afterEach(() => vi.useRealTimers());

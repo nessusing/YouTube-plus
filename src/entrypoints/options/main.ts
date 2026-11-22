@@ -11,7 +11,8 @@ import { getProfile, getSnapshot, updateProfile, type Identity } from '@/feature
 import type { PlaylistRef } from '@/features/queue/rpc';
 import type { TldrStatus } from '@/features/tldr/service';
 import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
-import { FEATURES, featureOn, getSettings, saveSettings, type PlayerSettings, type Settings } from '@/core/settings';
+import { DEFAULT_SETTINGS, FEATURES, featureOn, getSettings, saveSettings, type NotifySettings, type PlayerSettings, type Settings } from '@/core/settings';
+import { NOTIFY_PREVIEW, NOTIFY_X_KEY } from '@/core/notify';
 
 // Build the page in YouTube's language (plans P23); rebuild (reload) when it changes.
 await initLang(() => location.reload());
@@ -91,6 +92,7 @@ const tabs = [
   { id: 'tldr', label: t('feature.tldr') },
   { id: 'queue', label: t('feature.queue') },
   { id: 'player', label: t('feature.player') },
+  { id: 'notify', label: t('opt.tab.notify') },
   { id: 'storage', label: t('opt.tab.storage') },
   { id: 'diag', label: t('opt.tab.diag') },
 ] as const;
@@ -564,6 +566,60 @@ const resetPos = button(t('opt.player.resetPos'), async () => {
   flash(resetPos, t('opt.player.resetDone'));
 });
 group(player, t('opt.player.sub'), undefined, playerList, el('div', { className: 'inline mt-lg' }, resetPos));
+
+// ---------- notifications (design §46) ----------
+
+const notifyTab = sections.get('notify')!;
+pageHead(notifyTab, t('opt.tab.notify'), t('opt.notify.title'), t('opt.notify.sub'));
+
+const posBox = el('div', { className: 'radios', role: 'radiogroup' });
+for (const [v, label] of [['bottom', t('opt.notify.bottom')], ['top', t('opt.notify.top')]] as const) {
+  const input = el('input', { type: 'radio', name: 'notify-pos', value: v, checked: settings.notify.position === v });
+  input.addEventListener('change', () => input.checked && void update((s) => { s.notify.position = v; }));
+  posBox.append(el('label', {}, input, el('span', { className: 'text', textContent: label })));
+}
+const centerBtn = button(t('opt.notify.center'), async () => {
+  await browser.storage.local.remove(NOTIFY_X_KEY);
+  flash(centerBtn, t('opt.notify.centered'));
+});
+group(notifyTab, t('opt.notify.where'), undefined,
+  row(t('opt.notify.position'), posBox),
+  row(t('opt.notify.across'), inline(centerBtn), hint(t('opt.notify.acrossHint'))),
+  row(t('opt.notify.max'), inline(numberInput(() => settings.notify.maxVisible, (s, v) => { s.notify.maxVisible = v; }, 1, 5), el('span', { className: 'muted', textContent: t('opt.notify.maxUnit') }))),
+);
+
+type SecKey = keyof Pick<NotifySettings, 'plainSec' | 'actionSec' | 'errorSec'>;
+const SEC_ROWS: [SecKey, string][] = [['plainSec', t('opt.notify.plain')], ['actionSec', t('opt.notify.action')], ['errorSec', t('opt.notify.error')]];
+const secInputs = new Map<SecKey, HTMLInputElement>();
+const durationGroup = group(notifyTab, t('opt.notify.duration'), t('opt.notify.durationHint'));
+for (const [k, label] of SEC_ROWS) {
+  const input = numberInput(() => settings.notify[k], (s, v) => { s.notify[k] = v; }, 2, 30);
+  secInputs.set(k, input);
+  durationGroup.append(row(label, inline(input, el('span', { className: 'muted', textContent: t('opt.notify.sec') }))));
+}
+durationGroup.append(el('div', { className: 'inline mt' }, button(t('opt.notify.defaults'), async () => {
+  await update((s) => { for (const [k] of SEC_ROWS) s.notify[k] = DEFAULT_SETTINGS.notify[k]; });
+  for (const [k, input] of secInputs) input.value = String(settings.notify[k]);
+})));
+
+const previewMsg = el('span', { className: 'muted' });
+const previewBtn = button(t('opt.notify.preview'), async () => {
+  previewMsg.textContent = '';
+  const tab = await recentYouTubeTab();
+  if (!tab?.id) {
+    previewMsg.textContent = t('opt.yt.noTab');
+    return;
+  }
+  try {
+    await browser.tabs.update(tab.id, { active: true });
+    if (tab.windowId !== undefined) await browser.windows.update(tab.windowId, { focused: true });
+    const ok = await browser.tabs.sendMessage(tab.id, { type: NOTIFY_PREVIEW }, { frameId: 0 });
+    if (!ok) previewMsg.textContent = t('opt.queue.noScript');
+  } catch {
+    previewMsg.textContent = t('opt.queue.noScript');
+  }
+});
+group(notifyTab, t('opt.notify.preview'), t('opt.notify.previewHint'), el('div', { className: 'inline' }, previewBtn, previewMsg));
 
 // ---------- storage (design §4.1) ----------
 

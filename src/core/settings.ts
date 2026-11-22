@@ -41,6 +41,17 @@ export interface TldrSettings {
   batchSize: number;
 }
 
+/** Page notifications (design §46). The sideways position is per machine, in storage.local. */
+export interface NotifySettings {
+  position: 'bottom' | 'top';
+  /** Shown at once, 1–5; the oldest goes first. */
+  maxVisible: number;
+  /** Seconds shown, 2–30: plain, with a button, error. */
+  plainSec: number;
+  actionSec: number;
+  errorSec: number;
+}
+
 export interface Settings {
   /** Master switch: when false, no feature runs. */
   enabled: boolean;
@@ -49,6 +60,7 @@ export interface Settings {
   player: PlayerSettings;
   tldr: TldrSettings;
   storage: StorageLimits;
+  notify: NotifySettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -58,6 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true, loopButton: false, miniMinimize: true },
   tldr: { titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200, batchSize: 5 },
   storage: { logMB: 2, tldrCacheMB: 5 },
+  notify: { position: 'bottom', maxVisible: 3, plainSec: 4, actionSec: 6, errorSec: 8 },
 };
 
 /** A feature runs only when both the master switch and its own switch are on. */
@@ -79,6 +92,7 @@ export function withDefaults(stored: DeepPartial<Settings> | undefined): Setting
     player: { ...DEFAULT_SETTINGS.player, ...s.player },
     tldr: { ...DEFAULT_SETTINGS.tldr, ...s.tldr },
     storage: { ...DEFAULT_SETTINGS.storage, ...s.storage },
+    notify: { ...DEFAULT_SETTINGS.notify, ...s.notify },
   };
 }
 

@@ -9,7 +9,7 @@
 import { injectStyle, whenElement, type Toggleable } from '@/core/dom';
 import { t } from '@/core/i18n';
 import type { Logger } from '@/core/log';
-import { MINI_MIN_KEY } from './consts';
+import { MINI_BAR_TAG, MINI_MIN_KEY } from './consts';
 import { SEL } from './selectors';
 import { playerTooltip, type PlayerTooltip } from './tooltip';
 
@@ -95,7 +95,7 @@ export function miniMinimize(log: Logger): MiniMinimize {
 
   // ---- the bar ----
   const makeBar = () => {
-    host = document.createElement('ytpp-mini-bar');
+    host = document.createElement(MINI_BAR_TAG);
     // Same layer as ytd-miniplayer (2030), which it stands in for.
     host.style.cssText = `position:fixed;left:${BAR_GAP}px;bottom:${BAR_GAP}px;z-index:2030;display:none;`;
     const root = host.attachShadow({ mode: 'open' });

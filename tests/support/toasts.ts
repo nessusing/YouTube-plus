@@ -1,10 +1,12 @@
-// Toasts the controller showed. Test files mock the toast module with
-// `vi.mock('@/features/queue/toast', () => import('../../../support/toasts'))`.
+// Notices the controller showed. Test files mock the notify module with
+// `vi.mock('@/core/notify', () => import('../../../support/toasts'))`.
 
-export interface ToastCall { text: string; action?: string }
+import type { NotifyOptions } from '@/core/notify';
+
+export interface ToastCall { text: string; action?: string; error?: boolean }
 
 export const toasts: ToastCall[] = [];
 
-export function toast(text: string, action?: { label: string }): void {
-  toasts.push({ text, action: action?.label });
+export function notify(text: string, opts: NotifyOptions = {}): void {
+  toasts.push({ text, action: opts.action?.label, ...(opts.error ? { error: true } : {}) });
 }

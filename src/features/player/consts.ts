@@ -6,3 +6,5 @@ export const LOOP_ON_EVENT = 'ytpp-loop-on';
 export const LOOP_OFF_EVENT = 'ytpp-loop-off';
 /** storage.local key: the miniplayer is minimized to the bar (§44). */
 export const MINI_MIN_KEY = 'player/miniMinimized';
+/** The minimized miniplayer's bar (§44); notifications rise above it (design §46). */
+export const MINI_BAR_TAG = 'ytpp-mini-bar';

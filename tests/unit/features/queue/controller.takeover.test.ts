@@ -6,7 +6,7 @@ import { t } from '@/core/i18n';
 import { PROFILE_PREFIX, PROTOCOL_ERROR_KEY } from '@/features/queue/keys';
 import { setup } from '../../../support/queue-harness';
 
-vi.mock('@/features/queue/toast', () => import('../../../support/toasts'));
+vi.mock('@/core/notify', () => import('../../../support/toasts'));
 
 beforeEach(() => vi.useFakeTimers({ now: 1_000_000 }));
 afterEach(() => vi.useRealTimers());
@@ -252,7 +252,7 @@ describe('Add (§24.2)', () => {
     const add = h.ctl.onAdd(['x']);
     await h.settle();
     await add;
-    expect(h.toasts.at(-1)).toEqual({ text: t('queue.listGone', { name: 'List PLq' }), action: t('queue.toSettings') });
+    expect(h.toasts.at(-1)).toEqual({ text: t('queue.listGone', { name: 'List PLq' }), action: t('queue.toSettings'), error: true });
     expect(h.ctl.decision).toBe('noList');
     expect((await h.profile())?.listId).toBeUndefined();
     expect(h.button.visible).toBe(false);

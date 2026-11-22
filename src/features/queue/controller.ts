@@ -4,6 +4,7 @@
 // the list is watched, move on to the next one and remove it.
 
 import { t } from '@/core/i18n';
+import { notify } from '@/core/notify';
 import type { Toggleable } from '@/core/dom';
 import type { Logger } from '@/core/log';
 import type { PlayerEvent } from './bridge';
@@ -15,7 +16,6 @@ import { PROTOCOL_ERROR_KEY } from './keys';
 import type { PlayButton } from './play-button';
 import { getProfile, onProfileChanged, updateProfile, type Identity } from './profiles';
 import type { Rpc } from './rpc';
-import { toast } from './toast';
 
 /** When the tab comes back, re-read the list (edits elsewhere) at most this often. */
 const RECHECK_MS = 5_000;
@@ -211,7 +211,7 @@ export class QueueController {
     const name = this.listName();
     if (!await this.listGone(listId)) return;
     await this.apply();
-    toast(t('queue.listGone', { name }), { label: t('queue.toSettings'), run: openSettings });
+    notify(t('queue.listGone', { name }), { error: true, action: { label: t('queue.toSettings'), run: openSettings } });
   }
 
   /** A fresh read of the list. */
@@ -362,7 +362,7 @@ export class QueueController {
       return;
     }
     this.modeToast = undefined;
-    toast(t(mode === 'playlist' ? 'queue.switchedPlaylist' : 'queue.switchedNative'), { label: t('queue.reload'), run: () => location.reload() }, 10_000);
+    notify(t(mode === 'playlist' ? 'queue.switchedPlaylist' : 'queue.switchedNative'), { action: { label: t('queue.reload'), run: () => location.reload() } });
   }
 
   // ---------- §24.2 add ----------
@@ -374,7 +374,7 @@ export class QueueController {
     const gone = async () => {
       if (!await this.listGone(listId)) return;
       await this.apply();
-      toast(t('queue.listGone', { name }), { label: t('queue.toSettings'), run: openSettings });
+      notify(t('queue.listGone', { name }), { error: true, action: { label: t('queue.toSettings'), run: openSettings } });
     };
     const view = { label: t('queue.view'), run: () => void this.rpc.openPlaylist(listId) };
     try {
@@ -384,13 +384,13 @@ export class QueueController {
         const now = await this.goneForSure(listId);
         if (now === 'gone') return await gone();
         if (now === 'there') return await this.onAdd(videoIds);
-        toast(t('queue.addFailed'));
+        notify(t('queue.addFailed'), { error: true });
         return;
       }
       this.took(data.items);
       const fresh = notInList(data.items, videoIds);
       if (!fresh.length) {
-        toast(t('queue.already', { name }), view);
+        notify(t('queue.already', { name }), { action: view });
         await this.attachIfIdle(listId, undefined);
         return;
       }
@@ -399,16 +399,16 @@ export class QueueController {
         const again = await this.rpc.readPlaylist(listId).catch(() => undefined);
         if (again && !again.exists) return await gone();
         this.log.warn(`add ${fresh.join(',')} to ${listId} failed: ${r.error ?? r.status}`);
-        toast(t('queue.addFailed'));
+        notify(t('queue.addFailed'), { error: true });
         return;
       }
       this.log.info(`added ${fresh.join(',')} to ${listId}`);
-      toast(t('queue.added', { name }), view);
+      notify(t('queue.added', { name }), { action: view });
       // The count and a panel already showing the list follow from the edit event.
       await this.attachIfIdle(listId, { has: fresh });
     } catch (e) {
       this.log.error('add failed', e);
-      toast(t('queue.addFailed'));
+      notify(t('queue.addFailed'), { error: true });
     }
   }
 
@@ -434,8 +434,8 @@ export class QueueController {
   /** Add to queue went to YouTube's own queue: say why, once per page (§24.1). */
   onNativeAdd(): void {
     if (this.hinted) return;
-    if (this.decision === 'noList') toast(t('queue.noList'), { label: t('queue.toSettings'), run: openSettings }, 10_000);
-    else if (this.decision === 'notEditable') toast(t('queue.notEditable', { name: this.listName() }), undefined, 8000);
+    if (this.decision === 'noList') notify(t('queue.noList'), { action: { label: t('queue.toSettings'), run: openSettings } });
+    else if (this.decision === 'notEditable') notify(t('queue.notEditable', { name: this.listName() }));
     else return;
     this.hinted = true;
   }
@@ -455,7 +455,7 @@ export class QueueController {
       if (target) await this.rpc.playVideo(target.videoId, listId, !!current);
     } catch (e) {
       this.log.error('play failed', e);
-      toast(t('queue.failed'));
+      notify(t('queue.failed'), { error: true });
     }
   }
 
@@ -532,7 +532,7 @@ export class QueueController {
     } catch (e) {
       // No answer from the page script, or a network error (findings F6).
       this.log.warn(`watched ${item.videoId}: removing from ${listId} failed`, e);
-      toast(t('queue.removeFailed'));
+      notify(t('queue.removeFailed'), { error: true });
       return;
     }
     if (r.ok) {
@@ -542,7 +542,7 @@ export class QueueController {
       this.log.debug(`watched ${item.videoId}: already gone from ${listId}`);
     } else {
       this.log.warn(`watched ${item.videoId}: removing from ${listId} failed: ${r.error ?? r.status}`);
-      toast(t('queue.removeFailed'));
+      notify(t('queue.removeFailed'), { error: true });
     }
   }
 }

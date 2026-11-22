@@ -126,7 +126,7 @@ export async function startNativeQueue(page: Page, first: string): Promise<strin
   return [first, ...added];
 }
 
-// ---------- our closed shadow roots (toast, back to top) ----------
+// ---------- our closed shadow roots (notifications, back to top) ----------
 
 /**
  * Box and class of the element matching `selector` inside the closed shadow
@@ -157,7 +157,7 @@ export async function inClosedShadow(page: Page, host: string, selector: string)
 
 /** Click the toast's action ("Undo", "View"…). */
 export async function clickToastAction(page: Page): Promise<void> {
-  const b = await inClosedShadow(page, 'ytpp-toast', '.link');
+  const b = await inClosedShadow(page, 'ytpp-notify', '.newest .link');
   if (!b) throw new Error('the toast has no action');
   await page.mouse.click(b.x + b.w / 2, b.y + b.h / 2);
 }

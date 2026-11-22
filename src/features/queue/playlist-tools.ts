@@ -1,15 +1,14 @@
 // "Clear all" and "Remove watched" on your own playlist pages (design §25),
-// with confirm, 10 s undo, and the most recent snapshot kept (per identity)
+// with confirm, undo (a notice button, §46), and the most recent snapshot kept (per identity)
 // for the settings page.
 
 import { t as tr } from '@/core/i18n';
+import { notify } from '@/core/notify';
 import type { Logger } from '@/core/log';
 import { chunk, planClear, planUndoMoves, type ListAction, type Snapshot } from './core';
 import { saveSnapshot } from './profiles';
 import type { Rpc } from './rpc';
-import { toast } from './toast';
 
-const UNDO_MS = 10_000;
 const HEADER = 'ytd-playlist-header-renderer, yt-page-header-renderer';
 /** The new header's row of buttons (Play all, Share, ⋮). */
 const ROW = 'yt-flexible-actions-view-model';
@@ -105,7 +104,7 @@ export function playlistTools(rpc: Rpc, log: Logger, identity: () => string | un
       const data = await rpc.readPlaylist(listId);
       const { remove, removed } = planClear(data.items, mode);
       if (!remove.length) {
-        toast(tr(mode === 'watched' ? 'queue.noneWatched' : 'queue.empty'), undefined, 4000);
+        notify(tr(mode === 'watched' ? 'queue.noneWatched' : 'queue.empty'));
         return;
       }
       const title = data.title || listId;
@@ -121,10 +120,10 @@ export function playlistTools(rpc: Rpc, log: Logger, identity: () => string | un
       if (id) await saveSnapshot(id, snapshot);
       removeRows(new Set(remove.map((i) => i.videoId)));
       log.info(`clear (${mode}) on ${listId}: removed ${remove.length - failed}`);
-      toast(tr('queue.deleted', { n: remove.length - failed }), { label: tr('queue.undo'), run: () => void restoreSnapshot(rpc, log, snapshot).then((n) => shownInReads(rpc, listId, data.items.length - remove.length + n)).then(() => location.reload()) }, UNDO_MS);
+      notify(tr('queue.deleted', { n: remove.length - failed }), { action: { label: tr('queue.undo'), run: () => void restoreSnapshot(rpc, log, snapshot).then((n) => shownInReads(rpc, listId, data.items.length - remove.length + n)).then(() => location.reload()) } });
     } catch (e) {
       log.error('clear failed', e);
-      toast(tr('queue.failed'), undefined, 6000);
+      notify(tr('queue.failed'), { error: true });
     } finally {
       busy = false;
     }

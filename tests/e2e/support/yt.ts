@@ -323,7 +323,7 @@ export function playButton(page: Page) {
 }
 
 export async function lastToast(page: Page): Promise<string | undefined> {
-  return (await page.locator('ytpp-toast').getAttribute('data-text', { timeout: 1000 }).catch(() => null)) ?? undefined;
+  return (await page.locator('ytpp-notify').getAttribute('data-text', { timeout: 1000 }).catch(() => null)) ?? undefined;
 }
 
 /**

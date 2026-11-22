@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '@/core/i18n';
 import { setup } from '../../../support/queue-harness';
 
-vi.mock('@/features/queue/toast', () => import('../../../support/toasts'));
+vi.mock('@/core/notify', () => import('../../../support/toasts'));
 
 beforeEach(() => vi.useFakeTimers({ now: 1_000_000 }));
 afterEach(() => vi.useRealTimers());

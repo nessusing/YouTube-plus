@@ -759,13 +759,12 @@ function pvFrame(now: number) {
   if (pv.playing) pv.clock = (pv.clock + dt) % length;
   const width = pvBox.clientWidth;
   const height = pvBox.clientHeight;
-  // Like the real overlay: above the controls when they show, above the captions when on.
-  const base = pv.controls ? PV_CONTROLS_PX + 8 : Math.max(12, height * 0.04);
+  // Captions sit at the bottom, above the controls when they show; the card is at the top (§51.7).
   pvCaption.style.fontSize = `${Math.round(height * 0.034)}px`;
-  pvCaption.style.bottom = `${base}px`;
-  const bottom = pv.captions ? base + pvCaption.offsetHeight + 8 : base;
+  pvCaption.style.bottom = `${pv.controls ? PV_CONTROLS_PX + 8 : Math.max(12, height * 0.04)}px`;
+  const top = Math.max(12, height * 0.04);
   const s = slotAt(slots, pv.clock);
-  pvView.draw(s, s ? pv.clock - s.start : 0, { p: settings.danmaku.params.display, width, height, bottom, debug: pv.debug });
+  pvView.draw(s, s ? pv.clock - s.start : 0, { p: settings.danmaku.params.display, width, height, top, debug: pv.debug });
   pvStatus.textContent = t('opt.dm.pv.status', { i: s ? slots.indexOf(s) + 1 : '–', n: slots.length, t: pv.clock.toFixed(1) });
 }
 requestAnimationFrame(pvFrame);

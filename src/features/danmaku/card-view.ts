@@ -26,7 +26,7 @@ const CSS = `
 .handle { opacity: 0.72; font-weight: 500; margin-right: 0.45em; }
 .text img { height: 1em; width: auto; vertical-align: -0.15em; }
 .corner {
-  position: absolute; bottom: calc(100% + 3px); font-size: max(10px, 0.7em); line-height: 1.5; padding: 0 0.6em; border-radius: 1em;
+  position: absolute; top: calc(100% + 3px); font-size: max(10px, 0.7em); line-height: 1.5; padding: 0 0.6em; border-radius: 1em;
   background: rgba(8, 8, 8, 0.8); color: #ddd; white-space: nowrap;
 }
 .badge { right: 0.6em; }
@@ -39,8 +39,8 @@ export interface DrawOptions {
   /** The player's size in CSS pixels. */
   width: number;
   height: number;
-  /** Distance of the card's bottom from the player's bottom. */
-  bottom: number;
+  /** Distance of the card's top from the player's top. */
+  top: number;
   /** Show the debug source label. */
   debug?: boolean;
 }
@@ -148,7 +148,7 @@ export class CardView {
     this.badge.textContent = `${frame.item + 1}/${n}${slot.extra ? ` +${slot.extra}` : ''}`;
     this.label.hidden = !o.debug;
     this.label.textContent = sourceLabel(slot);
-    this.host.style.bottom = `${o.bottom}px`;
+    this.host.style.top = `${o.top}px`;
     this.card.hidden = false;
   }
 

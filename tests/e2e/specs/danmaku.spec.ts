@@ -63,7 +63,7 @@ const card = (page: Page) => page.evaluate(() => {
   const label = c.querySelector<HTMLElement>('.label');
   const text = c.querySelector<HTMLElement>('.text')!;
   const r = c.getBoundingClientRect();
-  return { text: text.textContent ?? '', label: label && !label.hidden ? label.textContent : '', transform: text.style.transform, bottom: r.bottom, opacity: Number(c.style.opacity) };
+  return { text: text.textContent ?? '', label: label && !label.hidden ? label.textContent : '', transform: text.style.transform, top: r.top, bottom: r.bottom, opacity: Number(c.style.opacity) };
 });
 
 /** The button's tooltip text, opened the way a pointer does. */
@@ -190,16 +190,21 @@ test.describe('comment danmaku', () => {
     expect(await card(page)).toBeUndefined();
   });
 
-  test('stays above the control bar while it shows', async ({ page, open, ctx }) => {
+  test('sits at the top of the player, clear of the control bar', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [{ id: 's', text: LONG, stamped: true }]);
     await setDanmaku(ctx, true);
     await openWatch(page, open, VIDEOS.a);
     await pauseAt(page, 22);
     await expectCard(page, 'everyone waits for');
     await showBar(page);
-    const barTop = await page.evaluate(() => document.querySelector('#movie_player .ytp-chrome-bottom')!.getBoundingClientRect().top);
-    // The card moves up with a 200 ms transition.
-    await expect.poll(async () => (await card(page))!.bottom).toBeLessThanOrEqual(barTop);
+    const [playerTop, playerH, barTop] = await page.evaluate(() => {
+      const p = document.querySelector('#movie_player')!.getBoundingClientRect();
+      return [p.top, p.height, document.querySelector('#movie_player .ytp-chrome-bottom')!.getBoundingClientRect().top];
+    });
+    const c = (await card(page))!;
+    expect(c.top).toBeGreaterThanOrEqual(playerTop);
+    expect(c.top - playerTop).toBeLessThan(playerH / 4);
+    expect(c.bottom).toBeLessThanOrEqual(barTop);
   });
 
   test('AI mode uses Gemini\'s confident times; hidden comments never show', async ({ page, open, ctx }) => {

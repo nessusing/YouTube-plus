@@ -2,12 +2,12 @@ import { getLang, initLang, t, type MsgKey } from '@/core/i18n';
 import { formatEntry, LOG_KEY, LOG_LEVELS, type LogEntry, type LogFeature } from '@/core/log';
 import type { Message, SelfCheckResponse } from '@/core/messages';
 import type { CheckResult } from '@/core/selfcheck';
-import { MINI_POS_KEY } from '@/features/player/consts';
+import { FLOAT_POS_KEY, MINI_POS_KEY } from '@/features/player/consts';
 import { recentYouTubeTab } from '@/core/page-checks';
 import { DEFAULT_PROFILE, type QueueMode, type QueueProfile } from '@/features/queue/core';
-import { PROFILE_PREFIX, PROTOCOL_ERROR_KEY, SNAPSHOT_PREFIX } from '@/features/queue/keys';
+import { PROFILE_PREFIX, PROTOCOL_ERROR_KEY } from '@/features/queue/keys';
 import type { QueueOp, QueueRequest, QueueResponse } from '@/features/queue/messages';
-import { getProfile, getSnapshot, updateProfile, type Identity } from '@/features/queue/profiles';
+import { getProfile, updateProfile, type Identity } from '@/features/queue/profiles';
 import type { PlaylistRef } from '@/features/queue/rpc';
 import type { TldrStatus } from '@/features/tldr/service';
 import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
@@ -311,7 +311,7 @@ function modeOption(mode: QueueMode, title: string, desc: string, ...extra: Chil
 const listSel = el('select', { className: 'list-select' });
 listSel.setAttribute('aria-label', t('opt.queue.list'));
 const NEW = '__new__';
-const newName = el('input', { type: 'text', value: 'YouTube+', className: 'field text' });
+const newName = el('input', { type: 'text', value: 'YouTube +', className: 'field text' });
 newName.setAttribute('aria-label', t('opt.queue.newName'));
 const createBtn = button(t('opt.queue.create'), createList, 'btn filled');
 const newRow = el('div', { className: 'inline' }, newName, createBtn);
@@ -352,7 +352,7 @@ async function saveProfile(mut: (p: QueueProfile) => void) {
 
 async function createList() {
   if (who.kind !== 'ok') return;
-  const title = newName.value.trim() || 'YouTube+';
+  const title = newName.value.trim() || 'YouTube +';
   createBtn.disabled = true;
   listMsg.textContent = t('opt.queue.creating');
   try {
@@ -456,20 +456,6 @@ function renderWho() {
   setState(ytState, 'ok', t('opt.yt.signedIn', { name }));
 }
 
-const snapLine = el('p', { className: 'sub' });
-const restoreMsg = el('span', { className: 'muted' });
-const restoreBtn = button(t('opt.resume'), restoreSnapshot);
-group(queue, t('opt.queue.lastClear'), t('opt.queue.lastClearHint'), snapLine, el('div', { className: 'inline mt' }, restoreBtn, restoreMsg));
-
-async function renderSnapshot() {
-  const key = who.kind === 'ok' ? who.me.key : undefined;
-  const snap = key ? await getSnapshot(key) : undefined;
-  restoreBtn.disabled = !snap;
-  snapLine.textContent = snap
-    ? t('opt.queue.snap', { t: new Date(snap.time).toLocaleString(), name: snap.listName, mode: t(snap.mode === 'all' ? 'queue.clearAll' : 'queue.removeWatched'), n: snap.removed.length })
-    : t('opt.queue.never');
-}
-
 async function renderProtocolError() {
   const err = (await browser.storage.local.get(PROTOCOL_ERROR_KEY))[PROTOCOL_ERROR_KEY] as { time: number; detail: string } | undefined;
   protoLine.replaceChildren();
@@ -504,32 +490,13 @@ function renderQueue(): Promise<void> {
       profile = key ? await getProfile(key) : { ...DEFAULT_PROFILE };
       renderWho();
       renderQueueControls();
-      await Promise.all([renderSnapshot(), renderProtocolError()]);
+      await renderProtocolError();
       if (profile.mode === 'playlist') await loadLists();
     } finally {
       queueBusy = undefined;
     }
   })();
   return queueBusy;
-}
-
-async function restoreSnapshot() {
-  if (who.kind !== 'ok' || !who.me.key) {
-    restoreMsg.textContent = t('opt.queue.needTab');
-    return;
-  }
-  const snap = await getSnapshot(who.me.key);
-  if (!snap) return;
-  restoreBtn.disabled = true;
-  restoreMsg.textContent = t('opt.queue.restoring');
-  try {
-    const n = await ask<number>(who.tab, { op: 'restore', key: who.me.key, snapshot: snap });
-    restoreMsg.textContent = t('opt.queue.restored', { n });
-  } catch (e) {
-    restoreMsg.textContent = t('opt.queue.restoreFail', { e: e instanceof Error ? e.message : String(e) });
-  } finally {
-    restoreBtn.disabled = false;
-  }
 }
 
 // Follow the YouTube tab: coming back to this page, or a YouTube tab loading.
@@ -549,7 +516,6 @@ browser.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && key && `${PROFILE_PREFIX}${key}` in changes) {
     void getProfile(key).then((p) => { profile = p; renderQueueControls(); if (p.mode === 'playlist') void loadLists(); });
   }
-  if (area === 'local' && key && `${SNAPSHOT_PREFIX}${key}` in changes) void renderSnapshot();
   if (area === 'local' && PROTOCOL_ERROR_KEY in changes) void renderProtocolError();
 });
 
@@ -562,7 +528,7 @@ for (const k of PLAYER_KEYS) {
   playerList.append(toggle(t(`opt.player.${k}`), settings.player[k], (v) => update((s) => { s.player[k] = v; })));
 }
 const resetPos = button(t('opt.player.resetPos'), async () => {
-  await browser.storage.local.remove(MINI_POS_KEY);
+  await browser.storage.local.remove([MINI_POS_KEY, FLOAT_POS_KEY]);
   flash(resetPos, t('opt.player.resetDone'));
 });
 group(player, t('opt.player.sub'), undefined, playerList, el('div', { className: 'inline mt-lg' }, resetPos));
@@ -654,7 +620,6 @@ const STORAGE_ROWS: {
     limit: () => limitInput(() => settings.storage.tldrCacheMB, (s, v) => { s.storage.tldrCacheMB = v; }),
     clear: () => clearCategory('tldrCache'),
   },
-  { cat: 'queueSnapshot', label: t('opt.storage.snapshot'), clear: () => clearCategory('queueSnapshot') },
   { cat: 'other', label: t('opt.storage.other') },
 ];
 

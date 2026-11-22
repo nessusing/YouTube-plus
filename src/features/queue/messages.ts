@@ -1,13 +1,10 @@
 // Settings page → queue content script in a YouTube tab (design §23: the
 // settings page reads lists, creates one and reads the identity through a tab).
 
-import type { Snapshot } from './core';
-
 export type QueueOp =
   | { op: 'whoami' }
   | { op: 'lists' }
-  | { op: 'create'; title: string }
-  | { op: 'restore'; key: string; snapshot: Snapshot };
+  | { op: 'create'; title: string };
 
 export type QueueRequest = { type: 'YouTube+/queue' } & QueueOp;
 

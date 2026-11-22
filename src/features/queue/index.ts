@@ -8,7 +8,7 @@ import { QUEUE_PAGE_CHECKS } from './consts';
 import { QueueController } from './controller';
 import { isQueueRequest, type QueueRequest } from './messages';
 import { playButton } from './play-button';
-import { playlistTools, restoreSnapshot } from './playlist-tools';
+import { playlistTools } from './playlist-tools';
 import { connect } from './rpc';
 
 export async function startQueue(): Promise<void> {
@@ -17,11 +17,12 @@ export async function startQueue(): Promise<void> {
   const bridge = connect();
   const { rpc } = bridge;
   let settings: Settings = await getSettings();
+  const tools = playlistTools(rpc, log, (listId, before, removed, playing) => ctl.noteRemoved(listId, before, removed, playing));
   const ctl = new QueueController(
     rpc,
     log,
     () => featureOn(settings, 'queue'),
-    playlistTools(rpc, log, () => ctl.me?.key),
+    tools,
     playButton(() => void ctl.play()),
   );
 
@@ -31,6 +32,8 @@ export async function startQueue(): Promise<void> {
   bridge.onPlayer((e) => ctl.onPlayer(e));
   bridge.onEdited((e) => ctl.onEdited(e));
   bridge.onPanel((id, snap) => ctl.onPanel(id, snap));
+  bridge.onTool((op, listId) => void tools.run(op, listId));
+  bridge.onDropped((d) => void ctl.onDropped(d));
 
   servePageChecks('queue', {
     [QUEUE_PAGE_CHECKS[0]]: async () => {
@@ -73,11 +76,6 @@ export async function startQueue(): Promise<void> {
         return rpc.editablePlaylists();
       case 'create':
         return rpc.createPrivatePlaylist(m.title);
-      case 'restore': {
-        const me = await rpc.identity();
-        if (me.key !== m.key) throw new Error(t('opt.queue.otherIdentity'));
-        return restoreSnapshot(rpc, log, m.snapshot);
-      }
     }
   };
   browser.runtime.onMessage.addListener((msg: unknown, _s, sendResponse) => {

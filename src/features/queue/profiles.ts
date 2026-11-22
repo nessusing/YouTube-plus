@@ -1,9 +1,9 @@
-// Per-identity queue settings and snapshots (design §22 Q17/Q22, §24.7).
+// Per-identity queue settings (design §22 Q17/Q22, §24.7).
 // An identity is a hash of ytcfg DATASYNC_ID (channel + Google account); the
 // raw ID is never stored. Used by the content script and the settings page.
 
-import { profileWithDefaults, type QueueProfile, type Snapshot } from './core';
-import { LEGACY_KEYS, PROFILE_PREFIX, SNAPSHOT_PREFIX } from './keys';
+import { profileWithDefaults, type QueueProfile } from './core';
+import { LEGACY_KEYS, PROFILE_PREFIX } from './keys';
 
 /** Who a YouTube tab is signed in as; from the page (main-world.ts). */
 export interface Identity {
@@ -17,7 +17,6 @@ export interface Identity {
 }
 
 export const profileKey = (id: string) => PROFILE_PREFIX + id;
-export const snapshotKey = (id: string) => SNAPSHOT_PREFIX + id;
 
 export async function getProfile(id: string): Promise<QueueProfile> {
   const k = profileKey(id);
@@ -44,20 +43,13 @@ export function onProfileChanged(id: string, cb: (p: QueueProfile) => void): () 
   return () => browser.storage.onChanged.removeListener(listener);
 }
 
-export async function getSnapshot(id: string): Promise<Snapshot | undefined> {
-  const k = snapshotKey(id);
-  return (await browser.storage.local.get(k))[k] as Snapshot | undefined;
-}
-
-export async function saveSnapshot(id: string, s: Snapshot): Promise<void> {
-  await browser.storage.local.set({ [snapshotKey(id)]: s });
-}
-
 /**
  * Drop what the old sync left behind. Its list was found by name, so it is not
  * carried over: every identity starts with no list chosen (design §29 step 2).
+ * Also the Clear all snapshots, gone with their undo (§47).
  */
 export async function removeLegacyKeys(): Promise<void> {
   await browser.storage.sync.remove(LEGACY_KEYS.sync);
-  await browser.storage.local.remove(LEGACY_KEYS.local);
+  const local = Object.keys(await browser.storage.local.get(null)).filter((k) => LEGACY_KEYS.localPrefixes.some((p) => k.startsWith(p)));
+  await browser.storage.local.remove([...LEGACY_KEYS.local, ...local]);
 }

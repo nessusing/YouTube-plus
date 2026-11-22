@@ -10,8 +10,8 @@ import { loopButton } from './loop-button';
 import { miniControls } from './mini-controls';
 import { miniDrag } from './mini-drag';
 import { miniMinimize } from './mini-minimize';
-import { SEL, THEATER_COOKIE } from './selectors';
-import { stickyPlayer } from './sticky';
+import { floatPlayer } from './float';
+import { SEL } from './selectors';
 
 import { PLAYER_PAGE_CHECKS } from './consts';
 
@@ -20,6 +20,7 @@ export async function startPlayer(): Promise<void> {
   await initLang(() => {
     loop.relabel();
     minimize.relabel();
+    float.relabel();
     if (!on.has('backToTop')) return;
     parts.backToTop.disable();
     parts.backToTop.enable();
@@ -27,10 +28,12 @@ export async function startPlayer(): Promise<void> {
   const log = createLogger('player');
   const loop = loopButton();
   const minimize = miniMinimize(log);
+  const float = floatPlayer(log);
   const parts: Record<keyof PlayerSettings, Toggleable> = {
     miniControls: miniControls(),
     freeDrag: miniDrag(log),
-    stickyPlayer: stickyPlayer(log),
+    // Setting key kept from the sticky player it replaced (§49).
+    stickyPlayer: float,
     backToTop: backToTop(),
     loopButton: loop,
     miniMinimize: minimize,
@@ -65,10 +68,10 @@ export async function startPlayer(): Promise<void> {
         : { status: 'fail', detail: t('check.notFound', { x: SEL.miniplayer }) },
     [PLAYER_PAGE_CHECKS[2]]: () => {
       if (location.pathname !== '/watch') return { status: 'skip', detail: t('check.player.onWatch') };
-      if (!document.querySelector(SEL.sizeButton)) return { status: 'fail', detail: t('check.notFound', { x: SEL.sizeButton }) };
-      if (!document.querySelector(`${SEL.watchFlexy}`)) return { status: 'fail', detail: t('check.notFound', { x: SEL.watchFlexy }) };
-      const pref = document.cookie.split('; ').some((c) => c.startsWith(`${THEATER_COOKIE}=`));
-      return { status: 'pass', detail: pref ? undefined : t('check.player.noCookie', { c: THEATER_COOKIE }) };
+      // The small window (§49) floats this box; its parent holds the place in the page.
+      const box = document.querySelector(SEL.floatBox);
+      if (!box?.querySelector(SEL.moviePlayer)) return { status: 'fail', detail: t('check.notFound', { x: `${SEL.floatBox} ${SEL.moviePlayer}` }) };
+      return { status: 'pass' };
     },
   });
 

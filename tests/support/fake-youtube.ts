@@ -12,12 +12,12 @@
 // Events the page script would post (edited, panel) are delivered a tick
 // later, like window.postMessage.
 
-import type { PlayerEvent, TakeoverState } from '@/features/queue/bridge';
+import type { MenuState, PlayerEvent, TakeoverState } from '@/features/queue/bridge';
 import { meetsExpect, parseEdit, type Expect, type ListAction, type ListEdit, type ListItem, type ListSnapshot } from '@/features/queue/core';
 import type { Identity } from '@/features/queue/profiles';
 import type { Playing, PlaylistData, PlaylistRef, Rpc, SyncResult } from '@/features/queue/rpc';
 
-interface Entry { videoId: string; setVideoId: string; removedAt?: number }
+interface Entry { videoId: string; setVideoId: string; removedAt?: number; /** watched, 0-100 (the resume overlay) */ percent?: number }
 interface List { id: string; title: string; editable: boolean; entries: Entry[]; /** reads see it from this time on */ from?: number }
 
 export interface Player {
@@ -54,6 +54,8 @@ export class FakeYouTube {
   player: Player = { mini: false, onWatch: false, ad: false };
   panel: Panel | undefined;
   takeover: TakeoverState = { decision: 'native', label: '' };
+  /** What the page script was told for the official ⋮ menus (§47). */
+  menu: Partial<MenuState> = {};
   /** The playlist manager's three methods are there (else syncList falls back). */
   playlistManager = true;
   /** After an attach, does the player report the list as its playlist? (to be confirmed in e2e) */
@@ -121,6 +123,11 @@ export class FakeYouTube {
       setTimeout(() => this.showPanel({ playlistId: listId, top, rows: this.visible(listId) }), 200);
     }
     return r;
+  }
+
+  /** How much of a video was watched, as reads show it (§47: ≥ 90 % counts as watched). */
+  watched(listId: string, videoId: string, percent: number): void {
+    for (const e of this.lists.get(listId)?.entries ?? []) if (e.videoId === videoId) e.percent = percent;
   }
 
   /** Another tab or the phone: the server changes, nothing tells this page. */
@@ -228,6 +235,9 @@ export class FakeYouTube {
     setTakeover: async (s: TakeoverState) => {
       this.takeover = s;
     },
+    setMenu: async (s: Partial<MenuState>) => {
+      this.menu = { ...this.menu, ...s };
+    },
     armRemoval: async (listId: string, setVideoId: string, videoId: string) => {
       this.armed = { listId, setVideoId, videoId };
     },
@@ -306,7 +316,7 @@ export class FakeYouTube {
     const now = Date.now();
     return (this.lists.get(id)?.entries ?? [])
       .filter((e) => e.removedAt === undefined || now < e.removedAt + this.removalLagMs)
-      .map(({ videoId, setVideoId }) => ({ videoId, setVideoId }));
+      .map(({ videoId, setVideoId, percent }) => (percent === undefined ? { videoId, setVideoId } : { videoId, setVideoId, percent }));
   }
 
   private apply(id: string, actions: ListAction[]): { ok: boolean; status: number; error?: string } {

@@ -1,12 +1,14 @@
 // MAIN world side of the queue feature (design §23): QueueTakeover (intercept
 // Add to queue, relabel it), PlayerWatch, page navigation, InnerTube calls,
-// and the bridge to the isolated script. Never break the page: every handler
+// the official ⋮ menus and drag out to delete (page-menus.ts, §47, §48), and
+// the bridge to the isolated script. Never break the page: every handler
 // swallows its own errors.
 
 import { isToMain, TAG, type PlayerEvent, type TakeoverState, type ToIso } from './bridge';
 import type { SyncResult } from './rpc';
-import { isLoopWrap, isQueueCommand, isWatchedHere, meetsExpect, nextRows, panelSnapshot, panelView, parseEdit, parseQueueAction, QUEUE_ICON, type Expect, type ListAction } from './core';
+import { isLoopWrap, isQueueCommand, isWatchedHere, meetsExpect, nextHasList, nextRows, panelSnapshot, panelView, parseEdit, parseQueueAction, QUEUE_ICON, type Expect, type ListAction } from './core';
 import * as it from './innertube';
+import { installPageMenus, setMenu, sheetItems, swapDrop } from './page-menus';
 
 const post = (m: Omit<ToIso, 'tag' | 'dir'>) => window.postMessage({ tag: TAG, dir: 'toIso', ...m }, location.origin);
 
@@ -56,24 +58,6 @@ const newMenu = new Map<Element, { orig: string; wrote: string }>();
 const oldMenu = new Set<AnyEl>();
 /** Hover buttons: renderer → original tooltip. */
 const tips = new WeakMap<Element, unknown>();
-
-/** The sheet's list items, from the component data on an ancestor (§21.3). */
-function sheetItems(el: Element): Record<string, unknown>[] | undefined {
-  let a: Element | null = el.parentElement;
-  for (let depth = 0; a && depth < 20; a = a.parentElement, depth++) {
-    const x = a as AnyEl;
-    const cands: unknown[] = [x.componentProps, (x.ytSheetViewModel as { componentProps?: unknown } | undefined)?.componentProps];
-    for (const k of Object.keys(x)) cands.push((x[k] as { componentProps?: unknown } | undefined)?.componentProps);
-    for (const cp of cands) {
-      if (!cp || typeof cp !== 'object') continue;
-      const raw = (cp as { data?: unknown }).data;
-      const data = typeof raw === 'function' ? (raw as () => unknown).call(cp) : raw;
-      const items = it.walk(data, 'listItems')[0];
-      if (Array.isArray(items)) return items as Record<string, unknown>[];
-    }
-  }
-  return undefined;
-}
 
 function isQueueListItem(entry: Record<string, unknown> | undefined): boolean {
   const vm = entry?.listItemViewModel as Record<string, unknown> | undefined;
@@ -470,6 +454,13 @@ async function syncList(listId: string, expect: Expect | undefined, attach: bool
         // Moved on meanwhile: the page has loaded what goes with the new video.
         const now = player();
         if (now?.getVideoData?.()?.video_id !== videoId || playingList(now) !== playing) return { how: 'none' };
+        if (!nextHasList(next)) {
+          // The list is empty now and `next` leaves it out: empty the panel
+          // the way its own Remove from playlist does. Nothing to attach.
+          if (!playing) return { how: 'none' };
+          dropFromPanel(listId, panelSnapshot(pm.getPlaylistData?.(), 0)?.snap.rows.map((r) => r.setVideoId) ?? []);
+          return { how: 'panel', videoId };
+        }
         // Playing the list already: a video not in it was just removed, not one to attach.
         const view = panelView(next, { videoId, title: data.title ?? '', author: data.author ?? '', duration: p.getDuration?.() ?? 0 }, !playing);
         if (!view) break;
@@ -487,6 +478,32 @@ async function syncList(listId: string, expect: Expect | undefined, attach: bool
     return { how: 'none' };
   }
   return onWatch && !mini && navigateIntoList(p, videoId, listId) ? { how: 'navigated', videoId } : { how: 'none' };
+}
+
+/**
+ * Take entries off the playlist panel now, the way the panel's own Remove
+ * from playlist does (measured 2026-11-21): the page drops the rows from the
+ * playlist manager's data at once and leaves playback alone; an emptied list
+ * shows "End of playlist", 1 / 0. Reads catch up later (§24.8). Only when the
+ * panel shows `listId`, and only entries it shows.
+ */
+function dropFromPanel(listId: string, setVideoIds: string[]): void {
+  try {
+    const pm = document.querySelector<PlaylistManager>('yt-playlist-manager');
+    const shown = panelSnapshot(pm?.getPlaylistData?.(), 0);
+    if (shown?.playlistId !== listId) return;
+    const have = new Set(shown.snap.rows.map((r) => r.setVideoId));
+    const ids = setVideoIds.filter((s) => have.has(s));
+    if (!ids.length) return;
+    const a = app();
+    a.dispatchEvent(new CustomEvent('yt-action', {
+      bubbles: true,
+      composed: true,
+      detail: { actionName: 'yt-playlist-remove-videos-action', optionalAction: false, args: [{ playlistRemoveVideosAction: { setVideoIds: ids } }, a, {}], returnValue: [] },
+    }));
+  } catch {
+    // reads and §24.8 catch up
+  }
 }
 
 /** Fallback: reload the video inside the list at the same second (about 1 s of buffering). */
@@ -521,33 +538,41 @@ function refreshPlaylist(): void {
 /**
  * The page edits lists itself too: Remove from playlist in the side panel,
  * Save to playlist, Add to queue straight into the list playing in the
- * miniplayer. Watch its edit_playlist requests (read only, never changed) and
- * report the ones that went through. YouTube looks `fetch` up on every call,
- * so wrapping it at document_start sees them.
+ * miniplayer. Watch its edit_playlist requests and report the ones that went
+ * through; reorders say nothing we count, so they are not reported. YouTube
+ * looks `fetch` up on every call, so wrapping it at document_start sees them.
+ * Some bodies are gzipped (it.bodyOf). Only a drop out of the panel (§48) gets
+ * its request changed, by swapDrop.
  */
 function installEditWatch(): void {
   const orig = window.fetch;
   window.fetch = function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
-    let body: Promise<string> | undefined;
+    let body: Promise<unknown> | undefined;
     try {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (url.includes('/youtubei/v1/browse/edit_playlist') && !it.isOwn(init)) {
-        if (typeof init?.body === 'string') body = Promise.resolve(init.body);
-        // Clone before the page's request reads its body.
-        else if (input instanceof Request) body = input.clone().text();
-      }
+      // Taken now, before the page's request reads its body.
+      if (url.includes('/youtubei/v1/browse/edit_playlist') && !it.isOwn(init)) body = it.bodyOf(input, init);
     } catch {
       body = undefined;
     }
-    const res = orig.call(this, input, init);
-    if (body) {
-      void Promise.all([body, res]).then(([b, r]) => {
-        if (!r.ok) return;
-        const edit = parseEdit(JSON.parse(b));
-        if (edit) post({ event: 'edited', edit } as ToIso);
-      }).catch(() => {});
+    const send = (): Promise<Response> => {
+      const res = orig.call(this, input, init);
+      if (body) {
+        void Promise.all([body, res]).then(([b, r]) => {
+          if (!r.ok) return;
+          const edit = parseEdit(b);
+          if (edit && (edit.has?.length || edit.gone?.length || edit.goneVideos?.length)) post({ event: 'edited', edit } as ToIso);
+        }).catch(() => {});
+      }
+      return res;
+    };
+    try {
+      const swapped = swapDrop(orig, input, init, body, send);
+      if (swapped) return swapped;
+    } catch {
+      // send it as it is
     }
-    return res;
+    return send();
   } as typeof window.fetch;
 }
 
@@ -577,7 +602,10 @@ const methods: Record<string, (...args: never[]) => unknown> = {
   editPlaylist: async (id: string, actions: ListAction[]) => {
     const r = await it.editPlaylist(id, actions);
     const edit = parseEdit({ playlistId: id, actions });
-    if (r.ok && edit) post({ event: 'edited', edit } as ToIso);
+    if (r.ok && edit) {
+      dropFromPanel(id, edit.gone ?? []);
+      post({ event: 'edited', edit } as ToIso);
+    }
     return r;
   },
   identity: it.identity,
@@ -585,6 +613,7 @@ const methods: Record<string, (...args: never[]) => unknown> = {
     state = s;
     relabel();
   },
+  setMenu,
   armRemoval,
   disarm: () => {
     armed = undefined;
@@ -611,6 +640,7 @@ export function startMainWorld(): void {
   installPanelWatch();
   installRelabel();
   installPlayerWatch();
+  installPageMenus({ takeover: () => state, post, dropFromPanel });
   window.addEventListener('message', async (e) => {
     if (e.source !== window || !isToMain(e.data)) return;
     const { id, method, args } = e.data;

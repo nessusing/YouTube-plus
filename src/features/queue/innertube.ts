@@ -30,6 +30,28 @@ export class InnerTubeError extends Error {
 const own = new WeakSet<object>();
 export const isOwn = (init: unknown): boolean => !!init && typeof init === 'object' && own.has(init);
 
+/**
+ * The JSON body of a page request. The page gzips some of them (the panel's
+ * reorder is a Request with Content-Encoding: gzip, measured 2026-11-21), so
+ * look at the bytes. Call it before the request goes out: a Request's body is
+ * cloned there and then. Undefined for bodies it cannot read.
+ */
+export function bodyOf(input: RequestInfo | URL, init?: RequestInit): Promise<unknown> | undefined {
+  let blob: Promise<Blob> | undefined;
+  const b = init?.body;
+  if (b !== undefined && b !== null) {
+    if (typeof b === 'string' || b instanceof Blob || b instanceof ArrayBuffer || ArrayBuffer.isView(b)) blob = Promise.resolve(new Blob([b as BlobPart]));
+  } else if (input instanceof Request) {
+    blob = input.clone().blob();
+  }
+  return blob?.then(async (x) => {
+    const head = new Uint8Array(await x.slice(0, 2).arrayBuffer());
+    const gz = head[0] === 0x1f && head[1] === 0x8b;
+    const text = gz ? await new Response(x.stream().pipeThrough(new DecompressionStream('gzip'))).text() : await x.text();
+    return JSON.parse(text) as unknown;
+  });
+}
+
 /** URL and init for one InnerTube POST, signed now. */
 export async function prepare(endpoint: string, body: Record<string, unknown>): Promise<{ url: string; init: RequestInit }> {
   const p3 = cookie('__Secure-3PAPISID');

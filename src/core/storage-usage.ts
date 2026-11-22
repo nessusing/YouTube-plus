@@ -3,16 +3,13 @@
 
 import { LOG_KEY } from './log';
 
-export type StorageCategory = 'log' | 'tldrCache' | 'queueSnapshot' | 'other';
+export type StorageCategory = 'log' | 'tldrCache' | 'other';
 
 export const TLDR_CACHE_PREFIX = 'tldr/cache/';
-/** Queue clear snapshots, one per identity: queue/snapshot/<identity> (design §25). */
-export const QUEUE_SNAPSHOT_PREFIX = 'queue/snapshot/';
 
 export function categoryOf(key: string): StorageCategory {
   if (key === LOG_KEY) return 'log';
   if (key.startsWith(TLDR_CACHE_PREFIX)) return 'tldrCache';
-  if (key.startsWith(QUEUE_SNAPSHOT_PREFIX)) return 'queueSnapshot';
   return 'other';
 }
 
@@ -28,7 +25,7 @@ export interface StorageUsage {
 }
 
 export function groupKeys(keys: string[]): Record<StorageCategory, string[]> {
-  const out: Record<StorageCategory, string[]> = { log: [], tldrCache: [], queueSnapshot: [], other: [] };
+  const out: Record<StorageCategory, string[]> = { log: [], tldrCache: [], other: [] };
   for (const k of keys) out[categoryOf(k)].push(k);
   return out;
 }
@@ -43,7 +40,6 @@ export async function getStorageUsage(): Promise<StorageUsage> {
     byCategory: {
       log: { bytes: await bytes(groups.log), count: Array.isArray(log) ? log.length : 0 },
       tldrCache: { bytes: await bytes(groups.tldrCache), count: groups.tldrCache.length },
-      queueSnapshot: { bytes: await bytes(groups.queueSnapshot) },
       other: { bytes: await bytes(groups.other) },
     },
   };

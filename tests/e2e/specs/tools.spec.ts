@@ -1,19 +1,19 @@
-// "Clear all" and "Remove watched" on our own playlist page (design §25):
-// confirm, batch removal, toast with Undo, snapshot restored from the
-// settings page.
-import type { BrowserContext, Page } from '@playwright/test';
+// "Clear all" and "Remove watched" in the official ⋮ menus (design §47):
+// on the page of a list we can edit, and while taking over, in the panel
+// showing the chosen list. No confirm, no undo. Dragging an entry out of the
+// panel removes it (§48).
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures';
 import { VIDEOS } from '../support/env';
-import { clickToastAction } from '../support/ui';
-import { lastToast, serviceWorker, storageGet, waitForVideo } from '../support/yt';
+import { lastToast, panelData, player, waitForVideo } from '../support/yt';
 
-const TOOLS = 'ytpp-playlist-tools';
+const OURS = ['Clear all', 'Remove watched'];
 
 /** The list's rows on its page (video IDs, in order); not the recommended videos under it, which have no setVideoId. */
 const pageRows = (page: Page) => page.locator('ytd-playlist-video-renderer').evaluateAll(
   (els) => els.map((e) => (e as HTMLElement & { data?: { videoId?: string; setVideoId?: string } }).data)
     .filter((d) => d?.setVideoId).map((d) => d!.videoId ?? ''),
-).catch(() => [] as string[]); // the page may be reloading (after Undo)
+).catch(() => [] as string[]);
 
 async function openList(page: Page, open: (p: string) => Promise<Page>, id: string, n: number): Promise<void> {
   // The page can come with the list as it was a few seconds ago (findings A4): load it again.
@@ -21,119 +21,146 @@ async function openList(page: Page, open: (p: string) => Promise<Page>, id: stri
     await open(`/playlist?list=${id}`);
     await expect.poll(() => pageRows(page).then((r) => r.length), { timeout: 8000 }).toBe(n);
   }).toPass({ timeout: 45_000 });
-  await expect(page.locator(`${TOOLS} .btn.more`)).toBeVisible({ timeout: 15_000 });
 }
 
-async function pick(page: Page, item: 'Clear all' | 'Remove watched'): Promise<void> {
-  await page.locator(`${TOOLS} .btn.more`).click();
-  await page.locator(`${TOOLS} .menu button`, { hasText: item }).click();
+/** The items of the menu open now (new-style sheet or old-style popup). */
+const menuItems = (page: Page) => page.locator('ytd-popup-container tp-yt-iron-dropdown:visible').locator('yt-list-item-view-model, ytd-menu-service-item-renderer');
+const itemTexts = async (page: Page) => (await menuItems(page).allInnerTexts()).map((s) => s.trim()).filter(Boolean);
+
+/** The ⋮ in the list page's header. */
+const headerMore = (page: Page) => page.locator('yt-page-header-renderer:visible').getByRole('button', { name: 'More actions' }).first();
+/** The ⋮ in the panel's header (beside the watch page). */
+const panelMore = (page: Page) => page.locator('ytd-watch-flexy ytd-playlist-panel-renderer').locator('#overflow-menu ytd-menu-renderer button, #overflow-menu-top-row ytd-menu-renderer button').locator('visible=true').first();
+
+async function openMenu(page: Page, more: Locator): Promise<string[]> {
+  await more.click();
+  await expect(menuItems(page).first()).toBeVisible({ timeout: 10_000 });
+  // Ours go in right as it opens; let the menu settle.
+  await page.waitForTimeout(300);
+  return itemTexts(page);
 }
 
-const dialog = (page: Page) => page.locator(`${TOOLS} .dialog`);
-
-async function snapshot(ctx: BrowserContext, key: string) {
-  return (await storageGet(ctx, 'local', `queue/snapshot/${key}`)) as { listId: string; mode: string; removed: { videoId: string; index: number }[] } | undefined;
+async function pick(page: Page, more: Locator, item: 'Clear all' | 'Remove watched'): Promise<void> {
+  const texts = await openMenu(page, more);
+  expect(texts.slice(-2)).toEqual(OURS);
+  await menuItems(page).filter({ hasText: item }).click();
+  await expect(page.locator('ytd-popup-container tp-yt-iron-dropdown:visible')).toHaveCount(0);
 }
 
-test('Clear all: confirm removes every entry; Undo puts them back in order', async ({ page, open, lists, ctx, account }) => {
-  const all = [VIDEOS.a, VIDEOS.b, VIDEOS.c, VIDEOS.d];
-  const id = await lists.create(all, 'clear');
-  await openList(page, open, id, 4);
-  await pick(page, 'Clear all');
-  await expect(dialog(page)).toContainText('Remove 4 videos from "YouTube+ e2e');
-  await dialog(page).locator('.ok').click();
-  await expect(dialog(page)).toBeHidden();
-  await expect.poll(() => lastToast(page)).toBe('Removed 4');
-  await expect.poll(() => pageRows(page)).toEqual([]);
-  await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([]);
-  const snap = await snapshot(ctx, account.me.key);
-  expect(snap?.listId).toBe(id);
-  expect(snap?.mode).toBe('all');
-  expect(snap?.removed).toEqual(all.map((videoId, index) => ({ videoId, index })));
+test.describe('list page', () => {
+  test('Clear all: at the bottom of the official ⋮; everything goes at once, no confirm', async ({ page, open, lists }) => {
+    const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c, VIDEOS.d], 'clear');
+    await openList(page, open, id, 4);
+    await pick(page, headerMore(page), 'Clear all');
+    await expect.poll(() => lastToast(page)).toBe('Removed 4');
+    await expect.poll(() => pageRows(page)).toEqual([]);
+    await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([]);
+  });
 
-  // Undo re-adds, moves each back to its place, and reloads the page.
-  await clickToastAction(page);
-  await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual(all);
-  await expect.poll(() => pageRows(page), { timeout: 30_000 }).toEqual(all);
+  test('Remove watched: only the entries watched to the end go', async ({ page, open, lists }) => {
+    // Watch VIDEOS.zoo (0:19) to the end first, so the history has it as watched.
+    await open(`/watch?v=${VIDEOS.zoo}`);
+    await waitForVideo(page, VIDEOS.zoo);
+    // Played through from the start: a jump to near the end is not always saved as watched.
+    await page.evaluate(() => { const v = document.querySelector<HTMLVideoElement>('#movie_player video')!; v.currentTime = 0; void v.play(); });
+    await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('#movie_player video')!.ended), { timeout: 45_000 }).toBe(true);
+    const id = await lists.create([VIDEOS.c, VIDEOS.zoo, VIDEOS.d], 'watched');
+    const pct = async () => Object.fromEntries((await lists.read(id)).items.map((i) => [i.videoId, (i as { percent?: number }).percent ?? 0]));
+    await expect.poll(async () => (await pct())[VIDEOS.zoo], { timeout: 30_000, message: 'the history shows it watched' }).toBeGreaterThanOrEqual(90);
+    const p = await pct();
+    test.skip(p[VIDEOS.c]! >= 90 || p[VIDEOS.d]! >= 90, `c / d show as watched in this account's history: ${JSON.stringify(p)}`);
+    await openList(page, open, id, 3);
+    await pick(page, headerMore(page), 'Remove watched');
+    await expect.poll(() => lastToast(page)).toBe('Removed 1');
+    await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([VIDEOS.c, VIDEOS.d]);
+    await expect.poll(() => pageRows(page)).toEqual([VIDEOS.c, VIDEOS.d]);
+  });
+
+  test('Remove watched with none watched: says so', async ({ page, open, lists }) => {
+    const id = await lists.create([VIDEOS.c, VIDEOS.d], 'none-watched');
+    await openList(page, open, id, 2);
+    await pick(page, headerMore(page), 'Remove watched');
+    await expect.poll(() => lastToast(page)).toBe('Nothing to remove');
+    expect(await lists.videos(id)).toEqual([VIDEOS.c, VIDEOS.d]);
+  });
+
+  test('a list we cannot edit: its ⋮ stays as YouTube made it', async ({ page, open }) => {
+    // Someone else's public list: the first playlist a search finds.
+    await open('/results?search_query=music+playlist&sp=EgIQAw%3D%3D');
+    const href = await page.locator('ytd-search a[href*="list=PL"]').first().getAttribute('href', { timeout: 30_000 });
+    const other = new URL(href!, 'https://www.youtube.com').searchParams.get('list')!;
+    await open(`/playlist?list=${other}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(3000);
+    const texts = await openMenu(page, headerMore(page));
+    for (const o of OURS) expect(texts).not.toContain(o);
+  });
 });
 
-test('Cancel: nothing is removed', async ({ page, open, lists }) => {
-  const id = await lists.create([VIDEOS.a, VIDEOS.b], 'cancel');
-  await openList(page, open, id, 2);
-  await pick(page, 'Clear all');
-  await dialog(page).locator('.cancel').click();
-  await expect(dialog(page)).toBeHidden();
-  await page.waitForTimeout(3000);
-  expect(await lists.videos(id)).toEqual([VIDEOS.a, VIDEOS.b]);
-  expect(await pageRows(page)).toEqual([VIDEOS.a, VIDEOS.b]);
+test.describe('panel beside the watch page', () => {
+  test('the chosen list: Clear all empties it, the video plays on', async ({ page, open, lists, setProfile }) => {
+    const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c], 'panel-clear');
+    await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
+    await open(`/watch?v=${VIDEOS.a}&list=${id}`);
+    await waitForVideo(page, VIDEOS.a);
+    await expect.poll(async () => (await panelData(page)).videoIds).toEqual([VIDEOS.a, VIDEOS.b, VIDEOS.c]);
+    const before = await player(page);
+    await pick(page, panelMore(page), 'Clear all');
+    await expect.poll(() => lastToast(page)).toBe('Removed 3');
+    await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([]);
+    const after = await player(page);
+    expect(after.videoId).toBe(VIDEOS.a);
+    expect(after.time).toBeGreaterThanOrEqual(before.time); // no reload
+  });
+
+  test('another list: its ⋮ stays as YouTube made it', async ({ page, open, lists, setProfile }) => {
+    const mine = await lists.create([VIDEOS.b], 'panel-mine');
+    const other = await lists.create([VIDEOS.a, VIDEOS.c], 'panel-other');
+    await setProfile({ mode: 'playlist', listId: mine, listName: 'x', removeWatched: true });
+    await open(`/watch?v=${VIDEOS.a}&list=${other}`);
+    await waitForVideo(page, VIDEOS.a);
+    await expect.poll(async () => (await panelData(page)).playlistId).toBe(other);
+    const texts = await openMenu(page, panelMore(page));
+    for (const o of OURS) expect(texts).not.toContain(o);
+  });
 });
 
-test('Remove watched: only the entries watched to the end go', async ({ page, open, lists }) => {
-  // Watch VIDEOS.zoo (0:19) to the end first, so the history has it as watched.
-  await open(`/watch?v=${VIDEOS.zoo}`);
-  await waitForVideo(page, VIDEOS.zoo);
-  // Played through from the start: a jump to near the end is not always saved as watched.
-  await page.evaluate(() => { const v = document.querySelector<HTMLVideoElement>('#movie_player video')!; v.currentTime = 0; void v.play(); });
-  await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('#movie_player video')!.ended), { timeout: 45_000 }).toBe(true);
-  const id = await lists.create([VIDEOS.c, VIDEOS.zoo, VIDEOS.d], 'watched');
-  const pct = async () => Object.fromEntries((await lists.read(id)).items.map((i) => [i.videoId, (i as { percent?: number }).percent ?? 0]));
-  await expect.poll(async () => (await pct())[VIDEOS.zoo], { timeout: 30_000, message: 'the history shows it watched' }).toBeGreaterThanOrEqual(90);
-  const p = await pct();
-  test.skip(p[VIDEOS.c]! >= 90 || p[VIDEOS.d]! >= 90, `c / d show as watched in this account's history: ${JSON.stringify(p)}`);
-  await openList(page, open, id, 3);
-  await pick(page, 'Remove watched');
-  await expect(dialog(page)).toContainText('Remove 1 videos');
-  await dialog(page).locator('.ok').click();
-  await expect.poll(() => lastToast(page)).toBe('Removed 1');
-  await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([VIDEOS.c, VIDEOS.d]);
-  await expect.poll(() => pageRows(page)).toEqual([VIDEOS.c, VIDEOS.d]);
-});
+test.describe('drag out of the panel (§48)', () => {
+  const rows = (page: Page) => page.locator('ytd-watch-flexy ytd-playlist-panel-renderer ytd-playlist-panel-video-renderer:visible');
 
-test('Remove watched with none watched: says so, asks nothing', async ({ page, open, lists }) => {
-  const id = await lists.create([VIDEOS.c, VIDEOS.d], 'none-watched');
-  await openList(page, open, id, 2);
-  await pick(page, 'Remove watched');
-  await expect.poll(() => lastToast(page)).toBe('No watched videos');
-  await expect(dialog(page)).toHaveCount(0);
-  expect(await lists.videos(id)).toEqual([VIDEOS.c, VIDEOS.d]);
-});
-
-test('the last clear can be restored from the settings page', async ({ page, open, lists, ctx }) => {
-  const all = [VIDEOS.a, VIDEOS.b, VIDEOS.c];
-  const id = await lists.create(all, 'restore');
-  await openList(page, open, id, 3);
-  await pick(page, 'Clear all');
-  await dialog(page).locator('.ok').click();
-  await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([]);
-
-  // The settings page works through the YouTube tab used last.
-  await page.bringToFront();
-  const extId = new URL((await serviceWorker(ctx)).url()).host;
-  const opts = await ctx.newPage();
-  try {
-    await opts.goto(`chrome-extension://${extId}/options.html`);
-    await opts.getByRole('tab', { name: 'Queue' }).click();
-    const group = opts.locator('section:visible').filter({ hasText: 'Last clear' });
-    await expect(group).toContainText('Clear all from "YouTube+ e2e', { timeout: 15_000 });
-    await expect(group).toContainText('3 videos');
-    await group.getByRole('button', { name: 'Resume' }).click();
-    await expect(group).toContainText('Restored 3 videos', { timeout: 60_000 });
-  } finally {
-    await opts.close();
+  /** Drag `row` by its handle to (x, y), slowly enough for the page's drag to follow. */
+  async function dragTo(page: Page, row: Locator, x: number, y: number): Promise<boolean> {
+    await row.hover();
+    const handle = row.locator('#reorder');
+    const b = (await handle.boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2 + 10, { steps: 5 });
+    await page.mouse.move(x, y, { steps: 20 });
+    const marked = await page.locator('ytd-app > ytd-playlist-panel-video-renderer.dragging[ytpp-drop-delete]').count() > 0;
+    await page.mouse.up();
+    return marked;
   }
-  await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual(all);
-});
 
-test('no tools on a list we cannot edit, nor off playlist pages', async ({ page, open }) => {
-  // Someone else's public list: the first playlist a search finds.
-  await open('/results?search_query=music+playlist&sp=EgIQAw%3D%3D');
-  const href = await page.locator('ytd-search a[href*="list=PL"]').first().getAttribute('href', { timeout: 30_000 });
-  const other = new URL(href!, 'https://www.youtube.com').searchParams.get('list')!;
-  await open(`/playlist?list=${other}`);
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 30_000 });
-  await page.waitForTimeout(3000);
-  await expect(page.locator(TOOLS)).toHaveCount(0);
-  await open(`/watch?v=${VIDEOS.a}`);
-  await page.waitForTimeout(2000);
-  await expect(page.locator(TOOLS)).toHaveCount(0);
+  test('dropped outside: the entry is removed, no notice; dropped inside: a plain reorder', async ({ page, open, lists, setProfile }) => {
+    const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c], 'drag');
+    await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
+    await open(`/watch?v=${VIDEOS.a}&list=${id}`);
+    await waitForVideo(page, VIDEOS.a);
+    await expect(rows(page)).toHaveCount(3, { timeout: 15_000 });
+    const toast = await lastToast(page);
+
+    // Out over the video: marked while outside, gone once dropped.
+    const video = (await page.locator('#movie_player').boundingBox())!;
+    expect(await dragTo(page, rows(page).nth(1), video.x + video.width / 2, video.y + video.height / 2)).toBe(true);
+    await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([VIDEOS.a, VIDEOS.c]);
+    await expect.poll(async () => (await panelData(page)).videoIds, { timeout: 30_000 }).toEqual([VIDEOS.a, VIDEOS.c]);
+    expect(await lastToast(page)).toBe(toast);
+    expect((await player(page)).videoId).toBe(VIDEOS.a);
+
+    // Within the panel: the last entry to the top, nothing removed.
+    const first = (await rows(page).first().boundingBox())!;
+    expect(await dragTo(page, rows(page).last(), first.x + first.width / 2, first.y + 5)).toBe(false);
+    await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([VIDEOS.c, VIDEOS.a]);
+  });
 });

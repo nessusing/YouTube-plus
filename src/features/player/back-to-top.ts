@@ -3,6 +3,7 @@
 
 import { t } from '@/core/i18n';
 import type { Toggleable } from '@/core/dom';
+import { BACK_TO_TOP_INSET, BACK_TO_TOP_SIZE } from './float-state';
 
 const SHOW_AFTER = 300;
 
@@ -23,7 +24,9 @@ export function backToTop(): Toggleable {
       if (host) return;
       host = document.createElement('ytpp-back-to-top');
       // Below ytd-miniplayer (2030) so the miniplayer covers it; above page content.
-      host.style.cssText = 'position:fixed;right:24px;bottom:24px;z-index:2025;width:48px;height:48px;pointer-events:none;';
+      // The watch page's small window (§49) sits left of it, measured from these.
+      host.style.cssText = `position:fixed;right:${BACK_TO_TOP_INSET}px;bottom:${BACK_TO_TOP_INSET}px;z-index:2025;`
+        + `width:${BACK_TO_TOP_SIZE}px;height:${BACK_TO_TOP_SIZE}px;pointer-events:none;`;
       const root = host.attachShadow({ mode: 'closed' });
       root.innerHTML = `
         <style>
@@ -43,7 +46,7 @@ export function backToTop(): Toggleable {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>`;
       btn = root.querySelector('button')!;
-      // Jump, not smooth: theater mode only switches back at scrollY === 0 (§37).
+      // Jump, not smooth (§37).
       btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'instant' }));
       document.documentElement.append(host);
       window.addEventListener('scroll', onScroll, { passive: true });

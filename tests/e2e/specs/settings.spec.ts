@@ -52,7 +52,7 @@ test('New…: creates a private playlist with the name given and chooses it', as
     await expect(listSelect(opts).locator('option[value="__new__"]')).toHaveCount(1, { timeout: 30_000 });
     await listSelect(opts).selectOption('__new__');
     const field = opts.getByRole('textbox', { name: 'Name of the new playlist' });
-    await expect(field).toHaveValue('YouTube+');
+    await expect(field).toHaveValue('YouTube +');
     await field.fill(name);
     await opts.getByRole('button', { name: 'Create' }).click();
     await expect(opts.locator('section:visible')).toContainText(`Created the private playlist "${name}" and chose it`, { timeout: 30_000 });

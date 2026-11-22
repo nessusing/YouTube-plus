@@ -20,7 +20,7 @@ describe('deciding to take over (§24.1)', () => {
     expect(h.ctl.decision).toBe('native');
     expect(h.yt.takeover.decision).toBe('native');
     expect(h.button.visible).toBe(false);
-    expect(h.tools.on).toBe(true); // clear all / remove watched work in both modes (§25)
+    expect(h.tools.on).toBe(true); // clear all / remove watched work in both modes (§47)
   });
 
   it('playlist mode with an editable list: takes over, relabels, shows the count', async () => {

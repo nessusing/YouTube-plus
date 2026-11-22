@@ -1,6 +1,6 @@
 // The player feature on real YouTube: miniplayer drag, snap and remembered
-// position (§35.2, §35.3), the watch page's sticky player and theater mode
-// (§36), back to top (§37). Miniplayer controls are in mini-controls.spec.ts.
+// position (§35.2, §35.3), the watch page's small window (§49, with §36.3 and
+// §36.4), back to top (§37). Miniplayer controls are in mini-controls.spec.ts.
 import type { BrowserContext, Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures';
 import { VIDEOS } from '../support/env';
@@ -99,7 +99,7 @@ test.describe('miniplayer drag', () => {
   });
 });
 
-// ---------- watch page ----------
+// ---------- watch page: the small window (§49) ----------
 
 async function cookie(ctx: BrowserContext, name: string): Promise<string | undefined> {
   return (await ctx.cookies('https://www.youtube.com')).find((c) => c.name === name)?.value;
@@ -109,68 +109,144 @@ async function setWide(ctx: BrowserContext, v: '0' | '1'): Promise<void> {
   await ctx.addCookies([{ name: 'wide', value: v, domain: '.youtube.com', path: '/', secure: true, expires: Math.floor(Date.now() / 1000) + 3600 * 24 * 365 }]);
 }
 
+const FLOAT_KEY = 'player/floatPos';
+/** float-state.ts: 400×225; right edge 24 + 48 + 16 px from the window's, bottom 24 px. */
+const FLOAT = { w: 400, h: 225, right: 88, bottom: 24 };
 const theater = (page: Page) => page.locator('ytd-watch-flexy').evaluate((f) => f.hasAttribute('theater'));
 const scrollTo = (page: Page, y: number) => page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), y);
 const scrollY = (page: Page) => page.evaluate(() => window.scrollY);
-const playerTop = (page: Page) => page.locator('#primary-inner > #player').evaluate((e) => e.getBoundingClientRect().top);
-const mastheadH = (page: Page) => page.evaluate(() => document.querySelector('#masthead-container')!.getBoundingClientRect().height);
+const floating = (page: Page) => page.evaluate(() => document.documentElement.hasAttribute('data-ytpp-float'));
+const floatBox = async (page: Page): Promise<Box> => (await page.locator('ytd-watch-flexy #player-container').boundingBox())!;
+const videoBox = async (page: Page): Promise<Box> => (await page.locator('#movie_player video').boundingBox())!;
+
+async function watch(page: Page, open: (p: string) => Promise<Page>, ctx: BrowserContext, wide: '0' | '1'): Promise<void> {
+  await setWide(ctx, wide);
+  await open(`/watch?v=${VIDEOS.a}`);
+  await waitForVideo(page, VIDEOS.a);
+  await page.evaluate(() => document.querySelector<HTMLVideoElement>('#movie_player video')!.play());
+}
+
+/** Scroll down to the comments and wait for the window to float. */
+async function floatIt(page: Page, y = 1500): Promise<void> {
+  await scrollTo(page, y);
+  await expect.poll(() => floating(page)).toBe(true);
+  await page.waitForTimeout(500);
+}
 
 test.describe('watch page', () => {
   let wideBefore: string | undefined;
-  test.beforeEach(async ({ ctx }) => { wideBefore = await cookie(ctx, 'wide'); });
-  test.afterEach(async ({ ctx }) => { if (wideBefore === '0' || wideBefore === '1') await setWide(ctx, wideBefore); });
-
-  test('normal mode: the player stays at the top while the page scrolls', async ({ page, open, ctx }) => {
-    await setWide(ctx, '0');
-    await open(`/watch?v=${VIDEOS.a}`);
-    await waitForVideo(page, VIDEOS.a);
-    expect(await theater(page)).toBe(false);
-    const mh = await mastheadH(page);
-    for (const y of [600, 1500]) {
-      await scrollTo(page, y);
-      await page.waitForTimeout(400);
-      expect(near(await playerTop(page), mh, 2), `player top at scrollY ${y}`).toBe(true);
-    }
+  test.beforeEach(async ({ ctx }) => {
+    wideBefore = await cookie(ctx, 'wide');
+    await storageRemove(ctx, 'local', FLOAT_KEY);
+  });
+  test.afterEach(async ({ ctx }) => {
+    if (wideBefore === '0' || wideBefore === '1') await setWide(ctx, wideBefore);
+    await storageRemove(ctx, 'local', FLOAT_KEY);
   });
 
-  test('theater mode: scrolling down switches to normal (stuck), back at the top it returns; the preference is kept', async ({ page, open, ctx }) => {
-    await setWide(ctx, '1');
-    await open(`/watch?v=${VIDEOS.a}`);
-    await waitForVideo(page, VIDEOS.a);
-    await expect.poll(() => theater(page)).toBe(true);
-    await page.mouse.move(700, 500);
-    await page.mouse.wheel(0, 800);
-    await expect.poll(() => theater(page)).toBe(false);
-    // Our switch must not throw the page back to the top.
-    await page.waitForTimeout(1000);
-    expect(await scrollY(page)).toBeGreaterThan(200);
-    expect(near(await playerTop(page), await mastheadH(page), 2), 'stuck').toBe(true);
-    await expect.poll(() => cookie(ctx, 'wide'), { message: 'preference unchanged' }).toBe('1');
+  test('normal mode: scrolled down, the player floats bottom right left of "back to top"; back up, it returns', async ({ page, open, ctx }) => {
+    await watch(page, open, ctx, '0');
+    const inPage = await floatBox(page);
+    await scrollTo(page, Math.round(inPage.height * 0.2));
+    await page.waitForTimeout(400);
+    expect(await floating(page), 'mostly on screen: stays').toBe(false);
+
+    await floatIt(page);
+    const vp = await viewport(page);
+    const b = await floatBox(page);
+    expect(near(b.width, FLOAT.w) && near(b.height, FLOAT.h), JSON.stringify(b)).toBe(true);
+    expect(near(vp.w - (b.x + b.width), FLOAT.right) && near(vp.h - (b.y + b.height), FLOAT.bottom), JSON.stringify({ vp, b })).toBe(true);
+    // YouTube refits the video to the window.
+    await expect.poll(async () => (await videoBox(page)).width <= FLOAT.w + 1).toBe(true);
+    expect((await player(page)).paused, 'keeps playing').toBe(false);
+
     await scrollTo(page, 0);
+    await expect.poll(() => floating(page)).toBe(false);
+    await expect.poll(async () => near((await floatBox(page)).width, inPage.width)).toBe(true);
+    await expect.poll(async () => (await videoBox(page)).width > FLOAT.w + 100).toBe(true);
+  });
+
+  test('theater mode: floats too, and stays in theater mode', async ({ page, open, ctx }) => {
+    await watch(page, open, ctx, '1');
     await expect.poll(() => theater(page)).toBe(true);
-    await page.waitForTimeout(2000);
+    await floatIt(page);
+    expect(await theater(page)).toBe(true);
+    const b = await floatBox(page);
+    expect(near(b.width, FLOAT.w) && near(b.height, FLOAT.h), JSON.stringify(b)).toBe(true);
+    // On top of the right column's thumbnails (in theater mode they used to cover it).
+    const onTop = await page.evaluate(() => {
+      const box = document.querySelector('ytd-watch-flexy #player-container')!;
+      const r = box.getBoundingClientRect();
+      return [[0.5, 0.5], [0.9, 0.5], [0.5, 0.9]].map(([x, y]) => box.contains(document.elementFromPoint(r.left + r.width * x!, r.top + r.height * y!)));
+    });
+    expect(onTop, 'nothing covers the window').toEqual([true, true, true]);
+    await scrollTo(page, 0);
+    await expect.poll(() => floating(page)).toBe(false);
+    expect(await theater(page)).toBe(true);
     expect(await cookie(ctx, 'wide')).toBe('1');
   });
 
-  test('stuck in normal mode, pressing t: back to the top in theater mode, saved as the preference', async ({ page, open, ctx }) => {
-    await setWide(ctx, '0');
-    await open(`/watch?v=${VIDEOS.a}`);
-    await waitForVideo(page, VIDEOS.a);
-    await scrollTo(page, 900);
-    await page.waitForTimeout(500);
+  test('floating, pressing t: back to the top in theater mode', async ({ page, open, ctx }) => {
+    await watch(page, open, ctx, '0');
+    await floatIt(page, 900);
     // The shortcut goes to the page, not to a text field.
-    await page.locator('#movie_player').click({ position: { x: 20, y: 20 } }).catch(() => {});
-    await page.evaluate(() => document.querySelector<HTMLVideoElement>('#movie_player video')!.play());
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
     await page.keyboard.press('t');
     await expect.poll(() => theater(page)).toBe(true);
     await expect.poll(() => scrollY(page)).toBe(0);
-    await expect.poll(() => cookie(ctx, 'wide')).toBe('1');
+    await expect.poll(() => floating(page)).toBe(false);
   });
 
-  test('stuck: a timestamp link seeks without scrolling the page', async ({ page, open, ctx }) => {
-    await setWide(ctx, '0');
-    await open(`/watch?v=${VIDEOS.a}`);
-    await waitForVideo(page, VIDEOS.a);
+  test('floating: the Expand button goes back to the top', async ({ page, open, ctx }) => {
+    await watch(page, open, ctx, '0');
+    await floatIt(page);
+    const b = await floatBox(page);
+    // Controls (and the button) show while the mouse moves over the window.
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.move(b.x + 20, b.y + 20, { steps: 4 });
+    await page.locator('#movie_player .ytpp-float-expand').click();
+    await expect.poll(() => scrollY(page)).toBe(0);
+    await expect.poll(() => floating(page)).toBe(false);
+    expect((await player(page)).paused, 'the click must not pause').toBe(false);
+  });
+
+  test('floating: dragged to the middle it stays there, keeps playing, and is remembered', async ({ page, open, ctx }) => {
+    await watch(page, open, ctx, '0');
+    await floatIt(page);
+    const vp = await viewport(page);
+    const b = await floatBox(page);
+    const x = Math.round(vp.w / 2 - b.width / 2);
+    const y = Math.round(vp.h / 2 - b.height / 2);
+    // A spot on the picture, clear of the top buttons and the bottom bar.
+    const sx = b.x + b.width * 0.5;
+    const sy = b.y + b.height * 0.45;
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    for (let i = 1; i <= 12; i++) await page.mouse.move(sx + ((x - b.x) * i) / 12, sy + ((y - b.y) * i) / 12);
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+    const after = await floatBox(page);
+    expect(near(after.x, x) && near(after.y, y), JSON.stringify({ x, y, after })).toBe(true);
+    expect((await player(page)).paused, 'a drag must not pause').toBe(false);
+    await expect.poll(() => storageGet(ctx, 'local', FLOAT_KEY)).toBeTruthy();
+
+    // Back in the page and out again: same place.
+    await scrollTo(page, 0);
+    await expect.poll(() => floating(page)).toBe(false);
+    await floatIt(page);
+    const again = await floatBox(page);
+    expect(near(again.x, x) && near(again.y, y), JSON.stringify({ x, y, again })).toBe(true);
+
+    // What "Reset … positions" in the settings does.
+    await storageRemove(ctx, 'local', FLOAT_KEY);
+    await expect.poll(async () => {
+      const r = await floatBox(page);
+      return near(vp.w - (r.x + r.width), FLOAT.right) && near(vp.h - (r.y + r.height), FLOAT.bottom);
+    }).toBe(true);
+  });
+
+  test('floating: a timestamp link seeks without scrolling the page', async ({ page, open, ctx }) => {
+    await watch(page, open, ctx, '0');
     // A timestamp like the ones YouTube makes in descriptions and comments.
     await page.locator('#primary-inner').evaluate((inner, v) => {
       const a = document.createElement('a');
@@ -185,12 +261,12 @@ test.describe('watch page', () => {
       else inner.append(a);
     }, VIDEOS.a);
     const ts = page.locator('#ytpp-e2e-ts');
-    // Scroll so the link sits in the lower half of the window, well below the stuck player.
-    await ts.evaluate((a) => window.scrollTo({ top: window.scrollY + a.getBoundingClientRect().top - window.innerHeight * 0.75, behavior: 'instant' }));
+    // Scroll so the link sits near the top of the window, with the player floating.
+    await ts.evaluate((a) => window.scrollTo({ top: window.scrollY + a.getBoundingClientRect().top - window.innerHeight * 0.3, behavior: 'instant' }));
+    await expect.poll(() => floating(page)).toBe(true);
     await page.waitForTimeout(500);
     // Measure and click with the mouse: a locator click could scroll first.
     const y = await scrollY(page);
-    expect(y).toBeGreaterThan(0);
     const box = (await ts.boundingBox())!;
     await page.mouse.click(box.x + 10, box.y + box.height / 2);
     await expect.poll(async () => Math.round((await player(page)).time)).toBeGreaterThanOrEqual(95);

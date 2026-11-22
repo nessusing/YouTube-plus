@@ -1,7 +1,7 @@
 // Isolated-world client for the MAIN world script.
 
-import { isToIso, TAG, type PlayerEvent, type TakeoverState } from './bridge';
-import type { Expect, ListAction, ListEdit, ListItem, ListSnapshot } from './core';
+import { isToIso, TAG, type Dropped, type MenuState, type PlayerEvent, type TakeoverState } from './bridge';
+import type { Expect, ListAction, ListEdit, ListItem, ListSnapshot, ToolOp } from './core';
 import type { Identity } from './profiles';
 
 export interface PlaylistRef { id: string; title: string; privacy: string }
@@ -17,6 +17,8 @@ export interface Rpc {
   editPlaylist(id: string, actions: ListAction[]): Promise<{ ok: boolean; status: number; error?: string; added: string[] }>;
   identity(): Promise<Identity>;
   setTakeover(s: TakeoverState): Promise<void>;
+  /** What the official ⋮ menus get (§47); merged into what the page script has. */
+  setMenu(s: Partial<MenuState>): Promise<void>;
   armRemoval(listId: string, setVideoId: string, videoId: string): Promise<void>;
   disarm(): Promise<void>;
   /** `keepPlace`: the video is the one playing, carry on from where it is (§24.4). */
@@ -42,6 +44,8 @@ export interface Bridge {
   onPlayer(cb: (e: PlayerEvent) => void): void;
   onEdited(cb: (e: ListEdit) => void): void;
   onPanel(cb: (playlistId: string, snap: ListSnapshot) => void): void;
+  onTool(cb: (op: ToolOp, listId: string) => void): void;
+  onDropped(cb: (d: Dropped) => void): void;
   ready: Promise<void>;
 }
 
@@ -54,6 +58,8 @@ export function connect(timeoutMs = 20000): Bridge {
   const playerCbs: ((e: PlayerEvent) => void)[] = [];
   const editCbs: ((e: ListEdit) => void)[] = [];
   const panelCbs: ((playlistId: string, snap: ListSnapshot) => void)[] = [];
+  const toolCbs: ((op: ToolOp, listId: string) => void)[] = [];
+  const droppedCbs: ((d: Dropped) => void)[] = [];
   let markReady!: () => void;
   const ready = new Promise<void>((r) => (markReady = r));
 
@@ -67,6 +73,8 @@ export function connect(timeoutMs = 20000): Bridge {
       else if (d.event === 'player') playerCbs.forEach((cb) => cb(d.payload));
       else if (d.event === 'edited') editCbs.forEach((cb) => cb(d.edit));
       else if (d.event === 'panel') panelCbs.forEach((cb) => cb(d.playlistId, d.snap));
+      else if (d.event === 'tool') toolCbs.forEach((cb) => cb(d.op, d.listId));
+      else if (d.event === 'dropped') droppedCbs.forEach((cb) => cb(d.drop));
       else if (d.event === 'ready') markReady();
       return;
     }
@@ -100,6 +108,8 @@ export function connect(timeoutMs = 20000): Bridge {
     onPlayer: (cb) => playerCbs.push(cb),
     onEdited: (cb) => editCbs.push(cb),
     onPanel: (cb) => panelCbs.push(cb),
+    onTool: (cb) => toolCbs.push(cb),
+    onDropped: (cb) => droppedCbs.push(cb),
     ready,
   };
 }

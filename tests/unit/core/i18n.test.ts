@@ -9,7 +9,7 @@ describe('t', () => {
     expect(t('queue.deleted', { n: 3 })).toBe('已删除 3 个');
     setLang('en');
     expect(t('verdict.match')).toBe('Title matches');
-    expect(t('queue.confirmRemove', { n: 2, title: 'L' })).toBe('Remove 2 videos from "L"');
+    expect(t('queue.deletedPartly', { n: 2, m: 1 })).toBe('Removed 2, 1 failed; see the YouTube+ log');
   });
 });
 

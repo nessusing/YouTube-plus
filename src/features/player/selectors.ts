@@ -9,7 +9,10 @@ export const SEL = {
   chromeBottom: '.ytp-chrome-bottom',
   sizeButton: '.ytp-size-button',
   watchFlexy: 'ytd-watch-flexy',
-  stickyTarget: '#primary-inner > #player',
+  /** Holds #movie_player on the watch page (normal and theater); floats as the small window (§49). */
+  floatBox: 'ytd-watch-flexy #player-container',
+  /** Its parent, which keeps its place in the page (normal: #player-container-inner, theater: #player-full-bleed-container). */
+  floatPlace: 'ytd-watch-flexy :has(> #player-container)',
   miniplayer: 'ytd-miniplayer',
   miniVideoArea: 'ytd-miniplayer-player-container',
   miniResizer: '[class*="ytdMiniplayerComponentResizer"]',
@@ -26,5 +29,3 @@ export const SEL = {
   /** Inside the miniplayer, pressing on these must not start a window drag. */
   noDrag: 'button, a, input, .ytp-chrome-bottom, .ytp-settings-menu, .ytp-popup, .ytp-miniplayer-controls, [class*="Resizer"]',
 } as const;
-
-export const THEATER_COOKIE = 'wide';

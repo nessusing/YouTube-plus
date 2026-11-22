@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chunk, decideTakeover, DEFAULT_PROFILE, isQueueCommand, countWith, isLoopWrap, isWatchedHere, leftCountsAsWatched, listSignature, panelSnapshot, meetsExpect, mergeExpect, nextAfter, nextRows, notInList, panelView, parseEdit, parseQueueAction, queueView, planClear,
-  planUndoMoves, playlistPage, playlistTitle, profileWithDefaults, type ListItem, type TakeoverInput,
+  chunk, clearNotice, decideTakeover, DEFAULT_PROFILE, isQueueCommand, countWith, isLoopWrap, isWatchedHere, leftCountsAsWatched, listSignature, panelSnapshot, meetsExpect, mergeExpect, moveToRemove, nextAfter, nextAfterRemoved, nextHasList, nextRows, notInList, panelView, parseEdit, parseQueueAction, queueView, planClear,
+  playlistPage, playlistTitle, profileWithDefaults, removedPlaying, TOOL_KEY, toolOf, withTools, type ListItem, type TakeoverInput,
 } from '@/features/queue/core';
 
 // Recorded 2026-11-20 on real lists, pruned to the structure.
@@ -275,24 +275,68 @@ describe('watched', () => {
   });
 });
 
-describe('clear and undo', () => {
+describe('clear all / remove watched (§47)', () => {
   const items = [L('a', 'l1', 95), L('b', 'l2', 10), L('c', 'l3', 100), L('d', 'l4')];
-  it('picks all or only watched (≥ 90 %), recording original positions', () => {
-    expect(planClear(items, 'all').removed.map((r) => r.index)).toEqual([0, 1, 2, 3]);
-    expect(planClear(items, 'watched').removed).toEqual([{ videoId: 'a', index: 0 }, { videoId: 'c', index: 2 }]);
+  it('picks all or only watched (≥ 90 %)', () => {
+    expect(planClear(items, 'all').map((i) => i.setVideoId)).toEqual(['l1', 'l2', 'l3', 'l4']);
+    expect(planClear(items, 'watched').map((i) => i.setVideoId)).toEqual(['l1', 'l3']);
   });
-  it('moves re-added items back to where they were', () => {
-    // after removing a and c: [b, d]; re-added at the end: [b, d, a', c']
-    const after = [L('b', 'l2'), L('d', 'l4'), L('a', 'n1'), L('c', 'n3')];
-    const moves = planUndoMoves(after, ['n1', 'n3'], [{ videoId: 'a', index: 0 }, { videoId: 'c', index: 2 }]);
-    expect(moves).toEqual([{ setVideoId: 'n1', afterSetVideoId: undefined }, { setVideoId: 'n3', afterSetVideoId: 'l2' }]);
-    // applying them yields a, b, c, d
-    const order = after.map((i) => i.setVideoId);
-    for (const m of moves) {
-      order.splice(order.indexOf(m.setVideoId), 1);
-      order.splice(m.afterSetVideoId ? order.indexOf(m.afterSetVideoId) + 1 : 0, 0, m.setVideoId);
-    }
-    expect(order).toEqual(['n1', 'l2', 'n3', 'l4']);
+  it('says what happened', () => {
+    expect(clearNotice(0, 0)).toEqual({ key: 'queue.nothing', n: 0, m: 0 });
+    expect(clearNotice(3, 0)).toEqual({ key: 'queue.deleted', n: 3, m: 0 });
+    expect(clearNotice(150, 50)).toEqual({ key: 'queue.deletedPartly', n: 100, m: 50 });
+    expect(clearNotice(2, 2)).toEqual({ key: 'queue.failed', n: 0, m: 2 });
+  });
+  it('reads our menu command, and nothing else', () => {
+    expect(toolOf({ [TOOL_KEY]: { op: 'watched', listId: 'PL1' } })).toEqual({ op: 'watched', listId: 'PL1' });
+    expect(toolOf({ [TOOL_KEY]: { op: 'other', listId: 'PL1' } })).toBeUndefined();
+    expect(toolOf({ watchEndpoint: { videoId: 'v' } })).toBeUndefined();
+    expect(toolOf(undefined)).toBeUndefined();
+  });
+  it('puts our items at the bottom once, or takes them out', () => {
+    const ours = (x: string) => x.startsWith('our');
+    expect(withTools(['shuffle', 'our1', 'delete'], ['our1', 'our2'], ours)).toEqual(['shuffle', 'delete', 'our1', 'our2']);
+    expect(withTools(['shuffle', 'our1', 'our2'], [], ours)).toEqual(['shuffle']);
+  });
+});
+
+describe('drag out to delete (§48)', () => {
+  const move = { playlistId: 'PL1', context: { x: 1 }, actions: [{ action: 'ACTION_MOVE_VIDEO_AFTER', setVideoId: 'S2', movedSetVideoIdPredecessor: 'S1' }] };
+  it('turns the reorder of the dropped entry into its removal, keeping the rest of the request', () => {
+    expect(moveToRemove(move, 'PL1', 'S2')).toEqual({ playlistId: 'PL1', context: { x: 1 }, actions: [{ action: 'ACTION_REMOVE_VIDEO', setVideoId: 'S2' }] });
+  });
+  it('leaves other requests alone', () => {
+    expect(moveToRemove(move, 'PL1', 'S9')).toBeUndefined();
+    expect(moveToRemove(move, 'PL2', 'S2')).toBeUndefined();
+    expect(moveToRemove({ playlistId: 'PL1', actions: [{ action: 'ACTION_REMOVE_VIDEO', setVideoId: 'S2' }] }, 'PL1', 'S2')).toBeUndefined();
+    expect(moveToRemove('nope', 'PL1', 'S2')).toBeUndefined();
+  });
+});
+
+describe('nextHasList', () => {
+  it('an empty list: `next` leaves the list out (measured 2026-11-21)', () => {
+    expect(nextHasList({ contents: { twoColumnWatchNextResults: { results: {}, autoplay: {} } } })).toBe(false);
+    expect(nextHasList({ contents: { twoColumnWatchNextResults: { playlist: { playlist: { contents: [] } } } } })).toBe(true);
+    expect(nextHasList(undefined)).toBe(false);
+  });
+});
+
+describe('the entry playing removed (§47, §48)', () => {
+  const before = [L('a', 'l1'), L('b', 'l2'), L('c', 'l3'), L('d', 'l4')];
+  it('remembers the entries up to the one playing, if it was removed', () => {
+    expect(removedPlaying(before, ['l1', 'l3'], { videoId: 'c' })).toEqual(['l1', 'l2', 'l3']);
+    expect(removedPlaying(before, ['l1'], { videoId: 'c' })).toBeUndefined();
+    expect(removedPlaying(before, ['l1'], { videoId: 'x' })).toBeUndefined();
+  });
+  it('picks the duplicate nearest the player index', () => {
+    const dup = [L('a', 'l1'), L('b', 'l2'), L('a', 'l3')];
+    expect(removedPlaying(dup, ['l3'], { videoId: 'a', index: 2 })).toEqual(['l1', 'l2', 'l3']);
+    expect(removedPlaying(dup, ['l3'], { videoId: 'a', index: 0 })).toBeUndefined();
+  });
+  it('next: the first entry after it that is left, or one added since', () => {
+    expect(nextAfterRemoved([L('b', 'l2'), L('d', 'l4')], ['l1', 'l2', 'l3'])?.setVideoId).toBe('l4');
+    expect(nextAfterRemoved([L('b', 'l2')], ['l1', 'l2', 'l3'])).toBeUndefined();
+    expect(nextAfterRemoved([L('e', 'n1')], ['l1', 'l2', 'l3', 'l4'])?.setVideoId).toBe('n1');
   });
 });
 

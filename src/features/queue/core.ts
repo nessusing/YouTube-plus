@@ -1,4 +1,4 @@
-// Queue core (design §24, §25). Pure: no DOM, no fetch, no storage.
+// Queue core (design §24, §47, §48). Pure: no DOM, no fetch, no storage.
 
 export interface ListItem { videoId: string; setVideoId: string; /** 0-100, from the resume overlay */ percent?: number }
 
@@ -218,6 +218,15 @@ export function queueView(next: unknown, now: { videoId: string; title: string; 
   return { list: view, autoplay: ap };
 }
 
+/**
+ * Whether a `next` response carries the list at all. For an empty list it
+ * leaves the list out entirely (measured 2026-11-21).
+ */
+export function nextHasList(next: unknown): boolean {
+  const two = obj(obj(next)?.contents)?.twoColumnWatchNextResults as Obj | undefined;
+  return !!obj(obj(two?.playlist)?.playlist);
+}
+
 /** The list's entries in a `next` response. */
 export function nextRows(next: unknown): ListItem[] {
   const two = obj(obj(next)?.contents)?.twoColumnWatchNextResults as Obj | undefined;
@@ -406,38 +415,78 @@ export function listSignature(items: ListItem[]): string {
   return items.map((i) => i.setVideoId || i.videoId).join(',');
 }
 
-// ---- clear all / remove watched (§25) ----
+// ---- clear all / remove watched (§47), drag out to delete (§48) ----
 
-export interface Snapshot {
-  listId: string;
-  listName: string;
-  time: number;
-  mode: 'all' | 'watched';
-  /** removed videos with their original index in the list */
-  removed: { videoId: string; index: number }[];
+export type ToolOp = 'all' | 'watched';
+
+/** What to remove: everything, or what was watched elsewhere (≥ 90 %). */
+export function planClear(items: ListItem[], op: ToolOp): ListItem[] {
+  return items.filter((it) => op === 'all' || isWatchedElsewhere(it));
 }
 
-export function planClear(items: ListItem[], mode: 'all' | 'watched'): { remove: ListItem[]; removed: Snapshot['removed'] } {
-  const picked = items.map((it, index) => ({ it, index })).filter(({ it }) => mode === 'all' || isWatchedElsewhere(it));
-  return { remove: picked.map((p) => p.it), removed: picked.map((p) => ({ videoId: p.it.videoId, index: p.index })) };
+/** The notice after a clear: removed N, or N removed and M failed, or nothing to remove. */
+export function clearNotice(picked: number, failed: number): { key: 'queue.nothing' | 'queue.deleted' | 'queue.deletedPartly' | 'queue.failed'; n: number; m: number } {
+  const n = picked - failed;
+  if (!picked) return { key: 'queue.nothing', n: 0, m: 0 };
+  if (!failed) return { key: 'queue.deleted', n, m: 0 };
+  return { key: n ? 'queue.deletedPartly' : 'queue.failed', n, m: failed };
 }
 
 /**
- * After re-adding (appended at the end), move each restored item back to its
- * original index. `after` = list as it is now (restored items at the end, in
- * snapshot order); returns moves to apply in order.
+ * Our marker in the command of a menu item we add to the official ⋮ (§47):
+ * `{ [TOOL_KEY]: { op, listId } }`.
  */
-export function planUndoMoves(after: ListItem[], restoredSetIds: string[], removed: Snapshot['removed']): { setVideoId: string; afterSetVideoId?: string }[] {
-  const order = after.map((i) => i.setVideoId);
-  const moves: { setVideoId: string; afterSetVideoId?: string }[] = [];
-  const pairs = removed.map((r, k) => ({ index: r.index, setId: restoredSetIds[k]! })).filter((p) => p.setId).sort((a, b) => a.index - b.index);
-  for (const p of pairs) {
-    const target = Math.min(p.index, order.length - 1);
-    const from = order.indexOf(p.setId);
-    if (from === target) continue;
-    order.splice(from, 1);
-    order.splice(target, 0, p.setId);
-    moves.push({ setVideoId: p.setId, afterSetVideoId: target === 0 ? undefined : order[target - 1] });
-  }
-  return moves;
+export const TOOL_KEY = 'ytppQueueTool';
+
+export interface ToolCommand { op: ToolOp; listId: string }
+
+export function toolOf(cmd: unknown): ToolCommand | undefined {
+  const t = obj(obj(cmd)?.[TOOL_KEY]);
+  return t && (t.op === 'all' || t.op === 'watched') && typeof t.listId === 'string' ? { op: t.op, listId: t.listId } : undefined;
+}
+
+/**
+ * A menu's items with ours taken out, and put back at the bottom when they
+ * belong there: the popup and the page reuse menus across lists (§21.3).
+ */
+export function withTools<T>(items: T[], ours: T[], isOurs: (x: T) => boolean): T[] {
+  return [...items.filter((x) => !isOurs(x)), ...ours];
+}
+
+/**
+ * The page's own reorder request after a drop outside the panel (§48): the
+ * entry moved back where it was. Swap that move for a removal; undefined when
+ * the request is not that one.
+ */
+export function moveToRemove(body: unknown, listId: string, setVideoId: string): Record<string, unknown> | undefined {
+  const b = obj(body);
+  if (!b || b.playlistId !== listId || !Array.isArray(b.actions)) return undefined;
+  let hit = false;
+  const actions = b.actions.map((a) => {
+    const x = obj(a);
+    if (x?.action !== 'ACTION_MOVE_VIDEO_AFTER' || x.setVideoId !== setVideoId) return a;
+    hit = true;
+    return { action: 'ACTION_REMOVE_VIDEO', setVideoId };
+  });
+  return hit ? { ...b, actions } : undefined;
+}
+
+/**
+ * The video playing was among the entries just removed (§47, §48): the entries
+ * up to and including it, by setVideoId, from the list as it was. What plays
+ * after it is then the first entry not among them. Undefined when the entry
+ * playing was not removed. `index` picks between duplicates.
+ */
+export function removedPlaying(before: ListItem[], removed: string[], playing: { videoId?: string; index?: number }): string[] | undefined {
+  const hits = before.map((it, i) => (it.videoId === playing.videoId ? i : -1)).filter((i) => i >= 0);
+  if (!hits.length) return undefined;
+  const at = playing.index === undefined ? hits[0]! : hits.reduce((a, b) => (Math.abs(b - playing.index!) < Math.abs(a - playing.index!) ? b : a));
+  if (!removed.includes(before[at]!.setVideoId)) return undefined;
+  return before.slice(0, at + 1).map((i) => i.setVideoId);
+}
+
+/** After a removed entry that was playing: the first entry that came after it, or was added since. */
+export function nextAfterRemoved(items: ListItem[], upTo: string[]): ListItem | undefined {
+  const done = new Set(upTo);
+  return items.find((i) => !done.has(i.setVideoId));
 }

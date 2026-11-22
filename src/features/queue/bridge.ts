@@ -2,7 +2,7 @@
 // world script. Both sides live on youtube.com; the tag keeps our messages
 // apart from the page's.
 
-import type { ListEdit, ListSnapshot, Takeover } from './core';
+import type { ListEdit, ListItem, ListSnapshot, Takeover, ToolOp } from './core';
 
 export const TAG = 'ytpp-queue';
 
@@ -18,6 +18,10 @@ export type ToIso =
   | { tag: typeof TAG; dir: 'toIso'; event: 'edited'; edit: ListEdit }
   /** The page put this list in the playlist panel (§24.8). */
   | { tag: typeof TAG; dir: 'toIso'; event: 'panel'; playlistId: string; snap: ListSnapshot }
+  /** Our Clear all / Remove watched in an official ⋮ menu was chosen (§47). */
+  | { tag: typeof TAG; dir: 'toIso'; event: 'tool'; op: ToolOp; listId: string }
+  /** A panel entry dropped outside the panel was removed, or not (§48). */
+  | { tag: typeof TAG; dir: 'toIso'; event: 'dropped'; drop: Dropped }
   | { tag: typeof TAG; dir: 'toIso'; event: 'ready' };
 
 /**
@@ -45,6 +49,25 @@ export interface TakeoverState {
   decision: Takeover;
   /** "Add to <list name>", shown on the menu items while taking over. */
   label: string;
+  /** The chosen list while taking over: its panels get our ⋮ items and drag out to delete (§47, §48). */
+  listId?: string;
+}
+
+/** What the official ⋮ menus get (§47) and the drag out of the panel says (§48). */
+export interface MenuState {
+  /** The /playlist page's list, when this identity can edit it. */
+  pageList?: string;
+  labels: { clearAll: string; removeWatched: string; dropToDelete: string };
+}
+
+export interface Dropped {
+  listId: string;
+  setVideoId: string;
+  videoId: string;
+  ok: boolean;
+  error?: string;
+  /** The list as the panel showed it when the drag started. */
+  before: ListItem[];
 }
 
 export function isToIso(d: unknown): d is ToIso {

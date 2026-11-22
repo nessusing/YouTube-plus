@@ -1,21 +1,23 @@
 // Playlist mode, isolated side (design §24): decide whether to take over Add
 // to queue, add to the chosen list, keep the top bar button and the playlist
 // panel in step with the list whoever edits it (§24.8), and after a video from
-// the list is watched, move on to the next one and remove it.
+// the list is watched, move on to the next one and remove it. The entry
+// playing may also be removed while it plays (Clear all, Remove watched, a
+// drag out of the panel: §47, §48); it plays on, then what came after it.
 
 import { t } from '@/core/i18n';
 import { notify } from '@/core/notify';
 import type { Toggleable } from '@/core/dom';
 import type { Logger } from '@/core/log';
-import type { PlayerEvent } from './bridge';
+import type { Dropped, PlayerEvent } from './bridge';
 import {
-  addActions, countWith, decideTakeover, DEFAULT_PROFILE, leftCountsAsWatched, listSignature, meetsExpect, mergeExpect, nextAfter, notInList,
-  type Expect, type ListEdit, type ListItem, type ListSnapshot, type QueueMode, type QueueProfile, type Takeover,
+  addActions, countWith, decideTakeover, DEFAULT_PROFILE, leftCountsAsWatched, listSignature, meetsExpect, mergeExpect, nextAfter, nextAfterRemoved,
+  notInList, removedPlaying, type Expect, type ListEdit, type ListItem, type ListSnapshot, type QueueMode, type QueueProfile, type Takeover,
 } from './core';
 import { PROTOCOL_ERROR_KEY } from './keys';
 import type { PlayButton } from './play-button';
 import { getProfile, onProfileChanged, updateProfile, type Identity } from './profiles';
-import type { Rpc } from './rpc';
+import type { Playing, Rpc } from './rpc';
 
 /** When the tab comes back, re-read the list (edits elsewhere) at most this often. */
 const RECHECK_MS = 5_000;
@@ -48,6 +50,8 @@ export class QueueController {
   private toolsOn = false;
   /** The video reloaded inside the list by the fallback attach (§24.2), until it ends. */
   private attached: string | undefined;
+  /** The entry playing was removed (§47, §48): its videoId, and the entries up to it as the list was. */
+  private removedHere: { videoId: string; upTo: string[] } | undefined;
   private edits: { expect: Expect; timer: ReturnType<typeof setTimeout> } | undefined;
   /** The latest look at the list, ours or the panel's; the count is taken from it (§24.8). */
   private snap: ListSnapshot | undefined;
@@ -324,12 +328,13 @@ export class QueueController {
     if (this.decision !== 'take') {
       // Not ours any more: forget the plan and what we knew of the list (findings F1, F3).
       await this.dropPlan();
+      this.removedHere = undefined;
       if (before === 'take') {
         this.snap = undefined;
         this.overlay = undefined;
       }
     }
-    await this.rpc.setTakeover({ decision: this.decision, label: t('queue.addTo', { name: this.listName() }) });
+    await this.rpc.setTakeover({ decision: this.decision, label: t('queue.addTo', { name: this.listName() }), listId: this.decision === 'take' ? this.listId : undefined });
     this.showButton();
   }
 
@@ -348,6 +353,7 @@ export class QueueController {
       // Another list: nothing known of the old one counts for it (findings F1, F2).
       this.snap = undefined;
       this.overlay = undefined;
+      this.removedHere = undefined;
       void this.dropPlan();
     }
     this.profile = p;
@@ -461,11 +467,15 @@ export class QueueController {
 
   onPlayer(e: PlayerEvent): void {
     const listId = this.listId;
+    // Another video now: the removed one is behind us.
+    if (this.removedHere && this.removedHere.videoId !== e.videoId) this.removedHere = undefined;
     if (this.decision !== 'take' || !listId || e.playlistId !== listId) return;
     // Reloaded inside the list without being in it (fallback attach): the
     // player sits at index 0 and its autoplay would skip the first entry.
     const attached = e.type === 'ended' && e.videoId === this.attached;
-    if (!this.profile.removeWatched && !attached) return;
+    // Removed while playing: we know what came after it, the page does not.
+    const removed = this.removedHere?.videoId === e.videoId;
+    if (!this.profile.removeWatched && !attached && !removed) return;
     const run = (name: string, fn: () => Promise<void>) => void fn().catch((err) => this.log.error(`${name} failed`, err));
     switch (e.type) {
       case 'near':
@@ -482,6 +492,10 @@ export class QueueController {
 
   private async plan(e: PlayerEvent): Promise<Plan> {
     const items = await this.readItems();
+    const r = this.removedHere;
+    // Removed while playing: nothing left to remove; next is the first entry
+    // after it, or added since. None: YouTube's autoplay decides (§47, §48).
+    if (r?.videoId === e.videoId) return { videoId: e.videoId, next: nextAfterRemoved(items, r.upTo) };
     return { videoId: e.videoId, ...nextAfter(items, e.videoId, e.index) };
   }
 
@@ -516,6 +530,7 @@ export class QueueController {
       }
     }
     if (e.videoId === this.attached) this.attached = undefined;
+    if (e.videoId === this.removedHere?.videoId) this.removedHere = undefined;
     if (p.watched && this.profile.removeWatched) await this.remove(listId, p.watched);
   }
 
@@ -523,6 +538,37 @@ export class QueueController {
   private async removeOnly(e: PlayerEvent, listId: string): Promise<void> {
     const p = await this.takePlan(e);
     if (p.watched) await this.remove(listId, p.watched);
+  }
+
+  // ---------- §47, §48 the entry playing removed ----------
+
+  /**
+   * Entries of `listId` were removed by Clear all / Remove watched or a drag
+   * out of the panel. If the entry playing was one of them, it plays on; when
+   * it ends, the first entry after it plays (§24.4 otherwise unchanged).
+   */
+  noteRemoved(listId: string, before: ListItem[], removed: string[], playing: Playing): void {
+    if (this.decision !== 'take' || listId !== this.listId || playing.playlistId !== listId) return;
+    const upTo = removedPlaying(before, removed, playing);
+    if (!upTo || !playing.videoId) return;
+    this.removedHere = { videoId: playing.videoId, upTo };
+    // A removal armed for closing the tab (§28.1) would now fail.
+    if (this.pending?.videoId === playing.videoId) void this.dropPlan();
+  }
+
+  /** An entry dragged out of the panel (§48): removed, or back in its place. */
+  async onDropped(d: Dropped): Promise<void> {
+    if (!d.ok) {
+      this.log.warn(`drag out: removing ${d.videoId} from ${d.listId} failed: ${d.error ?? ''}`);
+      notify(t('queue.dropFailed'), { error: true });
+      return;
+    }
+    this.log.info(`drag out: removed ${d.videoId} from ${d.listId}`);
+    try {
+      this.noteRemoved(d.listId, d.before, [d.setVideoId], await this.rpc.playing());
+    } catch (e) {
+      this.log.debug(`drag out: ${String(e)}`);
+    }
   }
 
   private async remove(listId: string, item: ListItem): Promise<void> {

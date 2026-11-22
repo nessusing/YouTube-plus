@@ -3,10 +3,7 @@
 // (= JS string length); the last frame has the full text; GzXR5e deletes.
 
 import { t } from '@/core/i18n';
-import type { Lang } from '@/core/settings';
 import type { ProviderError, Summary, SummaryInput, SummaryResult } from './types';
-
-const LANG_NAME: Record<Lang, string> = { zh: 'Simplified Chinese', en: 'English' };
 
 function schemaOf(titleCheck: boolean, id: string): string {
   return titleCheck
@@ -14,11 +11,19 @@ function schemaOf(titleCheck: boolean, id: string): string {
     : `{${id}"status":"ok","lang":"<language code>","points":["..."]}`;
 }
 
-function rules(i: Pick<SummaryInput, 'lang' | 'titleCheck'>): string[] {
-  const lang = LANG_NAME[i.lang];
+/**
+ * Output language = the video's own language, whatever it is, judged by
+ * Gemini, which has read the transcript (plans P23). Not the extension's
+ * language: a Vietnamese video gets Vietnamese points.
+ */
+function rules(i: Pick<SummaryInput, 'titleCheck'>, batch: boolean): string[] {
   return [
-    `points: 3 to 7 key points depending on the video's length, written in ${lang} whatever language the video is in.`,
-    i.titleCheck ? `titleMatch: does the content deliver what the title promises? Give a one-sentence reason in ${lang}.` : '',
+    `Language: write ${batch ? 'each video\'s' : 'the'} points${i.titleCheck ? ' and titleMatch reason' : ''} in the language the video is mainly spoken in, not translated.`
+      + ' For Chinese, use the script the video itself uses (Simplified or Traditional; Simplified if unclear).'
+      + (batch ? ' Each video uses its own language.' : ''),
+    'lang: the code of that language, e.g. "en", "zh-Hans", "zh-Hant", "vi", "ja".',
+    'points: 3 to 7 key points depending on the video\'s length.',
+    i.titleCheck ? 'titleMatch: does the content deliver what the title promises? Give a one-sentence reason.' : '',
   ];
 }
 
@@ -40,7 +45,7 @@ export function buildPrompt(i: SummaryInput): string {
     `Read the YouTube video https://www.youtube.com/watch?v=${i.videoId} (title: ${JSON.stringify(i.title)}) with the YouTube app.`,
     'Output ONLY JSON, no code fences, no other text:',
     schemaOf(i.titleCheck, ''),
-    ...rules(i),
+    ...rules(i, false),
     'If you cannot read the video content (no transcript, the tool failed, etc.), output ONLY {"status":"no_transcript"}. Never make up content from the title.',
     'Your entire reply is that one JSON object: it starts with { and ends with }.',
   ].filter(Boolean).join('\n');
@@ -48,7 +53,7 @@ export function buildPrompt(i: SummaryInput): string {
 
 /**
  * Several videos in one prompt (verified 2026-11-18: 8 videos in ~15 s, in
- * order, unreadable ones marked individually). All inputs share lang/titleCheck.
+ * order, unreadable ones marked individually). All inputs share titleCheck.
  */
 export function buildBatchPrompt(items: SummaryInput[]): string {
   const first = items[0]!;
@@ -58,7 +63,7 @@ export function buildBatchPrompt(items: SummaryInput[]): string {
     ...items.map((i, n) => `${n + 1}. https://www.youtube.com/watch?v=${i.videoId} (title: ${JSON.stringify(i.title)})`),
     'Output ONLY a JSON array, one object per video in the same order, no code fences, no other text:',
     `[${schemaOf(first.titleCheck, '"id":"<video id>",')}]`,
-    ...rules(first),
+    ...rules(first, true),
     'If you cannot read a video\'s content (no transcript, the tool failed, etc.), its object is ONLY {"id":"<video id>","status":"no_transcript"}. Never make up content from the title.',
     'Your entire reply is that one JSON array: it starts with [ and ends with ].',
   ].filter(Boolean).join('\n');

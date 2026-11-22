@@ -184,7 +184,7 @@ export async function startTldr(): Promise<void> {
     port = undefined;
   };
 
-  // New language: summaries differ, so ask the service for every video again.
+  // New UI language: rebuild the icons and tooltip text (summaries themselves are in the video's language).
   await initLang(() => {
     if (!enabled) return;
     states.clear();

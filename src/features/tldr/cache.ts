@@ -1,18 +1,19 @@
-// SummaryCache (design §13) in chrome.storage.local, one key per video and
-// output language (`tldr/cache/<lang>:<videoId>`), so switching language
-// regenerates instead of showing summaries in the old one.
+// SummaryCache (design §13) in chrome.storage.local, one key per video
+// (`tldr/cache/orig:<videoId>`). Summaries are in the video's own language
+// (plans P23), so the extension's language is not part of the key.
 
-import type { Lang } from '@/core/settings';
 import { TLDR_CACHE_PREFIX } from '@/core/storage-usage';
 import { evict, fresh, type CacheEntry } from './cache-rules';
 
+/** "orig" = the video's own language. Other keys are older formats (`<videoId>`, `<en|zh>:<videoId>`) and get dropped. */
+const KEY_PREFIX = `${TLDR_CACHE_PREFIX}orig:`;
 
 export class SummaryCache {
   private writes = 0;
-  constructor(private maxBytes: () => Promise<number>, private lang: () => Lang) {}
+  constructor(private maxBytes: () => Promise<number>) {}
 
-  private key(videoId: string, lang = this.lang()): string {
-    return `${TLDR_CACHE_PREFIX}${lang}:${videoId}`;
+  private key(videoId: string): string {
+    return `${KEY_PREFIX}${videoId}`;
   }
 
   async get(videoId: string): Promise<CacheEntry | undefined> {
@@ -34,8 +35,8 @@ export class SummaryCache {
     return out;
   }
 
-  async set(videoId: string, e: CacheEntry, lang?: Lang): Promise<void> {
-    await browser.storage.local.set({ [this.key(videoId, lang)]: e });
+  async set(videoId: string, e: CacheEntry): Promise<void> {
+    await browser.storage.local.set({ [this.key(videoId)]: e });
     if (++this.writes % 10 === 1) await this.trim();
   }
 
@@ -47,10 +48,10 @@ export class SummaryCache {
   async trim(): Promise<void> {
     const all = await browser.storage.local.get(null);
     const entries: Record<string, CacheEntry> = {};
-    const legacy: string[] = []; // keys from before the language was part of the key
+    const legacy: string[] = []; // older key formats, never read again
     for (const [k, v] of Object.entries(all)) {
       if (!k.startsWith(TLDR_CACHE_PREFIX)) continue;
-      if (k.includes(':', TLDR_CACHE_PREFIX.length)) entries[k] = v as CacheEntry;
+      if (k.startsWith(KEY_PREFIX)) entries[k] = v as CacheEntry;
       else legacy.push(k);
     }
     const drop = [...legacy, ...evict(entries, await this.maxBytes())];

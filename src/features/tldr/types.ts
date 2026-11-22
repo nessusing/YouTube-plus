@@ -1,12 +1,12 @@
 // TL;DR types (design §9.1).
 
-import type { Lang } from '@/core/settings';
-
-export interface SummaryInput { videoId: string; title: string; lang: Lang; titleCheck: boolean }
+/** The output language is the video's own (plans P23), so there is no language here. */
+export interface SummaryInput { videoId: string; title: string; titleCheck: boolean }
 
 export interface Summary {
   points: string[];
   titleMatch?: { verdict: 'match' | 'partial' | 'mismatch'; reason: string };
+  /** The video's language as Gemini judged it ("und" when it gave none); informational only. */
   lang: string;
   /** model text when JSON parsing failed; shown as markdown */
   raw?: string;

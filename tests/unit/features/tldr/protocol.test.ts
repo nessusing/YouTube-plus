@@ -49,11 +49,13 @@ describe('request building', () => {
     expect(inner[79]).toBeNull();
   });
   it('builds the prompt from settings', () => {
-    const p = buildPrompt({ videoId: 'abc', title: 'T "q"', lang: 'zh', titleCheck: false });
+    const p = buildPrompt({ videoId: 'abc', title: 'T "q"', titleCheck: false });
     expect(p).toContain('watch?v=abc');
-    expect(p).toContain('Simplified Chinese');
+    // The video's own language, never a fixed one (plans P23).
+    expect(p).toContain('language the video is mainly spoken in');
+    expect(p).not.toMatch(/written in (English|Simplified Chinese)/);
     expect(p).not.toContain('titleMatch');
-    expect(buildPrompt({ videoId: 'abc', title: 't', lang: 'en', titleCheck: true })).toContain('titleMatch');
+    expect(buildPrompt({ videoId: 'abc', title: 't', titleCheck: true })).toContain('titleMatch');
   });
   it('extracts tokens from the app HTML', () => {
     expect(extractTokens('x"SNlM0e":"AT1"y"cfb2h":"boq_1"z"FdrFJe":"-42"w"d2zJAe":"AIzaK"')).toEqual({ at: 'AT1', bl: 'boq_1', sid: '-42', key: 'AIzaK' });
@@ -161,11 +163,12 @@ describe('parseSummary', () => {
 describe('batch', () => {
   const ids = ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc'];
   it('lists every video in order and asks for an array', () => {
-    const p = buildBatchPrompt(ids.map((videoId) => ({ videoId, title: `T ${videoId}`, lang: 'zh', titleCheck: true })));
+    const p = buildBatchPrompt(ids.map((videoId) => ({ videoId, title: `T ${videoId}`, titleCheck: true })));
     expect(p.indexOf('v=aaaaaaaaaaa')).toBeLessThan(p.indexOf('v=bbbbbbbbbbb'));
     expect(p).toContain('JSON array');
     expect(p).toContain('"id":"<video id>"');
     expect(p).toContain('titleMatch');
+    expect(p).toContain('Each video uses its own language');
   });
   it('matches answers by id, keeps no_transcript, leaves out what is missing', () => {
     const text = '```json\n' + JSON.stringify([

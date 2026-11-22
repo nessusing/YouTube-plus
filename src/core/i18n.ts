@@ -1,6 +1,7 @@
 // UI language (en / zh). Every extension context (service worker, options
 // page, each content script) has its own copy of `current`: call initLang()
-// at startup so it follows settings.lang. TL;DR output uses the same language.
+// at startup so it follows settings.lang, which is YouTube's interface language
+// (core/youtube-lang.ts). TL;DR output is in each video's own language instead.
 
 import { detectLang, getSettings, onSettingsChanged, type Lang } from './settings';
 
@@ -133,8 +134,8 @@ const zh = {
   'opt.settings': '设置',
   'opt.tab.storage': '存储',
   'opt.tab.diag': '诊断',
-  'opt.general.title': '选择 YouTube+ 的语言和功能',
-  'opt.general.sub': '设置只保存在这个浏览器里。',
+  'opt.general.title': '选择 YouTube+ 的功能',
+  'opt.general.sub': '设置只保存在这个浏览器里。语言跟随 YouTube。',
   'opt.featuresHint': '关掉的功能不会在 YouTube 页面上运行。',
   'opt.featureDesc.tldr': '在缩略图上显示 Gemini 生成的视频要点',
   'opt.featureDesc.queue': '在 YouTube 自带的队列和一个播放列表之间二选一；另给你的列表加上「清空全部」「移除已看完」',
@@ -159,8 +160,6 @@ const zh = {
   'opt.diag.title': '排查问题',
   'opt.diag.sub': '自检逐项检查每个功能依赖的东西；日志只保存在本机。',
   'opt.selfcheckHint': 'TL;DR 的自检会真实生成一次总结（计入上限），并随即删除对话。',
-  'opt.language': '语言',
-  'opt.languageHint': '界面和 TL;DR 内容都用这个语言。',
   'opt.features': '功能开关',
   'opt.enabled': '启用 YouTube+',
   'opt.enabledHint': '关掉后所有功能都不在 YouTube 页面上运行，各功能自己的开关会保留。',
@@ -396,8 +395,8 @@ const en: Record<MsgKey, string> = {
   'opt.settings': 'Settings',
   'opt.tab.storage': 'Storage',
   'opt.tab.diag': 'Diagnostics',
-  'opt.general.title': 'Choose the language and features of YouTube+',
-  'opt.general.sub': 'Settings are saved in this browser only.',
+  'opt.general.title': 'Choose the features of YouTube+',
+  'opt.general.sub': 'Settings are saved in this browser only. The language follows YouTube.',
   'opt.featuresHint': 'A feature that is off does not run on YouTube pages.',
   'opt.featureDesc.tldr': 'Show Gemini-written key points on thumbnails',
   'opt.featureDesc.queue': 'Choose between YouTube\'s own queue and a playlist; adds Clear all and Remove watched to your playlists',
@@ -422,8 +421,6 @@ const en: Record<MsgKey, string> = {
   'opt.diag.title': 'Troubleshoot',
   'opt.diag.sub': 'The self-check tests what each feature depends on; the log stays on this computer.',
   'opt.selfcheckHint': 'The TL;DR check makes one real summary (it counts toward the limits) and deletes the chat right after.',
-  'opt.language': 'Language',
-  'opt.languageHint': 'Used for the interface and for TL;DR content.',
   'opt.features': 'Features',
   'opt.enabled': 'Enable YouTube+',
   'opt.enabledHint': 'When off, no feature runs on YouTube pages. Each feature keeps its own switch for when you turn this back on.',
@@ -539,9 +536,6 @@ const en: Record<MsgKey, string> = {
 };
 
 const DICT: Record<Lang, Record<MsgKey, string>> = { zh, en };
-
-/** Names shown in the language picker, each in its own language. */
-export const LANG_NAMES: Record<Lang, string> = { en: 'English', zh: '中文' };
 
 let current: Lang = detectLang();
 

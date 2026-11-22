@@ -4,7 +4,7 @@
 
 export type FeatureId = 'tldr' | 'queue' | 'player';
 
-/** UI language; TL;DR output follows it too (see core/i18n.ts). */
+/** UI language = YouTube's (core/youtube-lang.ts); TL;DR output is in each video's own language. */
 export type Lang = 'en' | 'zh';
 
 export function detectLang(): Lang {

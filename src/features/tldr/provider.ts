@@ -19,7 +19,7 @@ export class GeminiWebProvider implements SummaryProvider {
       return { kind: 'error', error: { code: 'transient' }, detail: String(e) };
     }
     if (parsed.cid) await this.deleteOrQueue(parsed.cid);
-    return parseSummary(parsed.text ?? '', input.lang);
+    return parseSummary(parsed.text ?? '', 'und');
   }
 
   /**
@@ -43,7 +43,7 @@ export class GeminiWebProvider implements SummaryProvider {
       return out;
     }
     if (parsed.cid) await this.deleteOrQueue(parsed.cid);
-    const got = parseBatch(parsed.text ?? '', inputs.map((i) => i.videoId), inputs[0]!.lang);
+    const got = parseBatch(parsed.text ?? '', inputs.map((i) => i.videoId), 'und');
     const missing = inputs.filter((i) => !got.has(i.videoId)).map((i) => i.videoId);
     if (missing.length) this.log.warn(`batch of ${inputs.length}: no answer for ${missing.join(', ')}`, (parsed.text ?? '').slice(0, 500));
     for (const i of inputs) {

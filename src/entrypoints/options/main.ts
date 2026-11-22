@@ -1,4 +1,4 @@
-import { getLang, initLang, LANG_NAMES, t, type Lang, type MsgKey } from '@/core/i18n';
+import { getLang, initLang, t, type MsgKey } from '@/core/i18n';
 import { formatEntry, LOG_KEY, LOG_LEVELS, type LogEntry, type LogFeature } from '@/core/log';
 import type { Message, SelfCheckResponse } from '@/core/messages';
 import type { CheckResult } from '@/core/selfcheck';
@@ -13,7 +13,7 @@ import type { TldrStatus } from '@/features/tldr/service';
 import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
 import { FEATURES, featureOn, getSettings, saveSettings, type PlayerSettings, type Settings } from '@/core/settings';
 
-// Build the page in the chosen language; rebuild (reload) when it changes.
+// Build the page in YouTube's language (plans P23); rebuild (reload) when it changes.
 await initLang(() => location.reload());
 document.documentElement.lang = getLang() === 'zh' ? 'zh-CN' : 'en';
 document.title = t('opt.title');
@@ -139,19 +139,6 @@ pageHead(general, t('opt.tab.general'), t('opt.general.title'), t('opt.general.s
 // Master switch: off turns every feature off without losing their own switches.
 group(general, t('opt.enabled'), t('opt.enabledHint'), toggle(t('opt.enabledLabel'), settings.enabled,
   (v) => update((s) => { s.enabled = v; }).then(() => { syncFeatureList(); return renderTldr(); })));
-
-const radios = el('div', { className: 'radios', role: 'radiogroup' });
-for (const l of Object.keys(LANG_NAMES) as Lang[]) {
-  const input = el('input', { type: 'radio', name: 'lang', value: l, checked: settings.lang === l });
-  input.addEventListener('change', async () => {
-    // Don't setLang() here: initLang's listener would then see no change and skip
-    // the rebuild. Reload ourselves once the new value is saved.
-    await update((s) => { s.lang = l; });
-    location.reload();
-  });
-  radios.append(el('label', {}, input, LANG_NAMES[l]));
-}
-group(general, t('opt.language'), t('opt.languageHint'), radios);
 
 const featureList = el('div', { className: 'stack' });
 for (const f of FEATURES) {

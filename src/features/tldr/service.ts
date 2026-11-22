@@ -39,7 +39,7 @@ export class TldrService {
   constructor(private settings: () => Settings, private log: Logger) {
     this.client = new GeminiWebClient(() => this.settings().tldr.account, log);
     this.provider = new GeminiWebProvider(this.client, log);
-    this.cache = new SummaryCache(async () => this.settings().storage.tldrCacheMB * 1024 * 1024, () => this.settings().lang);
+    this.cache = new SummaryCache(async () => this.settings().storage.tldrCacheMB * 1024 * 1024);
     this.loaded = browser.storage.local.get(STATE_KEY).then((g) => {
       const s = g[STATE_KEY] as PersistedState | undefined;
       if (s) this.state = s;
@@ -193,22 +193,14 @@ export class TldrService {
     try {
       this.state.counters = count(this.state.counters, now);
       await this.persist();
-      results = await this.provider.summarizeMany(batch.map((j) => ({ videoId: j.videoId, title: j.title, lang: s.lang, titleCheck: s.tldr.titleCheck })));
+      results = await this.provider.summarizeMany(batch.map((j) => ({ videoId: j.videoId, title: j.title, titleCheck: s.tldr.titleCheck })));
     } catch (e) {
       results = new Map(batch.map((j) => [j.videoId, { kind: 'error', error: { code: 'transient' }, detail: String(e) } as SummaryResult]));
     } finally {
       this.running = new Set();
     }
     if (batch.length > 1) this.log.debug(`batch of ${batch.length} done`);
-    for (const job of batch) {
-      const result = results.get(job.videoId)!;
-      if (s.lang !== this.settings().lang) {
-        // Language switched mid-run: keep the result for the old language, redo it in the new one.
-        if (result.kind === 'ok') await this.cache.set(job.videoId, { kind: 'ok', data: result.data, t: now, used: now }, s.lang);
-        this.jobs = upsert(this.jobs, { ...job, priority: 1 }, Date.now());
-        this.send(job.videoId, { state: 'queued' });
-      } else await this.handle(job, result);
-    }
+    for (const job of batch) await this.handle(job, results.get(job.videoId)!);
     this.nextAllowed = Date.now() + nextSpacing();
     this.kick();
   }

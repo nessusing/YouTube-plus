@@ -1,4 +1,4 @@
-// Sample cards for the options page preview (plans P13). Fixed comments of
+// Sample cards for the options page preview (§51). Fixed comments of
 // every shape (short, long, CJK, rotating, contents); durations follow the
 // current params, like the real schedule.
 

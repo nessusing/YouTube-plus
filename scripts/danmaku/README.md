@@ -1,6 +1,6 @@
-# P13 实测脚本
+# 评论弹幕实测脚本
 
-评论弹幕（docs/plans.md P13）实测用的脚本。都是匿名调 InnerTube，不需要登录，也不打开视频。Node 18 以上直接跑。
+评论弹幕（docs/design.md §51）实测用的脚本。都是匿名调 InnerTube，不需要登录，也不打开视频。Node 18 以上直接跑。
 
 | 脚本 | 做什么 |
 |---|---|
@@ -11,7 +11,7 @@
 
 流程：`pull.mjs` 生成 prompt → 贴进 gemini.google.com 新对话 → 回答贴进 `answer.txt` → `score.mjs`。
 
-`data/` 里是 2026-11-22 那几次的输入和回答，结论见 plans.md P13「实测结果」：
+`data/` 里是 2026-11-22 那几次的输入和回答，结论见 design.md §51：
 
 | 目录 | 视频 | prompt |
 |---|---|---|

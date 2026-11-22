@@ -1,4 +1,4 @@
-// How "hot" a comment is (plans P13 「本地模式」, used by both modes):
+// How "hot" a comment is (§51.5, used by both modes):
 // heat = likeWeight × likes' + replyWeight × replies' + recencyWeight × newness',
 // each term normalized to 0–1 over this video's comments.
 

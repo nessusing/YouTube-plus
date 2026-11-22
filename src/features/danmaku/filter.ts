@@ -1,4 +1,4 @@
-// Local filtering (plans P13 「本地过滤」): dropped comments are neither sent
+// Local filtering (§51.3): dropped comments are neither sent
 // to Gemini nor shown.
 
 import type { Comment } from './comments';

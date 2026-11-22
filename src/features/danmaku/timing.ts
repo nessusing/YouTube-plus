@@ -1,4 +1,4 @@
-// How long a card stays (plans P13 「排期」). Scheduling estimates lines from
+// How long a card stays (§51.6). Scheduling estimates lines from
 // a reference width; the card itself pages by its real lines within the time
 // it was given.
 

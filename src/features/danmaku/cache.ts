@@ -1,4 +1,4 @@
-// Danmaku cache (plans P13 「缓存」): per video in storage.local, its own size
+// Danmaku cache (§51.8): per video in storage.local, its own size
 // cap (cache.mb), least recently used out first. Comments expire after
 // cache.days; Gemini's placements outlive them, so after a refetch only new
 // comments go to Gemini.

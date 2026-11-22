@@ -1,4 +1,4 @@
-// P13 probe: search, keep videos with Chinese captions, count single-timestamp
+// Danmaku probe (§51): search, keep videos with Chinese captions, count single-timestamp
 // comments in the first 300. usage: node find.mjs <query>...
 const ctx = { client: { clientName: 'WEB', clientVersion: '2.20261120.00.00', hl: 'en', gl: 'US' } };
 const post = async (ep, body) => (await fetch(`https://www.youtube.com/youtubei/v1/${ep}?prettyPrint=false`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context: ctx, ...body }) })).json();

@@ -1,4 +1,4 @@
-// Cards for timestamped comments (plans P13 「带时间戳的评论」「同一时刻的多条评论」).
+// Cards for timestamped comments (§51.4).
 
 import type { Comment } from './comments';
 import type { DanmakuParams } from './params';

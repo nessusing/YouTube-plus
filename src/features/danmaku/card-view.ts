@@ -1,4 +1,4 @@
-// The caption-style card (plans P13 「显示」). Shared by the player overlay and
+// The caption-style card (§51.7). Shared by the player overlay and
 // the options page preview. Lives in its own shadow root so neither page's CSS
 // reaches it. Drawing is a function of time (frame.ts): call draw() every frame.
 

@@ -1,6 +1,6 @@
-// Comment danmaku (plans P13): every tunable number in one place. During
+// Comment danmaku (§51): every tunable number in one place. During
 // development the options page exposes most of these; which ones stay for
-// normal users is decided after real use (plans P13 「开发期间的可调参数」).
+// normal users is decided after real use (§51.9).
 
 export interface DisplayParams {
   /** Seconds per screen (two lines) of a long comment. */
@@ -108,7 +108,7 @@ export interface DanmakuParams {
 export const PROMPT_PLACEHOLDERS = ['{{url}}', '{{title}}', '{{duration}}', '{{comments}}'] as const;
 
 /**
- * Version 2 of the placement prompt plus the video length (plans P13 「实测结果」):
+ * Version 2 of the placement prompt plus the video length (§51.2, §51.5):
  * each confidence band is defined, "when unsure, use a", x only for junk.
  * The preamble is the TL;DR one (design §45): personalization reaches these
  * requests too.

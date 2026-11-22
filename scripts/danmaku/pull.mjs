@@ -1,4 +1,4 @@
-// P13 probe: pull the top comments of a video via InnerTube `next` (anonymous),
+// Danmaku probe (§51): pull the top comments of a video via InnerTube `next` (anonymous),
 // build a Gemini placement prompt with the timestamps stripped, and save the truth.
 // usage: node pull.mjs <videoId> <title> <outDir> [pages=10] [batch=100] <durationSec>
 import { writeFileSync, mkdirSync } from 'node:fs';

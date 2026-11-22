@@ -1,4 +1,4 @@
-// Timestamped comments (plans P13 「带时间戳的评论」).
+// Timestamped comments (§51.4).
 
 import type { Comment } from './comments';
 import type { StampParams } from './params';

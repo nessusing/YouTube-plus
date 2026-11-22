@@ -62,7 +62,7 @@ export interface NotifySettings {
   errorSec: number;
 }
 
-/** Comment danmaku (plans P13). The feature switch is features.danmaku, off by default. */
+/** Comment danmaku (§51). The feature switch is features.danmaku, off by default. */
 export interface DanmakuSettings {
   /** The player button, remembered for every video like the captions button. */
   active: boolean;

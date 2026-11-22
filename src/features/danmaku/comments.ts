@@ -1,4 +1,4 @@
-// Parse InnerTube `next` responses into comments (plans P13). Shapes measured
+// Parse InnerTube `next` responses into comments (§51). Shapes measured
 // 2026-11-22 with context.client.hl = 'en', which we always send so counts
 // read "9.3K" and ages "3 months ago" whatever the user's language.
 

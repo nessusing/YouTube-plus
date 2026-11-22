@@ -1,4 +1,4 @@
-// What a card shows at a moment (plans P13 「显示」), as a pure function of
+// What a card shows at a moment (§51.7), as a pure function of
 // time inside the card, so pausing, seeking and playback speed need nothing
 // special: the timeline is bound to video time.
 

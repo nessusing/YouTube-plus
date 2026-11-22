@@ -1,4 +1,4 @@
-// The danmaku button (plans P13 「开关」): in the player's control bar, left
+// The danmaku button (§51.1): in the player's control bar, left
 // of the captions button, remembered for every video like that button. Our own
 // icon, drawn in the style of the player's 2026 icons: a speech bubble, hollow
 // when off, filled when on; a small dot blinks while working; dimmed when the

@@ -603,7 +603,7 @@ const resetPos = button(t('opt.player.resetPos'), async () => {
 });
 group(player, t('opt.player.sub'), undefined, playerList, el('div', { className: 'inline mt-lg' }, resetPos));
 
-// ---------- comment danmaku (plans P13) ----------
+// ---------- comment danmaku (§51) ----------
 
 const dmTab = sections.get('danmaku')!;
 pageHead(dmTab, t('feature.danmaku'), t('opt.dm.title'), t('opt.dm.sub'));
@@ -717,7 +717,7 @@ function paramInput(fd: Field): { input: HTMLInputElement; refresh: () => void }
 
 const splitWords = (v: string) => v.split(/[,，、]/).map((w) => w.trim()).filter(Boolean);
 
-// Preview (plans P13): the real card on a mock player, looping sample comments
+// Preview (§51): the real card on a mock player, looping sample comments
 // with the current display params (read every frame, so edits show at once).
 const PV_SIZES = { small: 426, medium: 640, large: 854 } as const;
 /** YouTube's control bar, about this tall. */
@@ -887,7 +887,7 @@ const STORAGE_ROWS: {
     clear: () => clearCategory('tldrCache'),
   },
   {
-    // Its limit is with the other danmaku params (plans P13).
+    // Its limit is with the other danmaku params (§51).
     cat: 'danmakuCache', label: t('opt.storage.danmaku'), unit: t('opt.unit.entries'),
     clear: () => clearCategory('danmakuCache'),
   },

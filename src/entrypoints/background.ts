@@ -79,7 +79,7 @@ export default defineBackground(() => {
         return true;
       case 'YouTube+/dm-ask':
         tldr.ask(msg.prompt).then((r) => {
-          // The whole raw answer, always (plans P13 「日志」, after P17).
+          // The whole raw answer, always (§51.8, after P17).
           if (r.ok) dmLog.info(`Gemini answer for ${msg.videoId} (${(r.ms / 1000).toFixed(1)} s):\n${r.text}`);
           else dmLog.warn(`Gemini request for ${msg.videoId} failed: ${r.code}${r.detail ? ` (${r.detail})` : ''}`);
           sendResponse(r);

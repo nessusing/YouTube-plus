@@ -1,4 +1,4 @@
-// Danmaku, page side (MAIN world; plans P13 「拉评论」): InnerTube `next` the
+// Danmaku, page side (MAIN world; §51.2): InnerTube `next` the
 // way the page calls it, without scrolling or touching the comments section.
 // Always hl=en, so counts read "9.3K" and ages "3 months ago" (measured
 // 2026-11-22). Works signed out too.

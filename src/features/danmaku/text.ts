@@ -1,4 +1,4 @@
-// Text measures shared by filtering, timing and table-of-contents detection (plans P13).
+// Text measures shared by filtering, timing and table-of-contents detection (§51).
 
 /** Chinese, Japanese and Korean letters: slower to read, about twice as wide. */
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;

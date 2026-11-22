@@ -1,4 +1,4 @@
-// Comment danmaku (plans P13) on real YouTube. Most tests seed the cache with
+// Comment danmaku (§51) on real YouTube. Most tests seed the cache with
 // fixed comments, so cards land at known times and AI mode needs no Gemini:
 // every comment already has Gemini's verdict. One test fetches for real.
 import type { BrowserContext, Page } from '@playwright/test';

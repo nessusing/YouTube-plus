@@ -1,4 +1,4 @@
-// The layer over the player (plans P13 「显示」): one caption-style card at a
+// The layer over the player (§51.7): one caption-style card at a
 // time, drawn from the video's time every frame, so pausing, seeking back and
 // playback speed need nothing special. Hidden in the miniplayer, popped out
 // (§50), during ads and off the watch page. Above the control bar while it
@@ -57,7 +57,7 @@ export function overlay(): Overlay {
   let slots: Slot[] = [];
   let raf = 0;
   let lastT = -1;
-  /** After a seek into a card with too little of it left: not shown (plans P13 「播放控制」). */
+  /** After a seek into a card with too little of it left: not shown (§51.7). */
   let skipped: Slot | undefined;
 
   const frame = () => {

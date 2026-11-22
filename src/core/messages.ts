@@ -14,7 +14,7 @@ export type Message =
   | { type: 'YouTube+/tldr-resume' }
   | { type: 'YouTube+/tldr-signin' }
   | { type: 'YouTube+/tldr-recheck' }
-  /** Danmaku AI placement (plans P13): one prompt through the TL;DR queue; answers an AskResult. */
+  /** Danmaku AI placement (§51): one prompt through the TL;DR queue; answers an AskResult. */
   | { type: 'YouTube+/dm-ask'; videoId: string; prompt: string };
 
 export type SelfCheckResponse = { results: CheckResult[] };

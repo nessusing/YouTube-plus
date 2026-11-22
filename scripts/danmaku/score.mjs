@@ -1,4 +1,4 @@
-// P13 probe: score a Gemini placement answer (<dir>/answer.txt, pasted from the chat)
+// Danmaku probe (§51): score a Gemini placement answer (<dir>/answer.txt, pasted from the chat)
 // against the stripped timestamps in <dir>/truth.json.
 // usage: node score.mjs <dir>
 import { readFileSync } from 'node:fs';

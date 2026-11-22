@@ -6,7 +6,7 @@ import { LOG_KEY } from './log';
 export type StorageCategory = 'log' | 'tldrCache' | 'danmakuCache' | 'other';
 
 export const TLDR_CACHE_PREFIX = 'tldr/cache/';
-/** Comment danmaku: one key per video (plans P13 「缓存」). */
+/** Comment danmaku: one key per video (§51.8). */
 export const DANMAKU_CACHE_PREFIX = 'danmaku/cache/';
 
 export function categoryOf(key: string): StorageCategory {

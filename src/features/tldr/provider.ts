@@ -52,6 +52,16 @@ export class GeminiWebProvider implements SummaryProvider {
     return out;
   }
 
+  /**
+   * A free-form request (danmaku placement, plans P13): the answer's text. The
+   * chat is deleted like a summary's. Throws GeminiError.
+   */
+  async ask(prompt: string): Promise<string> {
+    const parsed = await this.client.generate(prompt);
+    if (parsed.cid) await this.deleteOrQueue(parsed.cid);
+    return parsed.text ?? '';
+  }
+
   private async deleteOrQueue(cid: string): Promise<void> {
     try {
       await this.client.deleteConversation(cid);

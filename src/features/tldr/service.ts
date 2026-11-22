@@ -10,7 +10,10 @@ import { GeminiError, GeminiWebClient } from './client';
 import { BLOCK_MS, breakerOpen, count, demote, freshCounters, nextSpacing, pickBatch, upsert, type Breaker, type Counters, type Job } from './jobs';
 import { PORT_NAME, STATE_KEY, type ToService, type ToTab, type VideoRef } from './messages';
 import { GeminiWebProvider } from './provider';
-import type { BadgeState, GeminiState, SummaryResult } from './types';
+import type { BadgeState, GeminiState, ProviderError, SummaryResult } from './types';
+
+/** A free-form request's outcome (danmaku placement, plans P13). */
+export type AskResult = { ok: true; text: string; ms: number } | { ok: false; code: ProviderError['code']; detail?: string };
 
 /** While signed out, look again this often (sign-in is normally noticed sooner, see onGeminiPage). */
 const SIGNIN_RECHECK_MS = 10 * 60 * 1000;
@@ -32,6 +35,8 @@ export class TldrService {
   private gemini: GeminiState = 'unknown';
   private probing: Promise<GeminiState> | undefined;
   private probeTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Free-form requests waiting; they go before TL;DR jobs (plans P13 「额度」). */
+  private asks: { prompt: string; resolve: (r: AskResult) => void }[] = [];
   readonly client: GeminiWebClient;
   readonly provider: GeminiWebProvider;
   readonly cache: SummaryCache;
@@ -169,7 +174,11 @@ export class TldrService {
     const wanted = new Set<string>();
     for (const info of this.ports.values()) info.videos.forEach((v) => wanted.add(v));
     this.jobs = this.jobs.filter((j) => wanted.has(j.videoId));
-    if (this.gemini === 'signedOut') return this.scheduleProbe();
+    if (this.gemini === 'signedOut') {
+      for (const a of this.asks.splice(0)) a.resolve({ ok: false, code: 'auth' });
+      return this.scheduleProbe();
+    }
+    if (this.asks.length) return this.runAsk(this.asks.shift()!, now);
     const s = this.settings();
     const batch = pickBatch(this.jobs, {
       counters: this.state.counters,
@@ -201,6 +210,47 @@ export class TldrService {
     }
     if (batch.length > 1) this.log.debug(`batch of ${batch.length} done`);
     for (const job of batch) await this.handle(job, results.get(job.videoId)!);
+    this.nextAllowed = Date.now() + nextSpacing();
+    this.kick();
+  }
+
+  /**
+   * A free-form Gemini request through this queue: one at a time with the
+   * summaries, the same breaker, counted against the caps; ahead of every
+   * TL;DR job and, like a click, not held back by the caps (plans P13 「额度」).
+   */
+  ask(prompt: string): Promise<AskResult> {
+    return new Promise((resolve) => {
+      this.asks.push({ prompt, resolve });
+      this.kick(true);
+    });
+  }
+
+  private async runAsk(a: { prompt: string; resolve: (r: AskResult) => void }, now: number): Promise<void> {
+    const b = this.state.breaker;
+    if (breakerOpen(b, now)) {
+      a.resolve({ ok: false, code: b.state === 'quota' ? 'quota' : 'blocked' });
+      return this.kick();
+    }
+    this.running = new Set(['(ask)']);
+    try {
+      this.state.counters = count(this.state.counters, now);
+      await this.persist();
+      const text = await this.provider.ask(a.prompt);
+      this.setGemini('ok');
+      a.resolve({ ok: true, text, ms: Date.now() - now });
+    } catch (e) {
+      const error: ProviderError = e instanceof GeminiError ? e.error : { code: 'transient' };
+      a.resolve({ ok: false, code: error.code, detail: String(e instanceof Error ? e.message : e) });
+      if (error.code === 'auth') this.setGemini('signedOut');
+      else if (error.code === 'quota' || error.code === 'blocked') {
+        this.state.breaker = error.code === 'quota' ? { state: 'quota' } : { state: 'blocked', until: Date.now() + BLOCK_MS };
+        this.log.warn(`${error.code} on a danmaku request; TL;DR paused too`);
+        await this.persist();
+      }
+    } finally {
+      this.running = new Set();
+    }
     this.nextAllowed = Date.now() + nextSpacing();
     this.kick();
   }

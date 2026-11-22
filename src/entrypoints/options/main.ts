@@ -886,6 +886,11 @@ const STORAGE_ROWS: {
     limit: () => limitInput(() => settings.storage.tldrCacheMB, (s, v) => { s.storage.tldrCacheMB = v; }),
     clear: () => clearCategory('tldrCache'),
   },
+  {
+    // Its limit is with the other danmaku params (plans P13).
+    cat: 'danmakuCache', label: t('opt.storage.danmaku'), unit: t('opt.unit.entries'),
+    clear: () => clearCategory('danmakuCache'),
+  },
   { cat: 'other', label: t('opt.storage.other') },
 ];
 

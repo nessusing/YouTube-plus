@@ -3,13 +3,16 @@
 
 import { LOG_KEY } from './log';
 
-export type StorageCategory = 'log' | 'tldrCache' | 'other';
+export type StorageCategory = 'log' | 'tldrCache' | 'danmakuCache' | 'other';
 
 export const TLDR_CACHE_PREFIX = 'tldr/cache/';
+/** Comment danmaku: one key per video (plans P13 「缓存」). */
+export const DANMAKU_CACHE_PREFIX = 'danmaku/cache/';
 
 export function categoryOf(key: string): StorageCategory {
   if (key === LOG_KEY) return 'log';
   if (key.startsWith(TLDR_CACHE_PREFIX)) return 'tldrCache';
+  if (key.startsWith(DANMAKU_CACHE_PREFIX)) return 'danmakuCache';
   return 'other';
 }
 
@@ -25,7 +28,7 @@ export interface StorageUsage {
 }
 
 export function groupKeys(keys: string[]): Record<StorageCategory, string[]> {
-  const out: Record<StorageCategory, string[]> = { log: [], tldrCache: [], other: [] };
+  const out: Record<StorageCategory, string[]> = { log: [], tldrCache: [], danmakuCache: [], other: [] };
   for (const k of keys) out[categoryOf(k)].push(k);
   return out;
 }
@@ -40,6 +43,7 @@ export async function getStorageUsage(): Promise<StorageUsage> {
     byCategory: {
       log: { bytes: await bytes(groups.log), count: Array.isArray(log) ? log.length : 0 },
       tldrCache: { bytes: await bytes(groups.tldrCache), count: groups.tldrCache.length },
+      danmakuCache: { bytes: await bytes(groups.danmakuCache), count: groups.danmakuCache.length },
       other: { bytes: await bytes(groups.other) },
     },
   };

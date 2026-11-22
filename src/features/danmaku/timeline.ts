@@ -4,9 +4,11 @@
 import type { Placement } from './ai';
 import { durOf, stampCards } from './cards';
 import type { Comment, HeatSegment } from './comments';
+import { filterComments } from './filter';
+import { heatOf } from './heat';
 import { localCandidates } from './local';
-import type { DanmakuParams } from './params';
-import { type Candidate, fillIdle, pickBest, placeStamps, type Slot } from './schedule';
+import type { CommentParams, DanmakuParams } from './params';
+import { type Candidate, fillIdle, pickBest, placeStamps, type Slot, type SlotKind, slotEnd } from './schedule';
 
 export type Mode = 'stamps' | 'local' | 'ai';
 
@@ -24,6 +26,35 @@ export interface TimelineInput {
 }
 
 const byStart = (a: Slot, b: Slot) => a.start - b.start;
+
+/** How many comments to fetch: max(minCount, perMinute × minutes), capped at maxCount. */
+export function fetchLimit(duration: number, p: Pick<CommentParams, 'minCount' | 'perMinute' | 'maxCount'>): number {
+  return Math.min(p.maxCount, Math.max(p.minCount, Math.round((p.perMinute * duration) / 60)));
+}
+
+/** Fetched comments → what buildTimeline takes: filtered, with their heat. */
+export function prepareComments(raw: Comment[], p: DanmakuParams): { comments: Comment[]; heat: number[] } {
+  const { kept } = filterComments(raw, p.comments);
+  return { comments: kept, heat: heatOf(kept, p.heat) };
+}
+
+/** Kinds where a comment appears once: shown already, it is not placed again. */
+const ONCE: ReadonlySet<SlotKind> = new Set(['local', 'ai', 'ambient']);
+
+/**
+ * A new timeline replaces only what has not started by `now` (plans P13 「分层上屏」):
+ * cards that started stay, so seeking back replays them. The new timeline
+ * fills everything else, before `now` too (a first layout mid-video, or a
+ * part skipped by seeking), keeping clear of the kept cards (with the gap)
+ * and never repeating a comment a kept card showed.
+ */
+export function mergeTimeline(old: Slot[], next: Slot[], now: number, gapSec: number): Slot[] {
+  const kept = old.filter((s) => s.start <= now);
+  const shown = new Set(kept.filter((s) => ONCE.has(s.kind)).flatMap((s) => s.items.map((c) => c.id)));
+  const clear = (s: Slot) => kept.every((k) => s.start >= slotEnd(k) + gapSec - 1e-9 || k.start >= slotEnd(s) + gapSec - 1e-9);
+  const fresh = next.filter((s) => clear(s) && !(ONCE.has(s.kind) && s.items.some((c) => shown.has(c.id))));
+  return [...kept, ...fresh].sort(byStart);
+}
 
 /**
  * stamps: timestamped comments only (also the AI fallback "只显示带时间戳的").

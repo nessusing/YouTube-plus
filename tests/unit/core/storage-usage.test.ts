@@ -5,9 +5,10 @@ describe('storage categories', () => {
   it('assigns keys to categories', () => {
     expect(categoryOf('log')).toBe('log');
     expect(categoryOf('tldr/cache/abc')).toBe('tldrCache');
+    expect(categoryOf('danmaku/cache/abc')).toBe('danmakuCache');
     expect(categoryOf('queue/outbox')).toBe('other');
-    expect(groupKeys(['log', 'tldr/cache/a', 'tldr/cache/b', 'x'])).toEqual({
-      log: ['log'], tldrCache: ['tldr/cache/a', 'tldr/cache/b'], other: ['x'],
+    expect(groupKeys(['log', 'tldr/cache/a', 'tldr/cache/b', 'danmaku/cache/c', 'x'])).toEqual({
+      log: ['log'], tldrCache: ['tldr/cache/a', 'tldr/cache/b'], danmakuCache: ['danmaku/cache/c'], other: ['x'],
     });
   });
 

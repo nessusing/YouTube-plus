@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlacementPrompt, missingPlaceholders, parsePlacement } from '@/features/danmaku/ai';
+import { buildPlacementPrompt, missingPlaceholders, parsePlacement, withCutoff } from '@/features/danmaku/ai';
 import { DEFAULT_PROMPT, PROMPT_PLACEHOLDERS } from '@/features/danmaku/params';
 
 const input = {
@@ -74,5 +74,14 @@ describe('parsePlacement', () => {
     expect(parse('no_transcript')).toEqual({ status: 'no_transcript' });
     expect(parse('  no_transcript\n')).toEqual({ status: 'no_transcript' });
     expect(parse('Sorry, I cannot help with that.')).toEqual({ status: 'unparsed' });
+  });
+});
+
+describe('withCutoff', () => {
+  it('moves stored placements across a new cut-off', () => {
+    expect(withCutoff({ kind: 'at', sec: 10, conf: 0.9 }, 0.95)).toEqual({ kind: 'ambient', why: 'low', sec: 10, conf: 0.9 });
+    expect(withCutoff({ kind: 'ambient', why: 'low', sec: 10, conf: 0.85 }, 0.85)).toEqual({ kind: 'at', sec: 10, conf: 0.85 });
+    expect(withCutoff({ kind: 'ambient', why: 'range', sec: 900, conf: 0.99 }, 0.5)).toEqual({ kind: 'ambient', why: 'range', sec: 900, conf: 0.99 });
+    expect(withCutoff({ kind: 'hide' }, 0.9)).toEqual({ kind: 'hide' });
   });
 });

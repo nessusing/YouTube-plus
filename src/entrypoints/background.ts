@@ -1,6 +1,7 @@
 import { coreChecks } from '@/core/core-checks';
 import { initLang } from '@/core/i18n';
 import { pageCheck } from '@/core/page-checks';
+import { DANMAKU_PAGE_CHECKS } from '@/features/danmaku/consts';
 import { PLAYER_PAGE_CHECKS } from '@/features/player/consts';
 import { QUEUE_PAGE_CHECKS } from '@/features/queue/consts';
 import { removeLegacyKeys } from '@/features/queue/profiles';
@@ -57,7 +58,9 @@ export default defineBackground(() => {
     ...tldrChecks(tldr),
     ...QUEUE_PAGE_CHECKS.map((n) => pageCheck('queue', n)),
     ...PLAYER_PAGE_CHECKS.map((n) => pageCheck('player', n)),
+    ...DANMAKU_PAGE_CHECKS.map((n) => pageCheck('danmaku', n)),
   ];
+  const dmLog = createLogger('danmaku');
 
   browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!isMessage(msg)) return;
@@ -73,6 +76,14 @@ export default defineBackground(() => {
         return true;
       case 'YouTube+/tldr-recheck':
         tldr.probe().then((gemini) => sendResponse({ gemini }));
+        return true;
+      case 'YouTube+/dm-ask':
+        tldr.ask(msg.prompt).then((r) => {
+          // The whole raw answer, always (plans P13 「日志」, after P17).
+          if (r.ok) dmLog.info(`Gemini answer for ${msg.videoId} (${(r.ms / 1000).toFixed(1)} s):\n${r.text}`);
+          else dmLog.warn(`Gemini request for ${msg.videoId} failed: ${r.code}${r.detail ? ` (${r.detail})` : ''}`);
+          sendResponse(r);
+        });
         return true;
       case 'YouTube+/open-options':
         void browser.tabs.create({ url: browser.runtime.getURL(`/options.html#${msg.hash ?? ''}`) });

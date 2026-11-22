@@ -85,3 +85,13 @@ export function parsePlacement(reply: string, o: { duration: number; highConf: n
   if (items.size) return { status: 'ok', items };
   return /^\s*no_transcript\b/im.test(reply) ? { status: 'no_transcript' } : { status: 'unparsed' };
 }
+
+/**
+ * A stored placement under the current confidence cut-off, so changing it
+ * applies to cached results too. Times outside the video stay ambient.
+ */
+export function withCutoff(pl: Placement, highConf: number): Placement {
+  if (pl.kind === 'at' && pl.conf < highConf) return { kind: 'ambient', why: 'low', sec: pl.sec, conf: pl.conf };
+  if (pl.kind === 'ambient' && pl.why === 'low' && pl.sec !== undefined && pl.conf !== undefined && pl.conf >= highConf) return { kind: 'at', sec: pl.sec, conf: pl.conf };
+  return pl;
+}

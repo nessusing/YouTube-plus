@@ -52,20 +52,24 @@ export function bodyOf(input: RequestInfo | URL, init?: RequestInit): Promise<un
   });
 }
 
-/** URL and init for one InnerTube POST, signed now. */
-export async function prepare(endpoint: string, body: Record<string, unknown>): Promise<{ url: string; init: RequestInit }> {
+/**
+ * URL and init for one InnerTube POST, signed now. `anonymous`: when signed
+ * out, send it unsigned instead of failing (reads such as `next` work that way).
+ */
+export async function prepare(endpoint: string, body: Record<string, unknown>, o: { anonymous?: boolean } = {}): Promise<{ url: string; init: RequestInit }> {
   const p3 = cookie('__Secure-3PAPISID');
   const sap = cookie('SAPISID') ?? p3;
-  if (!sap || !p3) throw new InnerTubeError(401, 'not signed in (no SAPISID cookie)');
+  const signed = !!sap && !!p3;
+  if (!signed && !o.anonymous) throw new InnerTubeError(401, 'not signed in (no SAPISID cookie)');
   const ts = Math.floor(Date.now() / 1000);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: `SAPISIDHASH ${ts}_${await sha1(`${ts} ${sap} ${ORIGIN}`)} SAPISID3PHASH ${ts}_${await sha1(`${ts} ${p3} ${ORIGIN}`)}`,
     'X-Origin': ORIGIN,
     'X-Goog-AuthUser': String(ytcfg.get('SESSION_INDEX') ?? 0),
     'X-Youtube-Client-Name': '1',
     'X-Youtube-Client-Version': String(ytcfg.get('INNERTUBE_CLIENT_VERSION') ?? ''),
   };
+  if (signed) headers.Authorization = `SAPISIDHASH ${ts}_${await sha1(`${ts} ${sap} ${ORIGIN}`)} SAPISID3PHASH ${ts}_${await sha1(`${ts} ${p3} ${ORIGIN}`)}`;
   const pageId = ytcfg.get('DELEGATED_SESSION_ID');
   if (pageId) headers['X-Goog-PageId'] = String(pageId);
   const init: RequestInit = { method: 'POST', credentials: 'include', headers, body: JSON.stringify({ context: ytcfg.get('INNERTUBE_CONTEXT'), ...body }) };
@@ -73,8 +77,8 @@ export async function prepare(endpoint: string, body: Record<string, unknown>): 
   return { url: `/youtubei/v1/${endpoint}?prettyPrint=false`, init };
 }
 
-export async function call<T = Record<string, unknown>>(endpoint: string, body: Record<string, unknown>): Promise<T> {
-  const req = await prepare(endpoint, body);
+export async function call<T = Record<string, unknown>>(endpoint: string, body: Record<string, unknown>, o: { anonymous?: boolean } = {}): Promise<T> {
+  const req = await prepare(endpoint, body, o);
   const res = await fetch(req.url, req.init);
   let json: Record<string, unknown> = {};
   try {

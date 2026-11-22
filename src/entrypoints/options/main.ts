@@ -2,7 +2,8 @@ import { getLang, initLang, t, type MsgKey } from '@/core/i18n';
 import { formatEntry, LOG_KEY, LOG_LEVELS, type LogEntry, type LogFeature } from '@/core/log';
 import type { Message, SelfCheckResponse } from '@/core/messages';
 import type { CheckResult } from '@/core/selfcheck';
-import { FLOAT_POS_KEY, MINI_POS_KEY } from '@/features/player/consts';
+import { FLOAT_POS_KEY, MINI_POS_KEY, PIP_SIZE_KEY } from '@/features/player/consts';
+import { checkShortcut, DEFAULT_PIP_SHORTCUT, formatShortcut, fromEvent, isModifierOnly } from '@/features/player/shortcut';
 import { recentYouTubeTab } from '@/core/page-checks';
 import { DEFAULT_PROFILE, type QueueMode, type QueueProfile } from '@/features/queue/core';
 import { PROFILE_PREFIX, PROTOCOL_ERROR_KEY } from '@/features/queue/keys';
@@ -527,8 +528,70 @@ const playerList = el('div', { className: 'stack' });
 for (const k of PLAYER_KEYS) {
   playerList.append(toggle(t(`opt.player.${k}`), settings.player[k], (v) => update((s) => { s.player[k] = v; })));
 }
+playerList.append(pipOption());
+
+/** Pop-out (§50): the switch, and under it the shortcut recorder. */
+function pipOption(): HTMLElement {
+  const supported = 'documentPictureInPicture' in window;
+  const sw = toggle(t('opt.player.pip'), settings.player.pip, (v) => {
+    void update((s) => { s.player.pip = v; });
+    render();
+  }, supported ? undefined : t('opt.player.pipUnsupported'));
+  const swInput = sw.querySelector('input')!;
+  swInput.disabled = !supported;
+
+  const keyBtn = el('button', { type: 'button', className: 'btn key' });
+  keyBtn.setAttribute('aria-label', t('opt.player.pipKey'));
+  const reset = button(t('opt.player.pipKeyDefault', { x: DEFAULT_PIP_SHORTCUT }), () => save(DEFAULT_PIP_SHORTCUT));
+  const clear = button(t('opt.player.pipKeyClear'), () => save(''));
+  const msg = el('p', { className: 'hint fail-line' });
+  let recording = false;
+
+  const render = () => {
+    const off = !supported || !settings.player.pip;
+    for (const b of [keyBtn, reset, clear]) b.disabled = off;
+    if (off) recording = false;
+    keyBtn.classList.toggle('recording', recording);
+    keyBtn.textContent = recording ? t('opt.player.pipKeyPress') : settings.shortcuts.pip || t('opt.player.pipKeyNone');
+  };
+  const stop = () => {
+    recording = false;
+    render();
+  };
+  const save = async (v: string) => {
+    msg.textContent = '';
+    recording = false;
+    await update((s) => { s.shortcuts.pip = v; });
+    render();
+  };
+  keyBtn.addEventListener('click', () => {
+    msg.textContent = '';
+    recording = true;
+    render();
+  });
+  keyBtn.addEventListener('blur', stop);
+  keyBtn.addEventListener('keydown', (e) => {
+    if (!recording) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape') return stop();
+    if (isModifierOnly(e)) return;
+    const k = fromEvent(e);
+    const err = checkShortcut(k);
+    if (err === 'needModifier') msg.textContent = t('opt.player.pipKeyNeedMod');
+    else if (err === 'youtube') msg.textContent = t('opt.player.pipKeyTaken', { x: formatShortcut(k) });
+    else void save(formatShortcut(k));
+  });
+  render();
+
+  const body = el('div', { className: 'switch-body' },
+    inline(el('span', { className: 'muted', textContent: t('opt.player.pipKey') }), keyBtn, reset, clear),
+    hint(t('opt.player.pipKeyRecordHint')), msg);
+  const box = el('div', { className: supported ? 'option' : 'option dim' }, sw, body);
+  return box;
+}
 const resetPos = button(t('opt.player.resetPos'), async () => {
-  await browser.storage.local.remove([MINI_POS_KEY, FLOAT_POS_KEY]);
+  await browser.storage.local.remove([MINI_POS_KEY, FLOAT_POS_KEY, PIP_SIZE_KEY]);
   flash(resetPos, t('opt.player.resetDone'));
 });
 group(player, t('opt.player.sub'), undefined, playerList, el('div', { className: 'inline mt-lg' }, resetPos));
@@ -661,7 +724,7 @@ pageHead(diag, t('opt.tab.diag'), t('opt.diag.title'), t('opt.diag.sub'));
 
 const checkBtn = button(t('opt.selfcheck'), () => runSelfCheck());
 const checkList = el('ul', { className: 'checks' });
-const STATUS_LABEL = { pass: t('opt.status.pass'), fail: t('opt.status.fail'), skip: t('opt.status.skip') } as const;
+const STATUS_LABEL = { pass: t('opt.status.pass'), fail: t('opt.status.fail'), skip: t('opt.status.skip'), warn: t('opt.status.warn') } as const;
 group(diag, t('opt.selfcheck'), t('opt.selfcheckHint'), el('div', { className: 'inline mb' }, checkBtn), checkList);
 
 function renderChecks(results: CheckResult[]) {

@@ -174,12 +174,13 @@ function createNotifier(): Notifier {
     if (document.fullscreenElement) return [];
     const out: DOMRect[] = [];
     const miniUp = !!document.querySelector(SEL.app)?.hasAttribute(SEL.appMiniActiveAttr);
-    if (miniUp && !html.hasAttribute('data-ytpp-mini-min')) {
+    if (miniUp && !html.hasAttribute('data-ytpp-mini-min') && !html.hasAttribute('data-ytpp-pip')) {
       const r = document.querySelector(SEL.miniplayer)?.getBoundingClientRect();
       if (r && r.width && r.height) out.push(r);
     }
-    const bar = document.querySelector<HTMLElement>(MINI_BAR_TAG);
-    if (bar && bar.style.display !== 'none') {
+    // §44 and §50 each have one; at most one shows.
+    for (const bar of document.querySelectorAll<HTMLElement>(MINI_BAR_TAG)) {
+      if (bar.style.display === 'none') continue;
       const r = bar.getBoundingClientRect();
       if (r.width && r.height) out.push(r);
     }

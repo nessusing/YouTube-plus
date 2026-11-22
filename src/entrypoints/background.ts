@@ -59,7 +59,7 @@ export default defineBackground(() => {
     ...PLAYER_PAGE_CHECKS.map((n) => pageCheck('player', n)),
   ];
 
-  browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!isMessage(msg)) return;
     switch (msg.type) {
       case 'YouTube+/tldr-status':
@@ -76,6 +76,9 @@ export default defineBackground(() => {
         return true;
       case 'YouTube+/open-options':
         void browser.tabs.create({ url: browser.runtime.getURL(`/options.html#${msg.hash ?? ''}`) });
+        return;
+      case 'YouTube+/window-fullscreen':
+        void windowFullscreen(sender.tab, msg.on).catch((e) => createLogger('player').warn('window full screen failed', e));
         return;
       case 'YouTube+/log':
         store.add(msg.entries);
@@ -101,3 +104,24 @@ export default defineBackground(() => {
     }
   });
 });
+
+/**
+ * §50: full screen from the PiP window (features/player/pip-full.ts). The
+ * window's state before is kept in storage.session (the worker may sleep
+ * meanwhile) and put back on the way out.
+ */
+async function windowFullscreen(tab: Browser.tabs.Tab | undefined, on: boolean): Promise<void> {
+  if (tab?.id === undefined || tab.windowId === undefined) return;
+  const key = `player/windowState/${tab.windowId}`;
+  if (on) {
+    const w = await browser.windows.get(tab.windowId);
+    if (w.state !== 'fullscreen') await browser.storage.session.set({ [key]: w.state ?? 'normal' });
+    await browser.tabs.update(tab.id, { active: true });
+    await browser.windows.update(tab.windowId, { focused: true, state: 'fullscreen' });
+    return;
+  }
+  const was = (await browser.storage.session.get(key))[key] as Browser.windows.WindowState | undefined;
+  await browser.storage.session.remove(key);
+  if (was) await browser.windows.update(tab.windowId, { state: was });
+}
+

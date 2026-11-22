@@ -4,7 +4,8 @@
 import { t, type MsgKey } from './i18n';
 import type { LogFeature, Logger } from './log';
 
-export type CheckStatus = 'pass' | 'fail' | 'skip';
+/** warn: works, but something is missing that the user should know about (yellow, not a failure). */
+export type CheckStatus = 'pass' | 'fail' | 'skip' | 'warn';
 
 export interface CheckOutcome {
   status: CheckStatus;
@@ -41,7 +42,7 @@ export async function runChecks(
     const r = { feature: c.feature, name: t(c.name), ...outcome };
     results.push(r);
     const line = `self-check [${c.feature}] ${c.name}: ${r.status}${r.detail ? ` (${r.detail})` : ''}`;
-    if (r.status === 'fail') log.warn(line);
+    if (r.status === 'fail' || r.status === 'warn') log.warn(line);
     else log.info(line);
   }
   return results;

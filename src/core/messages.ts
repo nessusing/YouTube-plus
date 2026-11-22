@@ -8,6 +8,8 @@ export type Message =
   | { type: 'YouTube+/log-clear' }
   | { type: 'YouTube+/selfcheck' }
   | { type: 'YouTube+/open-options'; hash?: string }
+  /** §50 full screen: the sender's tab to the front and its window full screen (as F11), or back as it was. */
+  | { type: 'YouTube+/window-fullscreen'; on: boolean }
   | { type: 'YouTube+/tldr-status' }
   | { type: 'YouTube+/tldr-resume' }
   | { type: 'YouTube+/tldr-signin' }

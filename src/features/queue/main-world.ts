@@ -8,6 +8,7 @@ import { isToMain, TAG, type PlayerEvent, type TakeoverState, type ToIso } from 
 import type { SyncResult } from './rpc';
 import { isLoopWrap, isQueueCommand, isWatchedHere, meetsExpect, nextHasList, nextRows, panelSnapshot, panelView, parseEdit, parseQueueAction, QUEUE_ICON, type Expect, type ListAction } from './core';
 import * as it from './innertube';
+import { listenWithPip, queryPlayerDom } from '@/core/pip-doc';
 import { installPageMenus, setMenu, sheetItems, swapDrop } from './page-menus';
 
 const post = (m: Omit<ToIso, 'tag' | 'dir'>) => window.postMessage({ tag: TAG, dir: 'toIso', ...m }, location.origin);
@@ -237,8 +238,9 @@ async function armRemoval(listId: string, setVideoId: string, videoId: string): 
   armed = { videoId, listId, setVideoId, req, at: Date.now() };
 }
 
+/** Popped out to a PiP window (§50), the player is in that window's document. */
 function player(): PlayerApi | null {
-  return document.querySelector<PlayerApi>('#movie_player');
+  return queryPlayerDom<PlayerApi>('#movie_player');
 }
 
 function installPlayerWatch(): void {
@@ -259,10 +261,12 @@ function installPlayerWatch(): void {
       currentTime: v.currentTime, duration: v.duration || 0, loop: v.loop,
     };
   };
+  // By tag: a video in a PiP window (§50) may not be an instance of this window's HTMLVideoElement.
   const isMain = (v: EventTarget | null): v is HTMLVideoElement =>
-    v instanceof HTMLVideoElement && !!v.closest('#movie_player');
+    (v as Element | null)?.tagName === 'VIDEO' && !!(v as Element).closest('#movie_player');
 
-  document.addEventListener('timeupdate', (e) => {
+  // On every PiP document too: popped out (§50), the video's events stay there.
+  listenWithPip('timeupdate', (e) => {
     try {
       if (!isMain(e.target)) return;
       const s = snapshot('left', e.target);
@@ -306,7 +310,7 @@ function installPlayerWatch(): void {
       // never break the page
     }
   }, true);
-  document.addEventListener('ended', (e) => {
+  listenWithPip('ended', (e) => {
     try {
       if (!isMain(e.target)) return;
       const s = snapshot('ended', e.target);

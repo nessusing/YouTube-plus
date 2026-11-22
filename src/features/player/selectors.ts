@@ -24,6 +24,14 @@ export const SEL = {
   miniPlayHolder: '.ytp-miniplayer-play-button-container',
   /** The ✕ at the top right of the miniplayer; the minimize button goes left of it (§44). */
   miniClose: '.ytp-miniplayer-scrim > .ytp-miniplayer-close-button',
+  /** The miniplayer's top layer (Expand, ✕); the pop-out button goes right of Expand (§50). */
+  miniScrim: '.ytp-miniplayer-scrim',
+  /** The miniplayer's Expand (to the watch page), top left (§50 full screen). */
+  miniExpand: '.ytp-miniplayer-scrim .ytp-miniplayer-expand-watch-page-button',
+  /** The watch page's "Miniplayer (i)" button (§50). Not there on 2026-11-22: pip.ts then sends an `i` keydown. */
+  miniButton: '.ytp-miniplayer-button',
+  /** Where #movie_player lives, inside ytd-player (§50 puts it back there). */
+  playerHome: 'ytd-player #container',
   /** Video title in the miniplayer's info bar. */
   miniTitle: 'ytd-miniplayer-info-bar [class*="ytdMiniplayerInfoBarTitle"]',
   /** Inside the miniplayer, pressing on these must not start a window drag. */

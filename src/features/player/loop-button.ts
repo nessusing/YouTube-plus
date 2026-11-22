@@ -6,6 +6,7 @@
 // the page (player-main.ts) so the right-click menu follows. YouTube turns it
 // off itself when another video starts.
 
+import { queryPlayerDom } from '@/core/pip-doc';
 import { injectStyle, whenElement, type Toggleable } from '@/core/dom';
 import { t } from '@/core/i18n';
 import { LOOP_OFF_EVENT, LOOP_ON_EVENT } from './consts';
@@ -145,14 +146,15 @@ export function loopButton(): LoopButton {
     // A frame queued before disable() must not put the buttons back.
     if (!active) return;
     let changed = false;
-    const v = document.querySelector<HTMLVideoElement>(SEL.video);
+    // Popped out (§50), the player and its control bar are in the PiP window.
+    const v = queryPlayerDom<HTMLVideoElement>(SEL.video);
     if (v !== video) {
       videoMo.disconnect();
       video = v;
       if (v) videoMo.observe(v, { attributes: true, attributeFilter: ['loop'] });
       changed = true;
     }
-    const play = document.querySelector(SEL.barPlay);
+    const play = queryPlayerDom(SEL.barPlay);
     if (play && (!bar || bar.previousElementSibling !== play)) {
       bar ??= make('ytpp-loop-bar');
       play.after(bar);

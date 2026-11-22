@@ -22,6 +22,14 @@ export interface PlayerSettings {
   loopButton: boolean;
   /** Minimize button in the miniplayer (§44). */
   miniMinimize: boolean;
+  /** Pop the miniplayer out to a Document PiP window (§50): the button and the shortcut. */
+  pip: boolean;
+}
+
+/** Keyboard shortcuts, as "Shift+I" (features/player/shortcut.ts); "" = none. */
+export interface ShortcutSettings {
+  /** Pop out / back in (§50). */
+  pip: string;
 }
 
 /** Caps on what we keep in storage.local (design §4.1). */
@@ -58,6 +66,7 @@ export interface Settings {
   lang: Lang;
   features: Record<FeatureId, boolean>;
   player: PlayerSettings;
+  shortcuts: ShortcutSettings;
   tldr: TldrSettings;
   storage: StorageLimits;
   notify: NotifySettings;
@@ -67,7 +76,8 @@ export const DEFAULT_SETTINGS: Settings = {
   enabled: true,
   lang: 'en',
   features: { tldr: true, queue: true, player: true },
-  player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true, loopButton: false, miniMinimize: true },
+  player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true, loopButton: false, miniMinimize: true, pip: true },
+  shortcuts: { pip: 'Shift+I' },
   tldr: { titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200, batchSize: 5 },
   storage: { logMB: 2, tldrCacheMB: 5 },
   notify: { position: 'bottom', maxVisible: 3, plainSec: 4, actionSec: 6, errorSec: 8 },
@@ -90,6 +100,7 @@ export function withDefaults(stored: DeepPartial<Settings> | undefined): Setting
     lang: s.lang === 'en' || s.lang === 'zh' ? s.lang : detectLang(),
     features: { ...DEFAULT_SETTINGS.features, ...s.features },
     player: { ...DEFAULT_SETTINGS.player, ...s.player },
+    shortcuts: { ...DEFAULT_SETTINGS.shortcuts, ...s.shortcuts },
     tldr: { ...DEFAULT_SETTINGS.tldr, ...s.tldr },
     storage: { ...DEFAULT_SETTINGS.storage, ...s.storage },
     notify: { ...DEFAULT_SETTINGS.notify, ...s.notify },

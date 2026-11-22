@@ -277,6 +277,12 @@ select {
 .list-select { max-width: min(28em, 100%); }
 .who .avatar { border-radius: 50%; }
 .hint.warn { color: var(--warn); }
+/* a switch's own settings, under its label (pop-out shortcut, P12) */
+.switch-body { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 0 52px; }
+.switch-body .fail-line { color: var(--fail); }
+.switch-body .fail-line:empty { display: none; }
+.btn.key { min-width: 7em; font-variant-numeric: tabular-nums; }
+.btn.key.recording { border-color: var(--link); color: var(--link); }
 
 .checks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .checks li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: baseline; }
@@ -284,6 +290,7 @@ select {
 .chip.pass { color: var(--pass); }
 .chip.fail { color: var(--fail); }
 .chip.skip { color: var(--muted); }
+.chip.warn { color: var(--warn); }
 .checks .detail { display: block; color: var(--muted); font-size: 12px; word-break: break-word; }
 .checks .fail-line { color: var(--fail); }
 

@@ -2,7 +2,9 @@
 // settings join this object as each feature lands. The queue's settings are
 // kept per YouTube identity instead (features/queue/profiles.ts, design §22).
 
-export type FeatureId = 'tldr' | 'queue' | 'player';
+import { type DanmakuParams, DEFAULT_PARAMS, paramsWithDefaults } from '@/features/danmaku/params';
+
+export type FeatureId = 'tldr' | 'queue' | 'player' | 'danmaku';
 
 /** UI language = YouTube's (core/youtube-lang.ts); TL;DR output is in each video's own language. */
 export type Lang = 'en' | 'zh';
@@ -11,7 +13,7 @@ export function detectLang(): Lang {
   const l = typeof navigator !== 'undefined' ? navigator.language : 'en';
   return /^zh\b/i.test(l) ? 'zh' : 'en';
 }
-export const FEATURES: FeatureId[] = ['tldr', 'queue', 'player'];
+export const FEATURES: FeatureId[] = ['tldr', 'queue', 'player', 'danmaku'];
 
 export interface PlayerSettings {
   miniControls: boolean;
@@ -60,6 +62,17 @@ export interface NotifySettings {
   errorSec: number;
 }
 
+/** Comment danmaku (plans P13). The feature switch is features.danmaku, off by default. */
+export interface DanmakuSettings {
+  /** The player button, remembered for every video like the captions button. */
+  active: boolean;
+  /** Where comments without timestamps go: spread locally or placed by Gemini. */
+  placement: 'local' | 'ai';
+  /** Source label on each card, timings in the button's tooltip. */
+  debug: boolean;
+  params: DanmakuParams;
+}
+
 export interface Settings {
   /** Master switch: when false, no feature runs. */
   enabled: boolean;
@@ -70,17 +83,19 @@ export interface Settings {
   tldr: TldrSettings;
   storage: StorageLimits;
   notify: NotifySettings;
+  danmaku: DanmakuSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   enabled: true,
   lang: 'en',
-  features: { tldr: true, queue: true, player: true },
+  features: { tldr: true, queue: true, player: true, danmaku: false },
   player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true, loopButton: false, miniMinimize: true, pip: true },
   shortcuts: { pip: 'Shift+I' },
   tldr: { titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200, batchSize: 5 },
   storage: { logMB: 2, tldrCacheMB: 5 },
   notify: { position: 'bottom', maxVisible: 3, plainSec: 4, actionSec: 6, errorSec: 8 },
+  danmaku: { active: true, placement: 'local', debug: false, params: DEFAULT_PARAMS },
 };
 
 /** A feature runs only when both the master switch and its own switch are on. */
@@ -104,6 +119,12 @@ export function withDefaults(stored: DeepPartial<Settings> | undefined): Setting
     tldr: { ...DEFAULT_SETTINGS.tldr, ...s.tldr },
     storage: { ...DEFAULT_SETTINGS.storage, ...s.storage },
     notify: { ...DEFAULT_SETTINGS.notify, ...s.notify },
+    danmaku: {
+      active: s.danmaku?.active !== false,
+      placement: s.danmaku?.placement === 'ai' ? 'ai' : 'local',
+      debug: s.danmaku?.debug === true,
+      params: paramsWithDefaults(s.danmaku?.params),
+    },
   };
 }
 

@@ -14,6 +14,11 @@ import type { TldrStatus } from '@/features/tldr/service';
 import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
 import { DEFAULT_SETTINGS, FEATURES, featureOn, getSettings, saveSettings, type NotifySettings, type PlayerSettings, type Settings } from '@/core/settings';
 import { NOTIFY_PREVIEW, NOTIFY_X_KEY } from '@/core/notify';
+import { missingPlaceholders } from '@/features/danmaku/ai';
+import { CardView } from '@/features/danmaku/card-view';
+import { demoTimeline } from '@/features/danmaku/demo';
+import { slotAt } from '@/features/danmaku/frame';
+import { DEFAULT_PARAMS, DEFAULT_PROMPT, promptOf, type DanmakuParams } from '@/features/danmaku/params';
 
 // Build the page in YouTube's language (plans P23); rebuild (reload) when it changes.
 await initLang(() => location.reload());
@@ -93,6 +98,7 @@ const tabs = [
   { id: 'tldr', label: t('feature.tldr') },
   { id: 'queue', label: t('feature.queue') },
   { id: 'player', label: t('feature.player') },
+  { id: 'danmaku', label: t('feature.danmaku') },
   { id: 'notify', label: t('opt.tab.notify') },
   { id: 'storage', label: t('opt.tab.storage') },
   { id: 'diag', label: t('opt.tab.diag') },
@@ -110,6 +116,7 @@ function selectTab(id: TabId) {
   for (const [k, b] of buttons) b.setAttribute('aria-selected', String(k === id));
   void renderTldr();
   if (id === 'storage') void renderStorage();
+  if (id === 'danmaku') syncDanmakuOff();
   window.scrollTo(0, 0);
 }
 
@@ -595,6 +602,202 @@ const resetPos = button(t('opt.player.resetPos'), async () => {
   flash(resetPos, t('opt.player.resetDone'));
 });
 group(player, t('opt.player.sub'), undefined, playerList, el('div', { className: 'inline mt-lg' }, resetPos));
+
+// ---------- comment danmaku (plans P13) ----------
+
+const dmTab = sections.get('danmaku')!;
+pageHead(dmTab, t('feature.danmaku'), t('opt.dm.title'), t('opt.dm.sub'));
+const dmOff = el('p', { className: 'hint warn', textContent: t('opt.dm.off') });
+dmTab.append(dmOff);
+function syncDanmakuOff() {
+  dmOff.hidden = featureOn(settings, 'danmaku');
+}
+
+/** Radio buttons; `rich` options carry a description. */
+function radios<T extends string>(name: string, options: [T, string, string?][], get: () => T, set: (v: T) => void): HTMLElement {
+  const rich = options.some((o) => o[2]);
+  const box = el('div', { className: rich ? 'radios rich' : 'radios', role: 'radiogroup' });
+  for (const [v, title, desc] of options) {
+    const input = el('input', { type: 'radio', name, value: v, checked: get() === v });
+    input.addEventListener('change', () => input.checked && set(v));
+    const text = desc
+      ? el('span', { className: 'text' }, el('strong', { textContent: title }), el('small', { textContent: desc }))
+      : el('span', { className: 'text', textContent: title });
+    box.append(el('label', {}, input, text));
+  }
+  return box;
+}
+
+group(dmTab, t('opt.dm.placement'), t('opt.dm.placementHint'),
+  radios('dm-placement', [['local', t('opt.dm.local'), t('opt.dm.localDesc')], ['ai', t('opt.dm.ai'), t('opt.dm.aiDesc')]],
+    () => settings.danmaku.placement, (v) => void update((s) => { s.danmaku.placement = v; })),
+  el('div', { className: 'mt' }, row(t('opt.dm.fallback'),
+    radios('dm-fallback', [['local', t('opt.dm.fallbackLocal')], ['stamps', t('opt.dm.fallbackStamps')]],
+      () => settings.danmaku.params.ai.fallback, (v) => void update((s) => { s.danmaku.params.ai.fallback = v; })))),
+);
+
+group(dmTab, t('opt.dm.debug'), undefined,
+  toggle(t('opt.dm.debugLabel'), settings.danmaku.debug, (v) => update((s) => { s.danmaku.debug = v; })));
+
+// The prompt: saved as '' while it equals the default (settings are one 8 KB sync item).
+const promptBox = el('textarea', { className: 'prompt', spellcheck: false, rows: 20, value: promptOf(settings.danmaku.params.ai) });
+promptBox.setAttribute('aria-label', t('opt.dm.prompt'));
+const promptState = el('p', { className: 'hint' });
+function renderPromptState() {
+  const missing = missingPlaceholders(promptBox.value);
+  promptState.className = missing.length ? 'hint warn' : 'hint';
+  promptState.textContent = missing.length ? t('opt.dm.promptMissing', { x: missing.join('、') })
+    : promptBox.value === DEFAULT_PROMPT ? t('opt.dm.promptIsDefault') : t('opt.dm.promptEdited');
+}
+let promptTimer: ReturnType<typeof setTimeout> | undefined;
+promptBox.addEventListener('input', () => {
+  renderPromptState();
+  clearTimeout(promptTimer);
+  promptTimer = setTimeout(() => {
+    const v = promptBox.value;
+    void update((s) => { s.danmaku.params.ai.prompt = v === DEFAULT_PROMPT ? '' : v; });
+  }, 600);
+});
+renderPromptState();
+group(dmTab, t('opt.dm.prompt'), t('opt.dm.promptHint'), promptBox, promptState,
+  el('div', { className: 'inline mt' }, button(t('opt.dm.defaults'), async () => {
+    clearTimeout(promptTimer);
+    promptBox.value = DEFAULT_PROMPT;
+    renderPromptState();
+    await update((s) => { s.danmaku.params.ai.prompt = ''; });
+  })));
+
+// Tunable numbers, by group; each group can go back to its defaults.
+type NumKey<G extends keyof DanmakuParams> = { [K in keyof DanmakuParams[G]]: DanmakuParams[G][K] extends number ? K : never }[keyof DanmakuParams[G]] & string;
+type Field = { [G in keyof DanmakuParams]: { g: G; k: NumKey<G>; min: number; max: number; step: number; unit?: MsgKey } }[keyof DanmakuParams];
+const f = <G extends keyof DanmakuParams>(g: G, k: NumKey<G>, min: number, max: number, step: number, unit?: MsgKey): Field => ({ g, k, min, max, step, unit }) as Field;
+const SEC = 'opt.dm.u.sec', TIMES = 'opt.dm.u.times', RATIO = 'opt.dm.u.ratio', ITEMS = 'opt.dm.u.items', CHARS = 'opt.dm.u.chars';
+const DM_GROUPS: { g: keyof DanmakuParams; hint?: MsgKey; fields: Field[] }[] = [
+  { g: 'display', fields: [
+    f('display', 'screenSec', 1, 30, 0.5, SEC), f('display', 'latinCharSec', 0.01, 1, 0.001, SEC), f('display', 'cjkCharSec', 0.01, 2, 0.01, SEC),
+    f('display', 'minSec', 0.5, 10, 0.5, SEC), f('display', 'gapSec', 0, 5, 0.5, SEC), f('display', 'fadeMs', 0, 2000, 50, 'opt.dm.u.ms'),
+    f('display', 'fontScale', 0.5, 3, 0.1, TIMES), f('display', 'bgOpacity', 0, 1, 0.05, RATIO), f('display', 'refLineWidth', 10, 200, 1, CHARS),
+    f('display', 'cjkWidth', 1, 3, 0.1, TIMES), f('display', 'resumeMinSec', 0, 10, 0.5, SEC),
+  ] },
+  { g: 'comments', fields: [
+    f('comments', 'firstBatch', 10, 600, 10, ITEMS), f('comments', 'minCount', 10, 600, 10, ITEMS), f('comments', 'perMinute', 1, 100, 1, ITEMS),
+    f('comments', 'maxCount', 10, 2000, 10, ITEMS), f('comments', 'minLength', 0, 100, 1, CHARS), f('comments', 'cjkWeight', 1, 5, 0.5, TIMES),
+  ] },
+  { g: 'stamps', fields: [
+    f('stamps', 'maxDelaySec', 0, 60, 0.5, SEC), f('stamps', 'clusterSec', 0, 10, 0.5, SEC), f('stamps', 'rotateMax', 1, 10, 1, ITEMS),
+    f('stamps', 'tocMinStamps', 2, 20, 1), f('stamps', 'tocTitleMax', 10, 200, 1, CHARS),
+  ] },
+  { g: 'heat', hint: 'opt.dm.g.heatHint', fields: [
+    f('heat', 'likeWeight', -5, 5, 0.1), f('heat', 'replyWeight', -5, 5, 0.1), f('heat', 'recencyWeight', -5, 5, 0.1),
+  ] },
+  { g: 'local', hint: 'opt.dm.g.localHint', fields: [
+    f('local', 'perMinuteMin', 0.5, 20, 0.5, 'opt.dm.u.perMin'), f('local', 'perMinuteMax', 1, 30, 0.5, 'opt.dm.u.perMin'), f('local', 'windowSec', 5, 300, 5, SEC),
+    f('local', 'replayWeight', 0, 10, 0.1), f('local', 'leadInSec', 0, 60, 1, SEC), f('local', 'spoilerTail', 0, 1, 0.05, RATIO),
+  ] },
+  { g: 'ai', hint: 'opt.dm.g.aiHint', fields: [
+    f('ai', 'batchSize', 10, 300, 10, ITEMS), f('ai', 'commentMaxChars', 50, 2000, 50), f('ai', 'highConf', 0, 1, 0.05, RATIO),
+    f('ai', 'relevanceWeight', 0, 10, 0.1), f('ai', 'heatWeight', 0, 10, 0.1), f('ai', 'idleSec', 5, 120, 1, SEC),
+  ] },
+  { g: 'cache', fields: [f('cache', 'days', 1, 60, 1, 'opt.dm.u.days'), f('cache', 'mb', 0.5, 50, 0.5, 'opt.dm.u.mb')] },
+];
+
+const paramOf = (s: Settings, g: keyof DanmakuParams) => s.danmaku.params[g] as unknown as Record<string, unknown>;
+
+/** A number field bound to one param; out-of-range input snaps back. */
+function paramInput(fd: Field): { input: HTMLInputElement; refresh: () => void } {
+  const get = () => String(paramOf(settings, fd.g)[fd.k]);
+  const input = el('input', { type: 'number', min: String(fd.min), max: String(fd.max), step: String(fd.step), value: get(), className: 'field num' });
+  input.addEventListener('change', () => {
+    const v = Number(input.value);
+    if (input.value === '' || !(v >= fd.min && v <= fd.max)) { input.value = get(); return; }
+    void update((s) => { paramOf(s, fd.g)[fd.k] = v; });
+  });
+  return { input, refresh: () => { input.value = get(); } };
+}
+
+const splitWords = (v: string) => v.split(/[,，、]/).map((w) => w.trim()).filter(Boolean);
+
+// Preview (plans P13): the real card on a mock player, looping sample comments
+// with the current display params (read every frame, so edits show at once).
+const PV_SIZES = { small: 426, medium: 640, large: 854 } as const;
+/** YouTube's control bar, about this tall. */
+const PV_CONTROLS_PX = 48;
+const pv = { size: 'medium' as keyof typeof PV_SIZES, controls: false, captions: false, debug: settings.danmaku.debug, playing: true, clock: 0, last: performance.now() };
+const pvView = new CardView();
+const pvCaption = el('div', { className: 'dm-caption', textContent: t('opt.dm.pv.caption') });
+const pvCtrl = el('div', { className: 'dm-ctrl' }, el('div', { className: 'dm-bar' }));
+const pvBox = el('div', { className: 'dm-preview' }, pvCtrl, pvCaption, pvView.host);
+const pvStatus = el('span', { className: 'muted' });
+const pvSize = el('select');
+for (const k of Object.keys(PV_SIZES) as (keyof typeof PV_SIZES)[]) pvSize.append(el('option', { value: k, textContent: t(`opt.dm.pv.${k}`), selected: k === pv.size }));
+pvSize.setAttribute('aria-label', t('opt.dm.pv.size'));
+pvSize.addEventListener('change', () => { pv.size = pvSize.value as keyof typeof PV_SIZES; pvLayout(); });
+const pvPlay = button(t('opt.dm.pv.pause'), () => {
+  pv.playing = !pv.playing;
+  pvPlay.textContent = pv.playing ? t('opt.dm.pv.pause') : t('opt.dm.pv.play');
+});
+function pvLayout() {
+  pvBox.style.width = `${PV_SIZES[pv.size]}px`;
+  pvCtrl.hidden = !pv.controls;
+  pvCaption.hidden = !pv.captions;
+}
+pvLayout();
+group(dmTab, t('opt.dm.preview'), t('opt.dm.previewHint'),
+  el('div', { className: 'inline' }, el('span', { className: 'muted', textContent: t('opt.dm.pv.size') }), pvSize, pvPlay, button(t('opt.dm.pv.restart'), () => { pv.clock = 0; }), pvStatus),
+  el('div', { className: 'inline mt' },
+    toggle(t('opt.dm.pv.controls'), pv.controls, (v) => { pv.controls = v; pvLayout(); }),
+    toggle(t('opt.dm.pv.captions'), pv.captions, (v) => { pv.captions = v; pvLayout(); }),
+    toggle(t('opt.dm.pv.debug'), pv.debug, (v) => { pv.debug = v; })),
+  pvBox);
+
+function pvFrame(now: number) {
+  requestAnimationFrame(pvFrame);
+  const dt = (now - pv.last) / 1000;
+  pv.last = now;
+  if (dmTab.hidden) return;
+  const { slots, length } = demoTimeline(settings.danmaku.params);
+  if (pv.playing) pv.clock = (pv.clock + dt) % length;
+  const width = pvBox.clientWidth;
+  const height = pvBox.clientHeight;
+  // Like the real overlay: above the controls when they show, above the captions when on.
+  const base = pv.controls ? PV_CONTROLS_PX + 8 : Math.max(12, height * 0.04);
+  pvCaption.style.fontSize = `${Math.round(height * 0.034)}px`;
+  pvCaption.style.bottom = `${base}px`;
+  const bottom = pv.captions ? base + pvCaption.offsetHeight + 8 : base;
+  const s = slotAt(slots, pv.clock);
+  pvView.draw(s, s ? pv.clock - s.start : 0, { p: settings.danmaku.params.display, width, height, bottom, debug: pv.debug });
+  pvStatus.textContent = t('opt.dm.pv.status', { i: s ? slots.indexOf(s) + 1 : '–', n: slots.length, t: pv.clock.toFixed(1) });
+}
+requestAnimationFrame(pvFrame);
+
+group(dmTab, t('opt.dm.params'), t('opt.dm.paramsHint'));
+for (const dg of DM_GROUPS) {
+  const refreshers: (() => void)[] = [];
+  const g = group(dmTab, t(`opt.dm.g.${dg.g}` as MsgKey), dg.hint ? t(dg.hint) : undefined);
+  for (const fd of dg.fields) {
+    const { input, refresh } = paramInput(fd);
+    refreshers.push(refresh);
+    g.append(row(t(`opt.dm.${fd.g}.${fd.k}` as MsgKey), inline(input, fd.unit ? el('span', { className: 'muted', textContent: t(fd.unit) }) : '')));
+  }
+  if (dg.g === 'local') {
+    const words = el('input', { type: 'text', className: 'field text wide', value: settings.danmaku.params.local.spoilerWords.join(', ') });
+    words.addEventListener('change', () => void update((s) => { s.danmaku.params.local.spoilerWords = splitWords(words.value); }));
+    refreshers.push(() => { words.value = settings.danmaku.params.local.spoilerWords.join(', '); });
+    g.append(row(t('opt.dm.local.spoilerWords'), words));
+  }
+  if (dg.g === 'ai') {
+    const amb = toggle(t('opt.dm.ai.ambient'), settings.danmaku.params.ai.ambient, (v) => update((s) => { s.danmaku.params.ai.ambient = v; }));
+    refreshers.push(() => { amb.querySelector('input')!.checked = settings.danmaku.params.ai.ambient; });
+    g.append(row('', amb));
+  }
+  g.append(el('div', { className: 'inline mt' }, button(t('opt.dm.defaults'), async () => {
+    await update((s) => {
+      const keep = dg.g === 'ai' ? { prompt: s.danmaku.params.ai.prompt, fallback: s.danmaku.params.ai.fallback } : {};
+      Object.assign(s.danmaku.params[dg.g], structuredClone(DEFAULT_PARAMS[dg.g]), keep);
+    });
+    for (const r of refreshers) r();
+  })));
+}
 
 // ---------- notifications (design §46) ----------
 

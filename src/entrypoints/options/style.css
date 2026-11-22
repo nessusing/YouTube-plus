@@ -225,6 +225,50 @@ input.field {
 input.field:focus { outline: none; border-bottom: 2px solid var(--link); padding-bottom: 4px; }
 input.field.num { width: 5.5em; }
 input.field.text { width: min(20em, 100%); }
+input.field.text.wide { width: min(36em, 100%); }
+
+/* Danmaku prompt (plans P13) */
+textarea.prompt {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 22em;
+  resize: vertical;
+  color: var(--fg);
+  background: var(--panel);
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: 12px/1.5 ui-monospace, "JetBrains Mono", monospace;
+}
+textarea.prompt:focus { outline: 2px solid var(--link); outline-offset: 0; }
+
+/* Danmaku preview: a mock player (plans P13) */
+.dm-preview {
+  position: relative;
+  overflow: hidden;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  margin-top: 16px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 30% 35%, rgba(255, 190, 120, 0.35), transparent 45%),
+    radial-gradient(circle at 75% 60%, rgba(90, 160, 255, 0.3), transparent 50%),
+    linear-gradient(160deg, #1b2733, #2b2219 70%, #121212);
+}
+.dm-ctrl { position: absolute; left: 0; right: 0; bottom: 0; height: 48px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.65)); }
+.dm-bar { position: absolute; left: 12px; right: 12px; bottom: 40px; height: 3px; background: rgba(255, 255, 255, 0.3); }
+.dm-bar::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 40%; background: #f00; }
+.dm-caption {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 0.3em;
+  white-space: nowrap;
+  color: #fff;
+  background: rgba(8, 8, 8, 0.75);
+  font-family: "YouTube Noto", Roboto, Arial, sans-serif;
+  line-height: 1.35;
+}
 
 select {
   font: inherit;

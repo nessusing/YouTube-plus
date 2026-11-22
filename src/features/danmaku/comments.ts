@@ -31,6 +31,23 @@ export interface Comment {
   images: InlineImage[];
   /** A web link or a link to another video. */
   hasLink: boolean;
+  // Only the comments panel uses these (style 'panel'); the danmaku cache leaves them out (lean()).
+  /** The author's avatar. */
+  avatar?: string;
+  /** As YouTube says it, in English: "3 months ago (edited)". */
+  published?: string;
+  /** 0 for a top-level comment, 1 for a reply, 2 for a reply to a reply. */
+  level?: number;
+  /** Replies that came inline with this one (a reply's own replies, in the page's reply threads). */
+  subReplies?: Comment[];
+  /** The (next) page of this comment's replies. */
+  replyToken?: string;
+}
+
+/** Without the fields only the comments panel uses: what the danmaku cache keeps. */
+export function lean(c: Comment): Comment {
+  const { avatar: _a, published: _p, level: _l, subReplies: _s, replyToken: _r, ...rest } = c;
+  return rest;
 }
 
 /** One stretch of the "Most replayed" curve, in seconds; score 0–1. */
@@ -106,11 +123,11 @@ export function parseWatch(j: unknown): WatchInfo {
   return { token, heatmap };
 }
 
-function parseEntity(e: J, videoId: string): Comment | undefined {
+function parseEntity(e: J, videoId: string, level: number): Comment | undefined {
   const p = obj(e.properties);
   const content = obj(p?.content);
   const text = str(content?.content);
-  if (!p || !text || Number(p.replyLevel ?? 0) !== 0) return undefined;
+  if (!p || !text || Number(p.replyLevel ?? 0) !== level) return undefined;
   const stamps: Stamp[] = [];
   let hasLink = /https?:\/\/|\bwww\./i.test(text);
   for (const run of arr(content?.commandRuns)) {
@@ -142,11 +159,26 @@ function parseEntity(e: J, videoId: string): Comment | undefined {
     stamps: stamps.sort((a, b) => a.start - b.start),
     images,
     hasLink,
+    avatar: str(at(e, 'author', 'avatarThumbnailUrl')) || undefined,
+    published: str(p.publishedTime) || undefined,
   };
 }
 
-/** One page of comments (a `next` call with a continuation token). */
-export function parsePage(j: unknown, videoId: string): CommentPage {
+/** The token of a continuation item, from its endpoint or its "Show more" button. */
+function continuationToken(item: unknown): string | undefined {
+  const c = obj(at(item, 'continuationItemRenderer'));
+  return str(at(c, 'continuationEndpoint', 'continuationCommand', 'token')) || str(at(c, 'button', 'buttonRenderer', 'command', 'continuationCommand', 'token')) || undefined;
+}
+
+/**
+ * One page of comments (a `next` call with a continuation token). Level 0:
+ * top-level comments, each with its replies' token. Level 1: a page of one
+ * comment's replies. Shapes seen 2026-11-22: a plain call gets replies as bare
+ * commentViewModels and the replies token under `contents`; the page's own
+ * client gets `subThreads`, and each reply as a thread of its own whose
+ * subThreads hold its replies (level 2) inline plus a token for more.
+ */
+export function parsePage(j: unknown, videoId: string, level = 0): CommentPage {
   const entities = new Map<string, J>();
   const order: string[] = [];
   for (const m of arr(at(j, 'frameworkUpdates', 'entityBatchUpdate', 'mutations'))) {
@@ -157,13 +189,28 @@ export function parsePage(j: unknown, videoId: string): CommentPage {
     order.push(key);
   }
   const items = arr(at(j, 'onResponseReceivedEndpoints')).flatMap((ep) => Object.values(obj(ep) ?? {})).flatMap((v) => arr(at(v, 'continuationItems')));
-  // Ranking order = the thread list; the entity list is a fallback.
-  const ranked = items.map((it) => str(at(it, 'commentThreadRenderer', 'commentViewModel', 'commentViewModel', 'commentKey'))).filter((k) => entities.has(k));
-  const keys = ranked.length ? ranked : order;
-  const comments = keys.flatMap((k) => parseEntity(entities.get(k)!, videoId) ?? []);
 
-  const last = obj(at(items.at(-1), 'continuationItemRenderer'));
-  const next = str(at(last, 'continuationEndpoint', 'continuationCommand', 'token')) || str(at(last, 'button', 'buttonRenderer', 'command', 'continuationCommand', 'token')) || undefined;
+  /** A thread (or bare view model) at `lvl`, with what it carries of its replies. */
+  const fromItem = (it: unknown, lvl: number): Comment | undefined => {
+    const thread = obj(at(it, 'commentThreadRenderer'));
+    const key = str(thread ? at(thread, 'commentViewModel', 'commentViewModel', 'commentKey') : at(it, 'commentViewModel', 'commentKey'));
+    const e = entities.get(key);
+    const c = e && parseEntity(e, videoId, lvl);
+    if (!c) return undefined;
+    if (lvl) c.level = lvl;
+    const rr = obj(at(thread, 'replies', 'commentRepliesRenderer'));
+    const subs = arr(rr?.subThreads ?? rr?.contents);
+    const inline = subs.flatMap((sub) => fromItem(sub, lvl + 1) ?? []);
+    if (inline.length) c.subReplies = inline;
+    const token = subs.map(continuationToken).find(Boolean);
+    if (token) c.replyToken = token;
+    return c;
+  };
+  // Ranking order = the thread list; the entity list is a fallback.
+  let comments = items.flatMap((it) => fromItem(it, level) ?? []);
+  if (!comments.length) comments = order.flatMap((k) => parseEntity(entities.get(k)!, videoId, level) ?? []);
+
+  const next = continuationToken(items.at(-1));
 
   const header = items.map((it) => obj(at(it, 'commentsHeaderRenderer'))).find(Boolean);
   const countText = arr(at(header, 'countText', 'runs')).map((r) => str(at(r, 'text'))).join('');

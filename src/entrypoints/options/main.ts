@@ -12,11 +12,13 @@ import { getProfile, updateProfile, type Identity } from '@/features/queue/profi
 import type { PlaylistRef } from '@/features/queue/rpc';
 import type { TldrStatus } from '@/features/tldr/service';
 import { clearCategory, formatBytes, getStorageUsage, type StorageCategory } from '@/core/storage-usage';
-import { DEFAULT_SETTINGS, FEATURES, featureOn, getSettings, saveSettings, type NotifySettings, type PlayerSettings, type Settings } from '@/core/settings';
+import { DEFAULT_SETTINGS, FEATURES, featureOn, getSettings, saveSettings, type NotifySettings, type PlayerSettings, type Settings, DANMAKU_STYLES, type DanmakuStyle } from '@/core/settings';
 import { NOTIFY_PREVIEW, NOTIFY_X_KEY } from '@/core/notify';
 import { missingPlaceholders } from '@/features/danmaku/ai';
 import { CardView } from '@/features/danmaku/card-view';
 import { demoTimeline } from '@/features/danmaku/demo';
+import { flyItems } from '@/features/danmaku/fly';
+import { FlyView } from '@/features/danmaku/fly-view';
 import { slotAt } from '@/features/danmaku/frame';
 import { DEFAULT_PARAMS, DEFAULT_PROMPT, promptOf, type DanmakuParams } from '@/features/danmaku/params';
 
@@ -628,6 +630,10 @@ function radios<T extends string>(name: string, options: [T, string, string?][],
   return box;
 }
 
+group(dmTab, t('opt.dm.style'), t('opt.dm.styleHint'),
+  radios('dm-style', DANMAKU_STYLES.map((v) => [v, t(`opt.dm.style.${v}`), t(`opt.dm.style.${v}Desc`)] as [DanmakuStyle, string, string]),
+    () => settings.danmaku.style, (v) => void update((s) => { s.danmaku.style = v; })));
+
 group(dmTab, t('opt.dm.placement'), t('opt.dm.placementHint'),
   radios('dm-placement', [['local', t('opt.dm.local'), t('opt.dm.localDesc')], ['ai', t('opt.dm.ai'), t('opt.dm.aiDesc')]],
     () => settings.danmaku.placement, (v) => void update((s) => { s.danmaku.placement = v; })),
@@ -678,6 +684,8 @@ const DM_GROUPS: { g: keyof DanmakuParams; hint?: MsgKey; fields: Field[] }[] = 
     f('display', 'minSec', 0.5, 10, 0.5, SEC), f('display', 'gapSec', 0, 5, 0.5, SEC), f('display', 'fadeMs', 0, 2000, 50, 'opt.dm.u.ms'),
     f('display', 'fontScale', 0.5, 3, 0.1, TIMES), f('display', 'bgOpacity', 0, 1, 0.05, RATIO), f('display', 'refLineWidth', 10, 200, 1, CHARS),
     f('display', 'cjkWidth', 1, 3, 0.1, TIMES), f('display', 'resumeMinSec', 0, 10, 0.5, SEC),
+    f('display', 'flyMinSec', 1, 30, 0.5, SEC), f('display', 'flyMaxSec', 1, 30, 0.5, SEC), f('display', 'flyMaxLines', 1, 20, 1, 'opt.dm.u.lines'),
+    f('display', 'flyArea', 0.1, 1, 0.05, RATIO),
   ] },
   { g: 'comments', fields: [
     f('comments', 'firstBatch', 10, 600, 10, ITEMS), f('comments', 'minCount', 10, 600, 10, ITEMS), f('comments', 'perMinute', 1, 100, 1, ITEMS),
@@ -724,9 +732,11 @@ const PV_SIZES = { small: 426, medium: 640, large: 854 } as const;
 const PV_CONTROLS_PX = 48;
 const pv = { size: 'medium' as keyof typeof PV_SIZES, controls: false, captions: false, debug: settings.danmaku.debug, playing: true, clock: 0, last: performance.now() };
 const pvView = new CardView();
+const pvFly = new FlyView();
+const pvPanelNote = hint(t('opt.dm.pv.panel'));
 const pvCaption = el('div', { className: 'dm-caption', textContent: t('opt.dm.pv.caption') });
 const pvCtrl = el('div', { className: 'dm-ctrl' }, el('div', { className: 'dm-bar' }));
-const pvBox = el('div', { className: 'dm-preview' }, pvCtrl, pvCaption, pvView.host);
+const pvBox = el('div', { className: 'dm-preview' }, pvCtrl, pvCaption, pvView.host, pvFly.host);
 const pvStatus = el('span', { className: 'muted' });
 const pvSize = el('select');
 for (const k of Object.keys(PV_SIZES) as (keyof typeof PV_SIZES)[]) pvSize.append(el('option', { value: k, textContent: t(`opt.dm.pv.${k}`), selected: k === pv.size }));
@@ -748,14 +758,24 @@ group(dmTab, t('opt.dm.preview'), t('opt.dm.previewHint'),
     toggle(t('opt.dm.pv.controls'), pv.controls, (v) => { pv.controls = v; pvLayout(); }),
     toggle(t('opt.dm.pv.captions'), pv.captions, (v) => { pv.captions = v; pvLayout(); }),
     toggle(t('opt.dm.pv.debug'), pv.debug, (v) => { pv.debug = v; })),
-  pvBox);
+  pvBox, pvPanelNote);
+
+/** flyItems of the demo, kept while the params are the same object (FlyView plans lanes per array). */
+let pvFlying: { p: DanmakuParams['display']; items: ReturnType<typeof flyItems> } | undefined;
+function pvFlyItems(slots: Parameters<typeof flyItems>[0], p: DanmakuParams['display']) {
+  if (pvFlying?.p !== p) pvFlying = { p, items: flyItems(slots, p) };
+  return pvFlying.items;
+}
 
 function pvFrame(now: number) {
   requestAnimationFrame(pvFrame);
   const dt = (now - pv.last) / 1000;
   pv.last = now;
   if (dmTab.hidden) return;
-  const { slots, length } = demoTimeline(settings.danmaku.params);
+  const { slots, length: cardLength } = demoTimeline(settings.danmaku.params);
+  // Flying comments take longer than their cards: let the last one get across.
+  const fp = settings.danmaku.params.display;
+  const length = settings.danmaku.style === 'fly' ? Math.max(cardLength, (slots.at(-1)?.start ?? 0) + 2 * Math.max(fp.flyMinSec, fp.flyMaxSec)) : cardLength;
   if (pv.playing) pv.clock = (pv.clock + dt) % length;
   const width = pvBox.clientWidth;
   const height = pvBox.clientHeight;
@@ -763,8 +783,18 @@ function pvFrame(now: number) {
   pvCaption.style.fontSize = `${Math.round(height * 0.034)}px`;
   pvCaption.style.bottom = `${pv.controls ? PV_CONTROLS_PX + 8 : Math.max(12, height * 0.04)}px`;
   const top = Math.max(12, height * 0.04);
+  const style = settings.danmaku.style;
+  pvPanelNote.hidden = style !== 'panel';
+  const p = settings.danmaku.params.display;
+  if (style === 'fly') {
+    pvView.draw(undefined, 0, { p, width, height, top });
+    pvFly.draw(pvFlyItems(slots, p), pv.clock, { p, width, height, top, debug: pv.debug });
+    pvStatus.textContent = t('opt.dm.pv.flyStatus', { t: pv.clock.toFixed(1) });
+    return;
+  }
+  pvFly.clear();
   const s = slotAt(slots, pv.clock);
-  pvView.draw(s, s ? pv.clock - s.start : 0, { p: settings.danmaku.params.display, width, height, top, debug: pv.debug });
+  pvView.draw(s, s ? pv.clock - s.start : 0, { p, width, height, top, debug: pv.debug });
   pvStatus.textContent = t('opt.dm.pv.status', { i: s ? slots.indexOf(s) + 1 : '–', n: slots.length, t: pv.clock.toFixed(1) });
 }
 requestAnimationFrame(pvFrame);

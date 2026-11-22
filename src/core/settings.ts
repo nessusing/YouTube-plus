@@ -62,12 +62,20 @@ export interface NotifySettings {
   errorSec: number;
 }
 
+/**
+ * How comments show (§52): one caption-style card at a time at the top, single
+ * lines flying right to left, or a panel on the player's right listing them all.
+ */
+export type DanmakuStyle = 'card' | 'fly' | 'panel';
+export const DANMAKU_STYLES: DanmakuStyle[] = ['card', 'fly', 'panel'];
+
 /** Comment danmaku (§51). The feature switch is features.danmaku, off by default. */
 export interface DanmakuSettings {
   /** The player button, remembered for every video like the captions button. */
   active: boolean;
   /** Where comments without timestamps go: spread locally or placed by Gemini. */
   placement: 'local' | 'ai';
+  style: DanmakuStyle;
   /** Source label on each card, timings in the button's tooltip. */
   debug: boolean;
   params: DanmakuParams;
@@ -95,7 +103,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tldr: { titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200, batchSize: 5 },
   storage: { logMB: 2, tldrCacheMB: 5 },
   notify: { position: 'bottom', maxVisible: 3, plainSec: 4, actionSec: 6, errorSec: 8 },
-  danmaku: { active: true, placement: 'local', debug: false, params: DEFAULT_PARAMS },
+  danmaku: { active: true, placement: 'local', style: 'card', debug: false, params: DEFAULT_PARAMS },
 };
 
 /** A feature runs only when both the master switch and its own switch are on. */
@@ -122,6 +130,7 @@ export function withDefaults(stored: DeepPartial<Settings> | undefined): Setting
     danmaku: {
       active: s.danmaku?.active !== false,
       placement: s.danmaku?.placement === 'ai' ? 'ai' : 'local',
+      style: DANMAKU_STYLES.includes(s.danmaku?.style as DanmakuStyle) ? s.danmaku!.style as DanmakuStyle : 'card',
       debug: s.danmaku?.debug === true,
       params: paramsWithDefaults(s.danmaku?.params),
     },

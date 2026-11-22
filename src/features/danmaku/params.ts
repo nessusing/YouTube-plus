@@ -21,6 +21,13 @@ export interface DisplayParams {
   cjkWidth: number;
   /** After a seek into a card, show it only if at least this much of it is left. */
   resumeMinSec: number;
+  /** Flying style (§52): seconds for a comment's head to cross the player, random per comment in [min, max]. */
+  flyMinSec: number;
+  flyMaxSec: number;
+  /** Comments longer than this many lines (estimated like a card's) do not fly. */
+  flyMaxLines: number;
+  /** Share of the player's height the flying lanes use, from the top. */
+  flyArea: number;
 }
 
 export interface CommentParams {
@@ -135,6 +142,7 @@ export const DEFAULT_PARAMS: DanmakuParams = {
   display: {
     screenSec: 5, latinCharSec: 0.068, cjkCharSec: 0.2, minSec: 1.5, gapSec: 0.5, fadeMs: 250,
     fontScale: 1, bgOpacity: 0.75, refLineWidth: 50, cjkWidth: 2, resumeMinSec: 1.5,
+    flyMinSec: 6, flyMaxSec: 10, flyMaxLines: 4, flyArea: 0.5,
   },
   comments: { firstBatch: 100, minCount: 200, perMinute: 15, maxCount: 300, minLength: 12, cjkWeight: 3 },
   stamps: { maxDelaySec: 5, clusterSec: 2, rotateMax: 3, tocMinStamps: 5, tocTitleMax: 60 },

@@ -10,7 +10,19 @@ import type { Slot } from './schedule';
 
 /** Font size relative to the player's height, about YouTube's own captions. */
 const FONT_PER_HEIGHT = 0.034;
-const LINE_HEIGHT = 1.35;
+export const LINE_HEIGHT = 1.35;
+/**
+ * Side padding of the pill. The background is a full stadium at any height
+ * (radius = half the height), so two lines need more room at the sides to keep
+ * the text off the arcs. Lines are always measured with the wide padding: what
+ * fits on one line there fits with the narrow one too.
+ */
+const PAD_ONE_LINE = '0.75em';
+const PAD_LINES = '1.05em';
+
+/** The card's font size in px for a player this tall. */
+export const fontPx = (height: number, p: Pick<DisplayParams, 'fontScale'>): number =>
+  Math.round(Math.min(64, Math.max(10, height * FONT_PER_HEIGHT * p.fontScale)) * 2) / 2;
 /** The card is at most this share of the player's width. */
 const MAX_WIDTH = 0.8;
 
@@ -19,7 +31,7 @@ const CSS = `
 .card {
   position: relative; box-sizing: border-box; color: #fff; text-align: center;
   font-family: "YouTube Noto", Roboto, "Arial Unicode Ms", Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif;
-  padding: 0.2em 0.75em;
+  padding: 0.2em ${PAD_LINES}; border-radius: 999px;
 }
 .view { overflow: hidden; }
 .text { white-space: pre-line; overflow-wrap: anywhere; transition: transform 300ms ease; }
@@ -68,7 +80,7 @@ export function commentNodes(doc: Document, c: Comment): Node[] {
 }
 
 /** The debug label: where the card came from. */
-export function sourceLabel(s: Slot): string {
+export function sourceLabel(s: Pick<Slot, 'kind' | 'conf'>): string {
   if (s.kind === 'ai') return t('dm.src.ai', { c: (s.conf ?? 0).toFixed(2) });
   return t(`dm.src.${s.kind}` as MsgKey);
 }
@@ -140,7 +152,9 @@ export class CardView {
       this.text.style.transition = '';
     }
     this.style(this.card, o);
-    this.view.style.height = `${Math.min(2, lines(frame.item)) * lh}px`;
+    const shown = Math.min(2, lines(frame.item));
+    this.view.style.height = `${shown * lh}px`;
+    this.card.style.paddingInline = shown === 1 ? PAD_ONE_LINE : PAD_LINES;
     this.text.style.transform = `translateY(${-frame.screen * 2 * lh}px)`;
     this.card.style.opacity = String(frame.opacity);
     const n = slot.items.length;
@@ -153,7 +167,7 @@ export class CardView {
   }
 
   private fontPx(o: DrawOptions): number {
-    return Math.round(Math.min(64, Math.max(10, o.height * FONT_PER_HEIGHT * o.p.fontScale)) * 2) / 2;
+    return fontPx(o.height, o.p);
   }
 
   private style(el: HTMLElement, o: DrawOptions): void {
@@ -162,6 +176,5 @@ export class CardView {
     el.style.lineHeight = `${font * LINE_HEIGHT}px`;
     el.style.maxWidth = `${Math.floor(o.width * MAX_WIDTH)}px`;
     el.style.background = `rgba(8, 8, 8, ${o.p.bgOpacity})`;
-    el.style.borderRadius = `${(font * LINE_HEIGHT) / 2 + font * 0.2}px`;
   }
 }

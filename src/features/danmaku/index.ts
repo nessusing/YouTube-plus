@@ -11,6 +11,7 @@ import type { VideoInfo } from './bridge';
 import { danmakuButton, type ButtonLook } from './button';
 import { DanmakuCache } from './cache';
 import { CHECK_VIDEO_ID, DANMAKU_PAGE_CHECKS } from './consts';
+import { CommentFeed } from './feed';
 import { overlay as makeOverlay } from './overlay';
 import { connectMain } from './rpc';
 import { Session } from './session';
@@ -18,11 +19,17 @@ import { Session } from './session';
 const sec = (ms?: number) => (ms === undefined ? '–' : (ms / 1000).toFixed(1));
 
 /** What the button's tooltip says (first line = its label). */
-function tipOf(s: Settings, session: Session | undefined, unsupported: MsgKey | undefined): string {
+function tipOf(s: Settings, session: Session | undefined, feed: CommentFeed | undefined, unsupported: MsgKey | undefined): string {
   const on = s.danmaku.active;
   const lines = [t(on ? 'dm.tip.on' : 'dm.tip.off')];
   if (!on) return lines.join('\n');
   if (unsupported) return [...lines, t(unsupported)].join('\n');
+  if (feed) {
+    if (feed.error) lines.push(t('dm.tip.error', { e: feed.error }));
+    else if (feed.done && !feed.comments.length) lines.push(t('dm.tip.none'));
+    else lines.push(t('dm.tip.panel', { n: feed.comments.length, total: feed.total ?? '…' }));
+    return lines.join('\n');
+  }
   if (!session) return lines.join('\n');
   if (session.phase === 'none') lines.push(t('dm.tip.none'));
   else if (session.phase === 'error') lines.push(t('dm.tip.error', { e: session.error }));
@@ -51,6 +58,8 @@ export async function startDanmaku(): Promise<void> {
   const cache = new DanmakuCache(() => settings.danmaku.params.cache.mb * 1024 * 1024);
   const layer = makeOverlay();
   let session: Session | undefined;
+  /** Style 'panel': the comments panel's feed instead of a session (no danmaku, no Gemini). */
+  let feed: CommentFeed | undefined;
   /** Why the current video gets nothing (live). */
   let unsupported: MsgKey | undefined;
   let enabled = false;
@@ -60,9 +69,9 @@ export async function startDanmaku(): Promise<void> {
   const render = () => {
     const look: ButtonLook = {
       on: settings.danmaku.active,
-      busy: !!session && ((session.phase === 'fetching') || !session.complete || session.aiPending > 0),
-      dim: !!unsupported || session?.phase === 'none',
-      tip: tipOf(settings, session, unsupported),
+      busy: feed ? feed.loading : !!session && ((session.phase === 'fetching') || !session.complete || session.aiPending > 0),
+      dim: !!unsupported || session?.phase === 'none' || (!!feed?.done && !feed.comments.length),
+      tip: tipOf(settings, session, feed, unsupported),
     };
     button.set(look);
   };
@@ -88,8 +97,11 @@ export async function startDanmaku(): Promise<void> {
   const stopSession = () => {
     session?.stop();
     session = undefined;
+    feed?.stop();
+    feed = undefined;
     unsupported = undefined;
     layer.setSlots('', []);
+    layer.setFeed(undefined);
   };
 
   /** The player's video once it is the one in the URL (the page may still be switching). */
@@ -106,7 +118,7 @@ export async function startDanmaku(): Promise<void> {
   const sync = async () => {
     if (!enabled || !settings.danmaku.active || location.pathname !== '/watch') return;
     const v = new URLSearchParams(location.search).get('v');
-    if (!v || session?.videoId === v) return;
+    if (!v || (session ?? feed)?.videoId === v) return;
     stopSession();
     const my = ++gen;
     render();
@@ -118,6 +130,17 @@ export async function startDanmaku(): Promise<void> {
     }
     if (info.live) {
       unsupported = 'dm.tip.live';
+      render();
+      return;
+    }
+    if (settings.danmaku.style === 'panel') {
+      const f: CommentFeed = new CommentFeed(v, rpc, () => {
+        if (f !== feed) return;
+        layer.feedChanged();
+        render();
+      });
+      feed = f;
+      layer.setFeed(f); // the panel loads the first page
       render();
       return;
     }
@@ -146,8 +169,10 @@ export async function startDanmaku(): Promise<void> {
       return;
     }
     if (!enabled) return;
-    layer.setDisplay(next.danmaku.params.display, next.danmaku.debug);
-    if (!next.danmaku.active) {
+    layer.setDisplay(next.danmaku.params.display, next.danmaku.debug, next.danmaku.style);
+    const panelNow = next.danmaku.style === 'panel';
+    if (!next.danmaku.active || panelNow !== (prev.danmaku.style === 'panel')) {
+      // Off, or between the panel (a feed) and the danmaku styles (a session): start over.
       gen++;
       stopSession();
     } else if (session && (prev.danmaku.placement !== next.danmaku.placement || JSON.stringify(prev.danmaku.params) !== JSON.stringify(next.danmaku.params))) {

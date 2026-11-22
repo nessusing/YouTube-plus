@@ -29,8 +29,8 @@ const api: MainApi = {
   async watch(videoId) {
     return parseWatch(await next({ videoId }));
   },
-  async page(token, videoId) {
-    return parsePage(await next({ continuation: token }), videoId);
+  async page(token, videoId, level = 0) {
+    return parsePage(await next({ continuation: token }), videoId, level);
   },
 };
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAge, parseCount, parsePage, parseWatch } from '@/features/danmaku/comments';
+import { lean, parseAge, parseCount, parsePage, parseWatch } from '@/features/danmaku/comments';
 
 const VID = 'vid12345678';
 
@@ -121,5 +121,73 @@ describe('parsePage', () => {
     const img = (start: number) => ({ startIndex: start, length: 1, element: { type: { imageType: { image: { sources: [{ url: 'https://e.test/heart.png', width: 16, height: 16 }] } } }, properties: { accessibilityProperties: { label: '❤' } } } });
     const p = parsePage(page({ entities: [entity({ key: 'A', text: 'Freddy..❤❤', attachmentRuns: [img(8), img(9)] })], threads: ['A'] }), VID);
     expect(p.comments[0]!.images).toEqual([{ start: 8, len: 1, url: 'https://e.test/heart.png', alt: '❤' }, { start: 9, len: 1, url: 'https://e.test/heart.png', alt: '❤' }]);
+  });
+});
+
+describe('fields for the comments panel (§52)', () => {
+  const withAvatar = (key: string, level = 0) => {
+    const e = entity({ key, text: `text ${key}`, age: '7 years ago (edited)', level });
+    (e.payload.commentEntityPayload.author as Record<string, unknown>).avatarThumbnailUrl = `https://yt3.test/${key}=s88`;
+    return e;
+  };
+
+  it('gives each comment its avatar, publish text and replies token', () => {
+    const replies = { commentRepliesRenderer: { contents: [{ continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token: 'REPLIES-A' } } } }] } };
+    const j = page({ entities: [withAvatar('A'), withAvatar('B')], threads: ['A', 'B'] });
+    const items = (j.onResponseReceivedEndpoints[0] as { appendContinuationItemsAction: { continuationItems: Record<string, Record<string, unknown>>[] } }).appendContinuationItemsAction.continuationItems;
+    items[0]!.commentThreadRenderer!.replies = replies;
+    const p = parsePage(j, VID);
+    expect(p.comments[0]).toMatchObject({ avatar: 'https://yt3.test/A=s88', published: '7 years ago (edited)', replyToken: 'REPLIES-A' });
+    expect(p.comments[1]!.replyToken).toBeUndefined();
+  });
+
+  it('finds the replies token under subThreads too (what the page itself gets)', () => {
+    const j = page({ entities: [withAvatar('A')], threads: ['A'] });
+    const items = (j.onResponseReceivedEndpoints[0] as { appendContinuationItemsAction: { continuationItems: Record<string, Record<string, unknown>>[] } }).appendContinuationItemsAction.continuationItems;
+    items[0]!.commentThreadRenderer!.replies = { commentRepliesRenderer: { subThreads: [{ continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token: 'SUB-A' } } } }] } };
+    expect(parsePage(j, VID).comments[0]!.replyToken).toBe('SUB-A');
+  });
+
+  it('reads a page of replies: bare comment view models, level 1, a "Show more replies" button', () => {
+    const items: unknown[] = [
+      { commentViewModel: { commentKey: 'R2' } }, { commentViewModel: { commentKey: 'R1' } },
+      { continuationItemRenderer: { button: { buttonRenderer: { command: { continuationCommand: { token: 'MORE' } } } } } },
+    ];
+    const j = { onResponseReceivedEndpoints: [{ appendContinuationItemsAction: { continuationItems: items } }], frameworkUpdates: { entityBatchUpdate: { mutations: [withAvatar('R1', 1), withAvatar('R2', 1)] } } };
+    const p = parsePage(j, VID, 1);
+    expect(p.comments.map((c) => c.id)).toEqual(['id-R2', 'id-R1']);
+    expect(p.next).toBe('MORE');
+    // The same page read as top-level comments has none.
+    expect(parsePage(j, VID).comments).toEqual([]);
+  });
+
+  it('reads the page client\'s nested reply threads: replies with their own replies inline and a token for more', () => {
+    const thread = (key: string, subThreads?: unknown[]) => ({ commentThreadRenderer: { commentViewModel: { commentViewModel: { commentKey: key } }, ...(subThreads ? { replies: { commentRepliesRenderer: { subThreads } } } : {}) } });
+    const more = (token: string) => ({ continuationItemRenderer: { button: { buttonRenderer: { command: { continuationCommand: { token } } } } } });
+    const items = [
+      thread('R1', [thread('S1'), thread('S2')]),
+      thread('R2', [more('MORE-R2')]),
+      thread('R3'),
+      more('NEXT-REPLIES'),
+    ];
+    const ents = [withAvatar('R1', 1), withAvatar('S1', 2), withAvatar('S2', 2), withAvatar('R2', 1), withAvatar('R3', 1)];
+    const p = parsePage({ onResponseReceivedEndpoints: [{ appendContinuationItemsAction: { continuationItems: items } }], frameworkUpdates: { entityBatchUpdate: { mutations: ents } } }, VID, 1);
+    expect(p.comments.map((c) => c.id)).toEqual(['id-R1', 'id-R2', 'id-R3']);
+    expect(p.comments[0]!.subReplies!.map((c) => [c.id, c.level])).toEqual([['id-S1', 2], ['id-S2', 2]]);
+    expect(p.comments[0]!.replyToken).toBeUndefined();
+    expect(p.comments[1]).toMatchObject({ level: 1, replyToken: 'MORE-R2' });
+    expect(p.comments[1]!.subReplies).toBeUndefined();
+    expect(p.next).toBe('NEXT-REPLIES');
+  });
+
+  it('lean() drops them for the danmaku cache', () => {
+    const c = parsePage(page({ entities: [withAvatar('A')], threads: ['A'] }), VID).comments[0]!;
+    const l = lean({ ...c, replyToken: 'T', level: 1, subReplies: [c] });
+    expect(l).not.toHaveProperty('avatar');
+    expect(l).not.toHaveProperty('published');
+    expect(l).not.toHaveProperty('replyToken');
+    expect(l).not.toHaveProperty('level');
+    expect(l).not.toHaveProperty('subReplies');
+    expect(l).toMatchObject({ id: 'id-A', text: 'text A', author: '@userA' });
   });
 });

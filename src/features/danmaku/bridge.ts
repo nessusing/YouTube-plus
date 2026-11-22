@@ -21,8 +21,8 @@ export interface MainApi {
   video(): VideoInfo | undefined;
   /** First `next` call: the first comments token and the "Most replayed" curve. */
   watch(videoId: string): Promise<WatchInfo>;
-  /** One comments page. */
-  page(token: string, videoId: string): Promise<CommentPage>;
+  /** One comments page; level 1 = a page of one comment's replies. */
+  page(token: string, videoId: string, level?: number): Promise<CommentPage>;
 }
 
 export type ToMain = { tag: typeof TAG; dir: 'toMain'; id: number; method: keyof MainApi; args: unknown[] };

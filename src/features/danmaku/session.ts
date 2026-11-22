@@ -10,7 +10,7 @@ import type { AskResult } from '@/features/tldr/service';
 import { buildPlacementPrompt, parsePlacement, type Placement, withCutoff } from './ai';
 import type { VideoInfo } from './bridge';
 import { type CacheEntry, type DanmakuCache, isFresh } from './cache';
-import type { Comment, HeatSegment } from './comments';
+import { type Comment, type HeatSegment, lean } from './comments';
 import { promptOf } from './params';
 import type { MainRpc } from './rpc';
 import type { Slot } from './schedule';
@@ -122,7 +122,7 @@ export class Session {
         for (const c of page.comments) {
           if (seen.has(c.id)) continue;
           seen.add(c.id);
-          this.comments.push(c);
+          this.comments.push(lean(c));
         }
         token = page.next;
         if (!placed && this.comments.length >= this.p.comments.firstBatch) {

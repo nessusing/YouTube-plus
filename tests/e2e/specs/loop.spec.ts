@@ -246,6 +246,8 @@ test.describe('loop and remove after playing (§40.2)', () => {
     await expect.poll(() => loopOn(page)).toBe(true);
     await seekToEnd(page, 8);
     await page.waitForTimeout(1500);
+    // Paused ~6 s before the end: a slow click below must not let it reach the end and loop (D-022, was flaky).
+    await page.evaluate(() => document.querySelector<HTMLVideoElement>('#movie_player video')!.pause());
     await page.locator(ROWS).nth(2).click();
     await waitForVideo(page, VIDEOS.b);
     await page.waitForTimeout(8000);

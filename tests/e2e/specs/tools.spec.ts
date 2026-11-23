@@ -98,7 +98,7 @@ test.describe('list page', () => {
 });
 
 test.describe('panel beside the watch page', () => {
-  test('the chosen list: Clear all empties it, the video plays on', async ({ page, open, lists, setProfile }) => {
+  test('F-06-AC1 F-05-AC13 the chosen list: Clear all empties it, the panel shows 1 / 0, the video plays on', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c], 'panel-clear');
     await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
     await open(`/watch?v=${VIDEOS.a}&list=${id}`);
@@ -108,6 +108,12 @@ test.describe('panel beside the watch page', () => {
     await pick(page, panelMore(page), 'Clear all');
     await expect.poll(() => lastToast(page)).toBe('Removed 3');
     await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([]);
+    // F-05-AC13: the panel empties at once and counts "1 / 0", as YouTube's own does.
+    await expect.poll(async () => (await panelData(page)).videoIds).toEqual([]);
+    await expect.poll(() => page.evaluate(() => {
+      const panel = [...document.querySelectorAll<HTMLElement>('ytd-watch-flexy ytd-playlist-panel-renderer')].find((e) => e.offsetParent !== null);
+      return panel?.innerText.replace(/\s+/g, ' ') ?? '';
+    })).toMatch(/\b1 \/ 0\b/);
     const after = await player(page);
     expect(after.videoId).toBe(VIDEOS.a);
     expect(after.time).toBeGreaterThanOrEqual(before.time); // no reload

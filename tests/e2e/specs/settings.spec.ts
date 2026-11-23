@@ -3,7 +3,7 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures';
 import { LIST_PREFIX, VIDEOS } from '../support/env';
-import { playButton, rpc, serviceWorker, storageGet, waitForVideo } from '../support/yt';
+import { playButton, rpc, serviceWorker, storageGet, storageSet, waitForVideo } from '../support/yt';
 
 async function openSettings(ctx: BrowserContext, yt: Page): Promise<Page> {
   // The settings page picks the YouTube tab used last.
@@ -88,5 +88,33 @@ test('F-01-AC3 the settings page opens on General, whichever tab was open last (
     await expect(byHash.getByRole('tab', { name: 'Queue' })).toHaveAttribute('aria-selected', 'true');
   } finally {
     await byHash.close();
+  }
+});
+
+test('F-05-AC3 self-check: the page, the chosen list editable, the interception installed', async ({ page, open, lists, setProfile, ctx }) => {
+  const id = await lists.create([VIDEOS.a], 'selfcheck');
+  await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
+  await open('/');
+  // TL;DR off for the run: its check makes a real summary on the account.
+  const before = ((await storageGet(ctx, 'sync', 'settings')) ?? {}) as { features?: Record<string, boolean> };
+  await storageSet(ctx, 'sync', { settings: { ...before, features: { ...before.features, tldr: false } } });
+  const extId = new URL((await serviceWorker(ctx)).url()).host;
+  const opts = await ctx.newPage();
+  try {
+    await opts.goto(`chrome-extension://${extId}/options.html`);
+    await page.bringToFront();
+    const { results } = await opts.evaluate(() => (globalThis as unknown as { chrome: { runtime: { sendMessage(m: unknown): Promise<{ results: { feature: string; name: string; status: string; detail?: string }[] }> } } })
+      .chrome.runtime.sendMessage({ type: 'YouTube+/selfcheck' }));
+    const queue = results.filter((r) => r.feature === 'queue');
+    expect(queue.map((r) => [r.name, r.status]), JSON.stringify(queue)).toEqual([
+      ['Page objects and auth', 'pass'],
+      ['The chosen playlist exists and is editable', 'pass'],
+      ['Add to queue interception installed', 'pass'],
+    ]);
+    expect(results.some((r) => r.feature === 'tldr')).toBe(false);
+  } finally {
+    await opts.close();
+    const now = ((await storageGet(ctx, 'sync', 'settings')) ?? {}) as { features?: Record<string, boolean> };
+    await storageSet(ctx, 'sync', { settings: { ...now, features: { ...now.features, tldr: before.features?.tldr ?? true } } });
   }
 });

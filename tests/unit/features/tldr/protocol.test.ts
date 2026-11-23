@@ -48,6 +48,15 @@ describe('request building', () => {
     expect(inner[45]).toBeNull();
     expect(inner[79]).toBeNull();
   });
+  it('F-03-AC6 tells Gemini to ignore the account\'s personalization, before anything else', () => {
+    const p = buildPrompt({ videoId: 'abc', title: 't', titleCheck: false });
+    const ignore = p.indexOf('custom instructions, saved info, persona');
+    expect(ignore).toBeGreaterThanOrEqual(0);
+    expect(ignore).toBeLessThan(p.indexOf('watch?v=abc'));
+    expect(p).toMatch(/ignore them/);
+    expect(p).toMatch(/no character voice/);
+  });
+
   it('F-03-AC4 builds the prompt from settings', () => {
     const p = buildPrompt({ videoId: 'abc', title: 'T "q"', titleCheck: false });
     expect(p).toContain('watch?v=abc');

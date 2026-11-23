@@ -74,3 +74,25 @@ test('F-02-AC6 in fullscreen: above the control bar while it shows, back to the 
     await page.evaluate(() => document.exitFullscreen().catch(() => {}));
   }
 });
+
+test('F-02-AC1 F-02-AC5 Preview in the settings page: a notice in the YouTube tab used last, and only there', async ({ page, open, ctx }) => {
+  await open(`/watch?v=${VIDEOS.a}`);
+  await waitForVideo(page, VIDEOS.a);
+  const other = await ctx.newPage();
+  await other.goto(`https://www.youtube.com/watch?v=${VIDEOS.b}`);
+  await waitForVideo(other, VIDEOS.b);
+  await page.bringToFront(); // used last
+  const extId = new URL((await serviceWorker(ctx)).url()).host;
+  const opts = await ctx.newPage();
+  try {
+    await opts.goto(`chrome-extension://${extId}/options.html`);
+    await opts.getByRole('tab', { name: 'Notifications' }).click();
+    await opts.locator('section:not([hidden])').getByRole('button', { name: 'Preview' }).click();
+    await expect.poll(() => lastToast(page)).toContain('YouTube+');
+    await other.waitForTimeout(1000);
+    expect(await other.locator('ytpp-notify').count()).toBe(0);
+  } finally {
+    await opts.close();
+    await other.close();
+  }
+});

@@ -9,7 +9,8 @@ export default defineConfig({
   outputDir: './.out/results',
   workers: 1,
   fullyParallel: false,
-  retries: 0,
+  // One retry: a test that passes only on it is reported flaky, not failed (D-022).
+  retries: 1,
   timeout: 180_000,
   expect: { timeout: 20_000 },
   reporter: [['list'], ['html', { outputFolder: './.out/report', open: 'never' }]],

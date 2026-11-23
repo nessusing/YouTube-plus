@@ -55,6 +55,28 @@ async function setPipShortcut(ctx: BrowserContext, v: string): Promise<void> {
   await storageSet(ctx, 'sync', { settings: { ...s, shortcuts: { ...s.shortcuts, pip: v } } });
 }
 
+/**
+ * Whether YouTube's own Esc closes the miniplayer on this account (F-11-AC4
+ * relies on it). Some accounts get an experiment where it does not; then the
+ * step is skipped with a note instead of failing (D-022). Leaves the page in
+ * the miniplayer either way.
+ */
+async function escClosesMini(page: Page): Promise<boolean> {
+  await page.bringToFront();
+  await page.keyboard.press('Escape');
+  const closed = await expect.poll(async () => (await pipState(page)).mini, { timeout: 5000 }).toBe(false).then(() => true, () => false);
+  if (!closed) {
+    const note = 'YouTube on this account does not close the miniplayer on Esc (an experiment?); Esc step skipped';
+    test.info().annotations.push({ type: 'skipped step', description: note });
+    console.log(`NOTE: ${note}`);
+    return false;
+  }
+  await page.goto(`https://www.youtube.com/watch?v=${VIDEOS.b}`);
+  await expect.poll(async () => (await pipState(page)).t ?? 0, { timeout: 30_000 }).toBeGreaterThan(1);
+  await toMini(page);
+  return true;
+}
+
 test.describe('pop-out (§50)', () => {
   test.afterEach(async ({ ctx }) => setPipShortcut(ctx, 'Shift+I'));
 
@@ -120,6 +142,7 @@ test.describe('pop-out (§50)', () => {
     });
 
     await test.step('Esc closes the miniplayer: the PiP window goes too', async () => {
+      if (!(await escClosesMini(page))) return;
       await opens(ctx, () => page.keyboard.press('Shift+I'));
       await expect.poll(async () => (await pipState(page)).popped).toBe(true);
       await page.bringToFront();

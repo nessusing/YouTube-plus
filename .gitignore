@@ -3,3 +3,7 @@ node_modules/
 .wxt/
 *.log
 tests/e2e/.out/
+.env
+.env.*
+!.env.example
+config.local.*

@@ -337,7 +337,7 @@ function installPlayerWatch(): void {
 
 // ---------- navigation ----------
 
-/** SPA navigation like a click on a link; full page load if the page does not start one (§28 item 2). */
+/** SPA navigation like a click on a link; full page load if the page does not start one (§28). */
 function navigate(url: string, endpoint: Record<string, unknown>, meta: Record<string, unknown>): void {
   let started = false;
   const onStart = () => (started = true);

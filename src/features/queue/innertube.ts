@@ -118,6 +118,11 @@ export async function editablePlaylists(): Promise<PlaylistRef[]> {
   }));
 }
 
+/**
+ * New private playlist. Its id may be only 13 characters: do not check the
+ * length. YouTube limits how many lists an account may create in a day; past
+ * that, the reply has no playlistId (seen 2026-11-21).
+ */
 export async function createPrivatePlaylist(title: string): Promise<string> {
   const j = await call<{ playlistId?: string }>('playlist/create', { title, privacyStatus: 'PRIVATE', videoIds: [] });
   if (!j.playlistId) throw new InnerTubeError(500, 'playlist/create returned no playlistId');
@@ -128,6 +133,7 @@ export async function createPrivatePlaylist(title: string): Promise<string> {
 export async function readPlaylist(id: string): Promise<PlaylistData> {
   const first = await call('browse', { browseId: `VL${id}` });
   const alerts = walk(first, 'alertRenderer') as { type?: string }[];
+  // An empty list has no isEditable; whether it is editable comes from get_add_to_playlist.
   const editableFlag = walk(first, 'isEditable')[0];
   const title = playlistTitle(first);
   if (alerts.some((a) => a.type === 'ERROR') && !title) return { exists: false, editable: false, title: '', items: [] };

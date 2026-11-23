@@ -36,6 +36,7 @@ export interface CommentParams {
   /** Fetch limit = max(minCount, perMinute × minutes), capped at maxCount. */
   minCount: number;
   perMinute: number;
+  /** Past ~300 (Top order) come mostly new comments with 0–1 likes (measured 2026-11-22). */
   maxCount: number;
   /** Shorter than this (in Latin characters; a CJK character counts `cjkWeight`) is dropped. */
   minLength: number;

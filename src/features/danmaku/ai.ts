@@ -1,7 +1,9 @@
 // AI placement through Gemini's YouTube app (§51.5): the
 // prompt from the user-editable template, and the compact one-line-per-comment
 // reply. Measured 2026-11-22: only confidence ≥ 0.9 is reliable (all within
-// 5 s); 0.5–0.8 can be minutes off, so it becomes ambient.
+// 5 s); 0.5–0.8 can be minutes off, so it becomes ambient. Comments on Chinese
+// videos are mostly reactions to the picture, music or memes and often get no
+// ≥ 0.9 at all; many Chinese channels have no caption track, so local it is.
 
 import { PROMPT_PLACEHOLDERS } from './params';
 

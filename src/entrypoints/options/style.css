@@ -124,7 +124,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
 .row {
   display: grid;
   grid-template-columns: 186px minmax(0, 1fr);
-  column-gap: 0;
+  /* room between a label that fills its column and the options (F-01, P28) */
+  column-gap: 24px;
   margin: 0 0 28px;
 }
 .row:last-child { margin-bottom: 0; }

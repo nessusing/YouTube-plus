@@ -169,10 +169,21 @@ function createNotifier(): Notifier {
     if (host.parentNode !== parent) parent.append(host);
   };
 
-  /** What the stack must not cover: the miniplayer and its minimized bar (§44). */
+  /**
+   * What the stack must not cover: the miniplayer and its minimized bar (§44);
+   * in fullscreen, the player's control bar while it shows (F-02-AC6).
+   */
   const obstacles = (): DOMRect[] => {
-    if (document.fullscreenElement) return [];
     const out: DOMRect[] = [];
+    const fs = document.fullscreenElement;
+    if (fs) {
+      const p = document.querySelector<HTMLElement>(SEL.moviePlayer);
+      if (p && fs.contains(p) && !p.classList.contains('ytp-autohide')) {
+        const r = p.querySelector(SEL.chromeBottom)?.getBoundingClientRect();
+        if (r && r.width && r.height) out.push(r);
+      }
+      return out;
+    }
     const miniUp = !!document.querySelector(SEL.app)?.hasAttribute(SEL.appMiniActiveAttr);
     if (miniUp && !html.hasAttribute('data-ytpp-mini-min') && !html.hasAttribute('data-ytpp-pip')) {
       const r = document.querySelector(SEL.miniplayer)?.getBoundingClientRect();

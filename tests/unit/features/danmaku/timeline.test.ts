@@ -17,12 +17,12 @@ function expectNoOverlap(ss: Slot[]) {
 const ids = (ss: Slot[]) => ss.flatMap((s) => s.items.map((c) => c.id));
 
 describe('buildTimeline', () => {
-  it('stamps: only timestamped comments', () => {
+  it('F-12-AC7 F-12-AC9 stamps: only timestamped comments', () => {
     const r = buildTimeline(input, 'stamps', DEFAULT_PARAMS);
     expect(r.map((s) => [s.kind, s.start, ids([s])])).toEqual([['stamp', 60, ['S']]]);
   });
 
-  it('local: the timestamped card plus the rest, one at a time', () => {
+  it('F-12-AC7 F-12-AC8 local: the timestamped card plus the rest, one at a time', () => {
     const r = buildTimeline(input, 'local', DEFAULT_PARAMS);
     expect(r.find((s) => s.kind === 'stamp')!.start).toBe(60);
     expect(r.filter((s) => s.kind === 'local').length).toBeGreaterThan(30);
@@ -39,7 +39,7 @@ describe('buildTimeline', () => {
       ['c2', { kind: 'hide' }],
     ]);
 
-    it('places confident times, fills idle stretches from the ambient ones, hides x and unknowns', () => {
+    it('F-12-AC9 places confident times, fills idle stretches from the ambient ones, hides x and unknowns', () => {
       const r = buildTimeline({ ...input, placements }, 'ai', DEFAULT_PARAMS);
       expect(r.find((s) => s.kind === 'ai')).toMatchObject({ start: 100, conf: 0.95 });
       expect(ids(r).sort()).toEqual(['S', 'c0', 'c1', 'c3']);
@@ -47,7 +47,7 @@ describe('buildTimeline', () => {
       expectNoOverlap(r);
     });
 
-    it('leaves idle stretches alone with ambient off', () => {
+    it('F-12-AC9 leaves idle stretches alone with ambient off', () => {
       const r = buildTimeline({ ...input, placements }, 'ai', { ...DEFAULT_PARAMS, ai: { ...DEFAULT_PARAMS.ai, ambient: false } });
       expect(r.map((s) => [s.kind, s.start])).toEqual([['stamp', 60], ['ai', 100]]);
     });

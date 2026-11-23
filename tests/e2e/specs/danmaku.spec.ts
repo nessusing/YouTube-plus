@@ -128,7 +128,7 @@ test.describe('comment danmaku', () => {
     for (const id of [...SEEDED, VIDEOS.b]) await storageRemove(ctx, 'local', CACHE(id));
   });
 
-  test('feature off (the default): no button, no layer', async ({ page, open, ctx }) => {
+  test('F-12-AC1 feature off (the default): no button, no layer', async ({ page, open, ctx }) => {
     await setDanmaku(ctx, false);
     await open(`/watch?v=${VIDEOS.a}`);
     await waitForVideo(page, VIDEOS.a);
@@ -137,7 +137,7 @@ test.describe('comment danmaku', () => {
     expect(await page.locator('.ytpp-dm-layer').count()).toBe(0);
   });
 
-  test('the button sits left of captions and switches danmaku off and on for every video', async ({ page, open, ctx }) => {
+  test('F-12-AC1 the button sits left of captions and switches danmaku off and on for every video', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [{ id: 's', text: LONG, stamped: true }]);
     await setDanmaku(ctx, true);
     await openWatch(page, open, VIDEOS.a);
@@ -159,7 +159,7 @@ test.describe('comment danmaku', () => {
     await expectCard(page, 'everyone waits for');
   });
 
-  test('a timestamped card: at its moment, paging, paused, seeking back and into its end', async ({ page, open, ctx }) => {
+  test('F-12-AC6 F-12-AC10 a timestamped card: at its moment, paging, paused, seeking back and into its end', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [{ id: 's', text: LONG, stamped: true }]);
     await setDanmaku(ctx, true);
     await openWatch(page, open, VIDEOS.a);
@@ -190,7 +190,7 @@ test.describe('comment danmaku', () => {
     expect(await card(page)).toBeUndefined();
   });
 
-  test('sits at the top of the player, clear of the control bar', async ({ page, open, ctx }) => {
+  test('F-12-AC12 sits at the top of the player, clear of the control bar', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [{ id: 's', text: LONG, stamped: true }]);
     await setDanmaku(ctx, true);
     await openWatch(page, open, VIDEOS.a);
@@ -260,7 +260,7 @@ test.describe('comment danmaku', () => {
     await page.evaluate(() => document.querySelector('.ytpp-e2e-caption')?.remove());
   });
 
-  test('AI mode uses Gemini\'s confident times; hidden comments never show', async ({ page, open, ctx }) => {
+  test('F-12-AC9 AI mode uses Gemini\'s confident times; hidden comments never show', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [
       { id: 'ai', text: AI_TEXT, likes: 50 },
       { id: 'x', text: HIDDEN_TEXT, likes: 500 },
@@ -285,7 +285,7 @@ test.describe('comment danmaku', () => {
     }
   });
 
-  test('hidden in the miniplayer, back on the watch page', async ({ page, open, ctx }) => {
+  test('F-12-AC2 hidden in the miniplayer, back on the watch page', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [{ id: 's', text: LONG, stamped: true }]);
     await setDanmaku(ctx, true);
     await openWatch(page, open, VIDEOS.a);
@@ -298,7 +298,7 @@ test.describe('comment danmaku', () => {
     await expectCard(page, 'everyone waits for');
   });
 
-  test('another video: its own cards only', async ({ page, open, ctx }) => {
+  test('F-12-AC3 another video: its own cards only', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [{ id: 's', text: LONG, stamped: true }]);
     await seed(ctx, VIDEOS.c, [{ id: 'o', text: OTHER, stamped: true }]);
     await setDanmaku(ctx, true);
@@ -313,7 +313,7 @@ test.describe('comment danmaku', () => {
     expect(await card(page)).toBeUndefined();
   });
 
-  test('no comments: dimmed, and says so', async ({ page, open, ctx }) => {
+  test('F-12-AC2 no comments: dimmed, and says so', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.d, []);
     await setDanmaku(ctx, true);
     await openWatch(page, open, VIDEOS.d);
@@ -321,7 +321,7 @@ test.describe('comment danmaku', () => {
     await expect.poll(() => tooltip(page)).toContain('This video has no comments');
   });
 
-  test('fetches the comments and caches them; the self-check fetches a page', async ({ page, open, ctx }) => {
+  test('F-12-AC4 F-12-AC15 fetches the comments and caches them; the self-check fetches a page', async ({ page, open, ctx }) => {
     await storageRemove(ctx, 'local', CACHE(VIDEOS.b));
     await setDanmaku(ctx, true);
     await openWatch(page, open, VIDEOS.b);

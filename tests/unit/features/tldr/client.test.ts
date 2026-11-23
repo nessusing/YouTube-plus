@@ -17,7 +17,7 @@ function setup() {
 }
 
 describe('GeminiWebClient channels', () => {
-  it('tries processSession first', async () => {
+  it('F-03-AC7 tries processSession first', async () => {
     const { c, session, stream } = setup();
     session.mockResolvedValue(ok('new'));
     expect((await c.generate('p')).text).toBe('new');
@@ -25,7 +25,7 @@ describe('GeminiWebClient channels', () => {
     expect(c.lastChannel).toBe('processSession');
   });
 
-  it('falls back on protocol errors and keeps using the channel that answered', async () => {
+  it('F-03-AC7 falls back on protocol errors and keeps using the channel that answered', async () => {
     const { c, session, stream } = setup();
     session.mockRejectedValue(err('protocol'));
     stream.mockResolvedValue(ok('old'));
@@ -44,14 +44,14 @@ describe('GeminiWebClient channels', () => {
     expect(stream).not.toHaveBeenCalled();
   });
 
-  it('falls back on auth errors (e.g. no SAPISID) too', async () => {
+  it('F-03-AC7 falls back on auth errors (e.g. no SAPISID) too', async () => {
     const { c, session, stream } = setup();
     session.mockRejectedValue(err('auth'));
     stream.mockResolvedValue(ok('old'));
     expect((await c.generate('p')).text).toBe('old');
   });
 
-  it('does not try the other channel for quota, blocks or network errors', async () => {
+  it('F-03-AC7 does not try the other channel for quota, blocks or network errors', async () => {
     for (const code of ['quota', 'blocked', 'transient'] as const) {
       const { c, session, stream } = setup();
       session.mockRejectedValue(err(code));
@@ -60,7 +60,7 @@ describe('GeminiWebClient channels', () => {
     }
   });
 
-  it('reports auth when both fail and one of them was auth', async () => {
+  it('F-03-AC7 reports auth when both fail and one of them was auth', async () => {
     const { c, session, stream } = setup();
     session.mockRejectedValue(err('auth'));
     stream.mockRejectedValue(err('protocol'));

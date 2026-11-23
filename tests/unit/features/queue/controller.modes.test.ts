@@ -45,7 +45,7 @@ function expectNative(h: Harness): void {
 }
 
 describe.each(Object.entries(STATES))('native → playlist, from %s', (_name, state) => {
-  it('takes over at once, shows the button, says a reload completes it', async () => {
+  it('F-05-AC8 takes over at once, shows the button, says a reload completes it', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE, before: state });
     const panelBefore = h.yt.panel;
     const playerBefore = { ...h.yt.player };
@@ -58,7 +58,7 @@ describe.each(Object.entries(STATES))('native → playlist, from %s', (_name, st
     expect(h.yt.navigations).toEqual([]);
   });
 
-  it('then Add goes into the list', async () => {
+  it('F-05-AC8 then Add goes into the list', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE, before: state });
     await switchTo(h, { mode: 'playlist' });
     await h.ctl.onAdd(['x']);
@@ -69,7 +69,7 @@ describe.each(Object.entries(STATES))('native → playlist, from %s', (_name, st
 });
 
 describe('native → playlist, what is playing afterwards', () => {
-  it('② single video: Add attaches the list under the miniplayer', async () => {
+  it('F-05-AC8 ② single video: Add attaches the list under the miniplayer', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE, before: STATES['② a single video in the miniplayer'] });
     await switchTo(h, { mode: 'playlist' });
     await h.ctl.onAdd(['x']);
@@ -78,7 +78,7 @@ describe('native → playlist, what is playing afterwards', () => {
   });
 
   // Findings F8, fixed 2026-11-21.
-  it('③ native queue: Add leaves the native queue playing', async () => {
+  it('F-05-AC8 ③ native queue: Add leaves the native queue playing', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE, before: STATES['③ the native queue in the miniplayer'] });
     await switchTo(h, { mode: 'playlist' });
     await h.ctl.onAdd(['x']);
@@ -91,7 +91,7 @@ describe('native → playlist, what is playing afterwards', () => {
     expect(h.yt.navigations).toEqual([]);
   });
 
-  it('④ our list already playing: from now on a watched entry is removed and the next one played', async () => {
+  it('F-05-AC8 ④ our list already playing: from now on a watched entry is removed and the next one played', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE, before: STATES['④ our list playing'] });
     await switchTo(h, { mode: 'playlist' });
     h.ctl.onPlayer(h.yt.playerEvent('ended'));
@@ -103,7 +103,7 @@ describe('native → playlist, what is playing afterwards', () => {
 });
 
 describe.each(Object.entries(STATES))('playlist → native, from %s', (_name, state) => {
-  it('stops taking over at once, hides the button, says a reload completes it', async () => {
+  it('F-05-AC8 stops taking over at once, hides the button, says a reload completes it', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: state });
     expectTaking(h, 3);
     await switchTo(h, { mode: 'native' });
@@ -111,7 +111,7 @@ describe.each(Object.entries(STATES))('playlist → native, from %s', (_name, st
     expect(h.toasts.map((x) => x.text)).toEqual([t('queue.switchedNative')]);
   });
 
-  it('then Add is left to YouTube', async () => {
+  it('F-05-AC8 then Add is left to YouTube', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: state });
     await switchTo(h, { mode: 'native' });
     await h.ctl.onAdd(['x']);
@@ -121,7 +121,7 @@ describe.each(Object.entries(STATES))('playlist → native, from %s', (_name, st
 });
 
 describe('playlist → native while our list plays (④): the extension keeps out', () => {
-  it('a watched entry is neither removed nor skipped past', async () => {
+  it('F-05-AC8 a watched entry is neither removed nor skipped past', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: STATES['④ our list playing'] });
     await switchTo(h, { mode: 'native' });
     h.ctl.onPlayer(h.yt.playerEvent('near'));
@@ -133,7 +133,7 @@ describe('playlist → native while our list plays (④): the extension keeps ou
   });
 
   // Findings F1, fixed 2026-11-21.
-  it('an unload removal armed before the switch is disarmed', async () => {
+  it('F-05-AC8 an unload removal armed before the switch is disarmed', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: STATES['④ our list playing'] });
     h.ctl.onPlayer(h.yt.playerEvent('near'));
     await h.settle();
@@ -143,7 +143,7 @@ describe('playlist → native while our list plays (④): the extension keeps ou
     expect(h.yt.armed).toBeUndefined();
   });
 
-  it('the page adding straight into the list playing is left alone (native behaviour)', async () => {
+  it('F-05-AC8 the page adding straight into the list playing is left alone (native behaviour)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: STATES['④ our list playing'] });
     await switchTo(h, { mode: 'native' });
     const syncs = h.yt.callsOf('syncList').length;
@@ -155,7 +155,7 @@ describe('playlist → native while our list plays (④): the extension keeps ou
 });
 
 describe('back to playlist mode after edits made meanwhile', () => {
-  it('an add made while native shows in the count when switching back within 30 s', async () => {
+  it('F-05-AC8 F-05-AC13 an add made while native shows in the count when switching back within 30 s', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: STATES['④ our list playing'] });
     await switchTo(h, { mode: 'native' });
     h.yt.pageEdit('PLq', [{ action: 'ACTION_ADD_VIDEO', addedVideoId: 'x' }]);
@@ -165,7 +165,7 @@ describe('back to playlist mode after edits made meanwhile', () => {
   });
 
   // Findings F4, fixed 2026-11-21.
-  it('a removal made while native shows in the count when switching back, even while reads lag', async () => {
+  it('F-05-AC8 F-05-AC13 a removal made while native shows in the count when switching back, even while reads lag', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => { STATES['④ our list playing']!(yt); yt.removalLagMs = 4000; } });
     await switchTo(h, { mode: 'native' });
     const b = h.yt.entries('PLq').find((e) => e.videoId === 'b')!;
@@ -177,7 +177,7 @@ describe('back to playlist mode after edits made meanwhile', () => {
   });
 
   // Findings F3, fixed 2026-11-21.
-  it('edits made in playlist mode do not linger into a later switch back', async () => {
+  it('F-05-AC8 F-05-AC13 edits made in playlist mode do not linger into a later switch back', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await h.ctl.onAdd(['x']);
     await vi.advanceTimersByTimeAsync(500);
@@ -191,14 +191,14 @@ describe('back to playlist mode after edits made meanwhile', () => {
 });
 
 describe('list A → list B', () => {
-  it('the button and label follow the new list', async () => {
+  it('F-05-AC7 F-05-AC9 the button and label follow the new list', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await switchTo(h, { listId: 'PLr', listName: 'List PLr' });
     expectTaking(h, 2, 'List PLr');
     expect(h.toasts).toHaveLength(0); // same mode: no reload hint
   });
 
-  it('A playing: its entries ending are no longer ours to remove', async () => {
+  it('F-05-AC11 A playing: its entries ending are no longer ours to remove', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: STATES['④ our list playing'] });
     await switchTo(h, { listId: 'PLr', listName: 'List PLr' });
     h.ctl.onPlayer(h.yt.playerEvent('ended'));
@@ -208,7 +208,7 @@ describe('list A → list B', () => {
   });
 
   // Findings F2, fixed 2026-11-21.
-  it('edits and panel updates of A do not touch B\'s count', async () => {
+  it('F-05-AC13 edits and panel updates of A do not touch B\'s count', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: STATES['④ our list playing'] });
     await h.ctl.onAdd(['x']);
     await vi.advanceTimersByTimeAsync(100);
@@ -218,7 +218,7 @@ describe('list A → list B', () => {
     expect(h.button.count).toBe(2);
   });
 
-  it('to a list that is gone: forgets it, stops taking over', async () => {
+  it('F-05-AC14 to a list that is gone: forgets it, stops taking over', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await switchTo(h, { listId: 'PLgone', listName: 'Gone' });
     expect(h.ctl.decision).toBe('noList');
@@ -228,7 +228,7 @@ describe('list A → list B', () => {
 });
 
 describe('switching quickly back and forth', () => {
-  it('native → playlist → native: ends native', async () => {
+  it('F-05-AC8 native → playlist → native: ends native', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE });
     await h.setProfile({ mode: 'playlist' });
     await vi.advanceTimersByTimeAsync(0);
@@ -237,7 +237,7 @@ describe('switching quickly back and forth', () => {
     expectNative(h);
   });
 
-  it('playlist → native → playlist: ends taking over with the right count', async () => {
+  it('F-05-AC8 playlist → native → playlist: ends taking over with the right count', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await h.setProfile({ mode: 'native' });
     await vi.advanceTimersByTimeAsync(0);
@@ -246,7 +246,7 @@ describe('switching quickly back and forth', () => {
     expectTaking(h, 3);
   });
 
-  it('with slow reads: the last choice wins', async () => {
+  it('F-05-AC8 with slow reads: the last choice wins', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE });
     const read = h.yt.rpc.editablePlaylists;
     let release!: () => void;
@@ -266,7 +266,7 @@ describe('switching quickly back and forth', () => {
 });
 
 describe('other settings changes', () => {
-  it('turning remove-after-playing off applies at once, without a reload hint', async () => {
+  it('F-05-AC11 turning remove-after-playing off applies at once, without a reload hint', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: STATES['④ our list playing'] });
     await switchTo(h, { removeWatched: false });
     expect(h.toasts).toHaveLength(0);
@@ -276,7 +276,7 @@ describe('other settings changes', () => {
     expect(h.yt.navigations).toEqual([]);
   });
 
-  it('switched while the tab is in the background: the hint waits until it is visible', async () => {
+  it('F-05-AC8 switched while the tab is in the background: the hint waits until it is visible', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE });
     h.setVisible(false);
     await switchTo(h, { mode: 'playlist' });
@@ -287,7 +287,7 @@ describe('other settings changes', () => {
     expect(h.toasts.map((x) => x.text)).toEqual([t('queue.switchedPlaylist')]);
   });
 
-  it('switched twice in the background: one hint, for the mode it ended in', async () => {
+  it('F-05-AC8 switched twice in the background: one hint, for the mode it ended in', async () => {
     const h = await setup({ lists: LISTS, profile: NATIVE });
     h.setVisible(false);
     await switchTo(h, { mode: 'playlist' });
@@ -297,7 +297,7 @@ describe('other settings changes', () => {
     expect(h.toasts.map((x) => x.text)).toEqual([t('queue.switchedNative')]);
   });
 
-  it('to playlist mode with no list chosen: the first Add says so', async () => {
+  it('F-05-AC4 to playlist mode with no list chosen: the first Add says so', async () => {
     const h = await setup({ lists: LISTS, profile: { mode: 'native' } });
     await switchTo(h, { mode: 'playlist' });
     expect(h.ctl.decision).toBe('noList');

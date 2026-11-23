@@ -15,7 +15,7 @@ const LISTS = { PLq: ['a', 'b', 'c'] };
 const PLAYLIST = { mode: 'playlist' as const, listId: 'PLq', listName: 'List PLq' };
 
 describe('deciding to take over (§24.1)', () => {
-  it('native mode: leaves Add to queue alone and shows no button', async () => {
+  it('F-05-AC4 native mode: leaves Add to queue alone and shows no button', async () => {
     const h = await setup({ lists: LISTS, profile: { mode: 'native', listId: 'PLq' } });
     expect(h.ctl.decision).toBe('native');
     expect(h.yt.takeover.decision).toBe('native');
@@ -23,14 +23,14 @@ describe('deciding to take over (§24.1)', () => {
     expect(h.tools.on).toBe(true); // clear all / remove watched work in both modes (§47)
   });
 
-  it('playlist mode with an editable list: takes over, relabels, shows the count', async () => {
+  it('F-05-AC4 F-05-AC7 playlist mode with an editable list: takes over, relabels, shows the count', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     expect(h.ctl.decision).toBe('take');
     expect(h.yt.takeover).toEqual({ decision: 'take', label: t('queue.addTo', { name: 'List PLq' }), listId: 'PLq' });
     expect(h.button).toMatchObject({ visible: true, name: 'List PLq', count: 3 });
   });
 
-  it('no list chosen: native this time, says why once per page', async () => {
+  it('F-05-AC4 no list chosen: native this time, says why once per page', async () => {
     const h = await setup({ lists: LISTS, profile: { mode: 'playlist' } });
     expect(h.ctl.decision).toBe('noList');
     expect(h.yt.takeover.decision).toBe('noList');
@@ -39,7 +39,7 @@ describe('deciding to take over (§24.1)', () => {
     expect(h.toasts.map((x) => x.text)).toEqual([t('queue.noList')]);
   });
 
-  it('list this identity cannot edit: native, keeps the choice, says why', async () => {
+  it('F-05-AC4 list this identity cannot edit: native, keeps the choice, says why', async () => {
     const h = await setup({ before: (yt) => yt.addList('PLx', 'Theirs', ['a'], false), profile: { mode: 'playlist', listId: 'PLx', listName: 'Theirs' } });
     expect(h.ctl.decision).toBe('notEditable');
     expect((await h.profile())?.listId).toBe('PLx');
@@ -47,7 +47,7 @@ describe('deciding to take over (§24.1)', () => {
     expect(h.toasts[0]?.text).toBe(t('queue.notEditable', { name: 'Theirs' }));
   });
 
-  it('list deleted elsewhere: forgets it for this identity (§24.5)', async () => {
+  it('F-05-AC14 list deleted elsewhere: forgets it for this identity (§24.5)', async () => {
     const h = await setup({ lists: {}, profile: { mode: 'playlist', listId: 'PLgone', listName: 'Old' } });
     expect(h.ctl.decision).toBe('noList');
     const p = await h.profile();
@@ -55,7 +55,7 @@ describe('deciding to take over (§24.1)', () => {
     expect(p?.listName).toBeUndefined();
   });
 
-  it('another list chosen while a deleted one is being checked: the new choice stays', async () => {
+  it('F-05-AC14 another list chosen while a deleted one is being checked: the new choice stays', async () => {
     // The check reads again for seconds (findings F16); the settings page can choose a new list meanwhile.
     const h = await setup({ lists: { PLnew: ['a'] }, profile: { mode: 'playlist', listId: 'PLgone', listName: 'Old' }, start: false });
     const p = h.ctl.refresh();
@@ -67,21 +67,21 @@ describe('deciding to take over (§24.1)', () => {
     expect(h.toasts.map((x) => x.text)).not.toContain(t('queue.listGone', { name: 'Old' }));
   });
 
-  it('no playlists listed at all: protocol error, back to native, reported for the settings page (§26)', async () => {
+  it('F-05-AC15 no playlists listed at all: protocol error, back to native, reported for the settings page (§26)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => (yt.protocolBroken = true) });
     expect(h.ctl.decision).toBe('native');
     expect((await fakeBrowser.storage.local.get(PROTOCOL_ERROR_KEY))[PROTOCOL_ERROR_KEY]).toBeTruthy();
     expect(h.log.lines.some((l) => l.level === 'error')).toBe(true);
   });
 
-  it('signed out: native, playlist tools off, no button', async () => {
+  it('F-05-AC4 signed out: native, playlist tools off, no button', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => (yt.me = { loggedIn: false, brand: false }) });
     expect(h.ctl.decision).toBe('native');
     expect(h.tools.on).toBe(false);
     expect(h.button.visible).toBe(false);
   });
 
-  it('queue feature turned off: native', async () => {
+  it('F-05-AC4 queue feature turned off: native', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, start: false });
     h.feature.on = false;
     await h.ctl.refresh();
@@ -89,13 +89,13 @@ describe('deciding to take over (§24.1)', () => {
     expect(h.tools.on).toBe(false);
   });
 
-  it('list could not be checked (read failed): does not take over, keeps the choice', async () => {
+  it('F-05-AC4 list could not be checked (read failed): does not take over, keeps the choice', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.fail('editablePlaylists') });
     expect(h.ctl.decision).toBe('native');
     expect((await h.profile())?.listId).toBe('PLq');
   });
 
-  it('takes the list title from the server when it was renamed', async () => {
+  it('F-05-AC7 takes the list title from the server when it was renamed', async () => {
     const h = await setup({ lists: LISTS, profile: { ...PLAYLIST, listName: 'Old name' } });
     expect((await h.profile())?.listName).toBe('List PLq');
     expect(h.button.name).toBe('List PLq');
@@ -103,7 +103,7 @@ describe('deciding to take over (§24.1)', () => {
 });
 
 describe('identities (§24.7)', () => {
-  it('each identity keeps its own settings; switching reads the new one', async () => {
+  it('F-05-AC1 each identity keeps its own settings; switching reads the new one', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     expect(h.ctl.decision).toBe('take');
     h.yt.me = { loggedIn: true, key: 'other', name: 'Other', brand: true };
@@ -115,7 +115,7 @@ describe('identities (§24.7)', () => {
     expect((await fakeBrowser.storage.sync.get(`${PROFILE_PREFIX}me`))[`${PROFILE_PREFIX}me`]).toMatchObject({ mode: 'playlist', listId: 'PLq' });
   });
 
-  it('after switching identity, changes to the old identity no longer apply here', async () => {
+  it('F-05-AC1 after switching identity, changes to the old identity no longer apply here', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     h.yt.me = { loggedIn: true, key: 'other', brand: false };
     await h.ctl.refresh();
@@ -128,7 +128,7 @@ describe('identities (§24.7)', () => {
 });
 
 describe('Add (§24.2)', () => {
-  it('adds a new video, says so, counts it', async () => {
+  it('F-05-AC5 adds a new video, says so, counts it', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await h.ctl.onAdd(['x']);
     await h.settle();
@@ -137,7 +137,7 @@ describe('Add (§24.2)', () => {
     expect(h.button.count).toBe(4);
   });
 
-  it('a video already in the list is not added again (the server would duplicate it)', async () => {
+  it('F-05-AC6 a video already in the list is not added again (the server would duplicate it)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await h.ctl.onAdd(['b']);
     await h.settle();
@@ -146,7 +146,7 @@ describe('Add (§24.2)', () => {
     expect(h.toasts.at(-1)?.text).toBe(t('queue.already', { name: 'List PLq' }));
   });
 
-  it('several at once: only the new ones are added', async () => {
+  it('F-05-AC6 several at once: only the new ones are added', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await h.ctl.onAdd(['b', 'x', 'y']);
     await h.settle();
@@ -154,14 +154,14 @@ describe('Add (§24.2)', () => {
     expect(h.button.count).toBe(5);
   });
 
-  it('nothing playing: no list is attached', async () => {
+  it('F-05-AC6 nothing playing: no list is attached', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await h.ctl.onAdd(['x']);
     await h.settle();
     expect(h.yt.panel).toBeUndefined();
   });
 
-  it('watching a video outside any list: the list shows next to it, this video on top', async () => {
+  it('F-05-AC6 watching a video outside any list: the list shows next to it, this video on top', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('v1') });
     await h.ctl.onAdd(['x']);
     await h.settle();
@@ -170,7 +170,7 @@ describe('Add (§24.2)', () => {
     expect(h.yt.navigations).toEqual([]); // no reload
   });
 
-  it('same in the miniplayer', async () => {
+  it('F-05-AC6 same in the miniplayer', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('v1', undefined, { mini: true }) });
     await h.ctl.onAdd(['x']);
     await h.settle();
@@ -178,14 +178,14 @@ describe('Add (§24.2)', () => {
     expect(h.yt.navigations).toEqual([]);
   });
 
-  it('already in the list while watching outside it: still attaches', async () => {
+  it('F-05-AC6 already in the list while watching outside it: still attaches', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('v1') });
     await h.ctl.onAdd(['a']);
     await h.settle();
     expect(h.yt.panel).toMatchObject({ playlistId: 'PLq', top: 'v1' });
   });
 
-  it('another list playing: leaves it, the toast is all', async () => {
+  it('F-05-AC6 another list playing: leaves it, the toast is all', async () => {
     const h = await setup({ lists: { ...LISTS, PLo: ['o1', 'o2'] }, profile: PLAYLIST, before: (yt) => yt.load('o1', 'PLo') });
     await h.settle();
     await h.ctl.onAdd(['x']);
@@ -195,7 +195,7 @@ describe('Add (§24.2)', () => {
   });
 
   // Findings F8, fixed 2026-11-21.
-  it('the native queue playing in the miniplayer: leaves it', async () => {
+  it('F-05-AC6 the native queue playing in the miniplayer: leaves it', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.playNativeQueue(['v1', 'q1', 'q2']) });
     await h.ctl.onAdd(['x']);
     await h.settle();
@@ -203,21 +203,21 @@ describe('Add (§24.2)', () => {
     expect(h.yt.panel?.rows.map((r) => r.videoId)).toEqual(['v1', 'q1', 'q2']);
   });
 
-  it('during an ad: does not attach', async () => {
+  it('F-05-AC6 during an ad: does not attach', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => { yt.load('v1'); yt.player.ad = true; } });
     await h.ctl.onAdd(['x']);
     await h.settle();
     expect(h.yt.panel).toBeUndefined();
   });
 
-  it('the list itself playing: the panel shows the new video', async () => {
+  it('F-05-AC6 the list itself playing: the panel shows the new video', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('a', 'PLq') });
     await h.ctl.onAdd(['x']);
     await h.settle();
     expect(h.yt.panel?.rows.map((r) => r.videoId)).toEqual(['a', 'b', 'c', 'x']);
   });
 
-  it('no playlist manager, on the watch page: reloads inside the list and plays the list after this video', async () => {
+  it('F-05-AC6 no playlist manager, on the watch page: reloads inside the list and plays the list after this video', async () => {
     const h = await setup({ lists: LISTS, profile: { ...PLAYLIST, removeWatched: false }, before: (yt) => { yt.playlistManager = false; yt.load('v1'); } });
     await h.ctl.onAdd(['x']);
     await h.settle();
@@ -229,14 +229,14 @@ describe('Add (§24.2)', () => {
     expect(h.yt.truth('PLq')).toEqual(['a', 'b', 'c', 'x']); // nothing removed with remove-after-playing off
   });
 
-  it('no playlist manager, in the miniplayer: does not reload (it would expand)', async () => {
+  it('F-05-AC6 no playlist manager, in the miniplayer: does not reload (it would expand)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => { yt.playlistManager = false; yt.load('v1', undefined, { mini: true }); } });
     await h.ctl.onAdd(['x']);
     await h.settle();
     expect(h.yt.navigations).toEqual([]);
   });
 
-  it('add fails: says so, no retry', async () => {
+  it('F-05-AC15 add fails: says so, no retry', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.fail('editPlaylist') });
     await h.ctl.onAdd(['x']);
     await h.settle();
@@ -245,7 +245,7 @@ describe('Add (§24.2)', () => {
     expect(h.yt.truth('PLq')).toEqual(['a', 'b', 'c']);
   });
 
-  it('list deleted meanwhile: forgets it, points to the settings', async () => {
+  it('F-05-AC14 list deleted meanwhile: forgets it, points to the settings', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     h.yt.deleteList('PLq');
     // It reads again before believing the list is gone (findings F16).
@@ -258,14 +258,14 @@ describe('Add (§24.2)', () => {
     expect(h.button.visible).toBe(false);
   });
 
-  it('not taking over: Add is ignored here', async () => {
+  it('F-05-AC4 not taking over: Add is ignored here', async () => {
     const h = await setup({ lists: LISTS, profile: { mode: 'native', listId: 'PLq' } });
     await h.ctl.onAdd(['x']);
     await h.settle();
     expect(h.yt.truth('PLq')).toEqual(['a', 'b', 'c']);
   });
 
-  it('"View" opens the list page', async () => {
+  it('F-05-AC5 "View" opens the list page', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await h.ctl.onAdd(['x']);
     expect(h.toasts.at(-1)?.action).toBe(t('queue.view'));
@@ -273,14 +273,14 @@ describe('Add (§24.2)', () => {
 });
 
 describe('Play button (§24.4)', () => {
-  it('plays the list from its first entry', async () => {
+  it('F-05-AC9 plays the list from its first entry', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     await h.ctl.play();
     await h.settle();
     expect(h.yt.navigations).toEqual(['/watch?v=a&list=PLq']);
   });
 
-  it('the list playing in the miniplayer: carries on with the entry playing there (§24.4)', async () => {
+  it('F-05-AC9 the list playing in the miniplayer: carries on with the entry playing there (§24.4)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     h.yt.load('b', 'PLq', { mini: true });
     await h.ctl.play();
@@ -288,7 +288,7 @@ describe('Play button (§24.4)', () => {
     expect(h.yt.navigations).toEqual(['/watch?v=b&list=PLq']);
   });
 
-  it('already on the watch page of an entry in the list: stays put (§24.4)', async () => {
+  it('F-05-AC9 already on the watch page of an entry in the list: stays put (§24.4)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     h.yt.load('b', 'PLq');
     await h.ctl.play();
@@ -296,7 +296,7 @@ describe('Play button (§24.4)', () => {
     expect(h.yt.navigations).toEqual([]);
   });
 
-  it('a video outside the list in the miniplayer: plays the list from its first entry', async () => {
+  it('F-05-AC9 a video outside the list in the miniplayer: plays the list from its first entry', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     h.yt.load('x', undefined, { mini: true });
     await h.ctl.play();
@@ -304,7 +304,7 @@ describe('Play button (§24.4)', () => {
     expect(h.yt.navigations).toEqual(['/watch?v=a&list=PLq']);
   });
 
-  it('an empty list: nothing to play, the count is 0', async () => {
+  it('F-05-AC9 an empty list: nothing to play, the count is 0', async () => {
     const h = await setup({ lists: { PLq: [] }, profile: PLAYLIST });
     expect(h.button.count).toBe(0);
     await h.ctl.play();

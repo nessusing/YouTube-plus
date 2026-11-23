@@ -6,7 +6,7 @@ import { comeBack, panelData, panelRowsShown, playButton, waitForVideo } from '.
 
 const ROWS = [VIDEOS.a, VIDEOS.b, VIDEOS.c, VIDEOS.d];
 
-test('Remove from playlist in the side panel: count and panel follow', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC13 Remove from playlist in the side panel: count and panel follow', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create(ROWS, 'panel-remove');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}&list=${id}`);
@@ -28,7 +28,7 @@ test('Remove from playlist in the side panel: count and panel follow', async ({ 
   expect(await lists.videos(id)).toEqual([VIDEOS.a, VIDEOS.b, VIDEOS.d]);
 });
 
-test('Add while the list plays: count up at once, the panel shows it', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC13 Add while the list plays: count up at once, the panel shows it', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.a, VIDEOS.b], 'add-playing');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}&list=${id}`);
@@ -40,7 +40,7 @@ test('Add while the list plays: count up at once, the panel shows it', async ({ 
   expect(await panelRowsShown(page, 'watch')).toEqual([VIDEOS.a, VIDEOS.b, videoId]);
 });
 
-test('edited in another tab: caught up when this tab comes back', async ({ page, open, lists, setProfile, account }) => {
+test('F-05-AC13 edited in another tab: caught up when this tab comes back', async ({ page, open, lists, setProfile, account }) => {
   const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c], 'elsewhere');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}&list=${id}`);
@@ -56,7 +56,7 @@ test('edited in another tab: caught up when this tab comes back', async ({ page,
   await expect.poll(async () => (await panelData(page)).videoIds, { timeout: 30_000 }).toEqual([VIDEOS.a, VIDEOS.c, VIDEOS.d, VIDEOS.e]);
 });
 
-test('a page edit outside the panel (same tab): count follows', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC13 a page edit outside the panel (same tab): count follows', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.a, VIDEOS.b], 'page-edit');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open('/');

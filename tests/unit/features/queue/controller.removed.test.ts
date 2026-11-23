@@ -31,7 +31,7 @@ async function dropOut(h: Harness, videoId: string, ok = true) {
 }
 
 describe('the menus', () => {
-  it('while taking over, the page script knows the chosen list (its panels get the items)', async () => {
+  it('F-06-AC1 while taking over, the page script knows the chosen list (its panels get the items)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     expect(h.yt.takeover).toMatchObject({ decision: 'take', listId: 'PLq' });
     await h.setProfile({ mode: 'native' });
@@ -39,7 +39,7 @@ describe('the menus', () => {
     expect(h.yt.takeover.listId).toBeUndefined();
   });
 
-  it('the labels go to the page script when the tools start', async () => {
+  it('F-06-AC1 the labels go to the page script when the tools start', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     toolsFor(h);
     await h.settle();
@@ -48,7 +48,7 @@ describe('the menus', () => {
 });
 
 describe('clear all / remove watched (§47)', () => {
-  it('clear all: everything goes at once, no confirm, a notice says how many', async () => {
+  it('F-06-AC2 clear all: everything goes at once, no confirm, a notice says how many', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     const tools = toolsFor(h);
     await tools.run('all', 'PLq');
@@ -58,7 +58,7 @@ describe('clear all / remove watched (§47)', () => {
     expect(h.button.count).toBe(0);
   });
 
-  it('remove watched: only entries watched to 90 % or more', async () => {
+  it('F-06-AC2 remove watched: only entries watched to 90 % or more', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => { yt.watched('PLq', 'a', 95); yt.watched('PLq', 'c', 90); yt.watched('PLq', 'd', 89); } });
     const tools = toolsFor(h);
     await tools.run('watched', 'PLq');
@@ -67,7 +67,7 @@ describe('clear all / remove watched (§47)', () => {
     expect(h.toasts.at(-1)?.text).toBe(t('queue.deleted', { n: 2 }));
   });
 
-  it('nothing to remove: says so', async () => {
+  it('F-06-AC2 nothing to remove: says so', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     const tools = toolsFor(h);
     await tools.run('watched', 'PLq');
@@ -75,7 +75,7 @@ describe('clear all / remove watched (§47)', () => {
     expect(h.yt.callsOf('editPlaylist')).toEqual([]);
   });
 
-  it('a failed batch: the notice and the log say so, no retry (§26)', async () => {
+  it('F-06-AC2 F-05-AC15 a failed batch: the notice and the log say so, no retry (§26)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     const tools = toolsFor(h);
     h.yt.editStatus = 500;
@@ -88,7 +88,7 @@ describe('clear all / remove watched (§47)', () => {
 });
 
 describe('the entry playing removed (§47, §48)', () => {
-  it('remove watched takes the one playing: it plays on, then the entry after it', async () => {
+  it('F-06-AC3 remove watched takes the one playing: it plays on, then the entry after it', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => { yt.load('b', 'PLq'); yt.watched('PLq', 'a', 100); yt.watched('PLq', 'b', 95); } });
     const tools = toolsFor(h);
     await tools.run('watched', 'PLq');
@@ -102,7 +102,7 @@ describe('the entry playing removed (§47, §48)', () => {
     expect(h.yt.truth('PLq')).toEqual(['c', 'd']);
   });
 
-  it('clear all while playing: when it ends, YouTube decides what is next', async () => {
+  it('F-06-AC3 clear all while playing: when it ends, YouTube decides what is next', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('b', 'PLq') });
     const tools = toolsFor(h);
     await tools.run('all', 'PLq');
@@ -112,7 +112,7 @@ describe('the entry playing removed (§47, §48)', () => {
     expect(h.yt.navigations).toEqual([]);
   });
 
-  it('cleared, then something added: that plays next', async () => {
+  it('F-06-AC3 cleared, then something added: that plays next', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('b', 'PLq') });
     const tools = toolsFor(h);
     await tools.run('all', 'PLq');
@@ -123,7 +123,7 @@ describe('the entry playing removed (§47, §48)', () => {
     expect(h.yt.navigations).toEqual(['/watch?v=x&list=PLq']);
   });
 
-  it('dragged out while playing, remove after playing off: still the entry after it', async () => {
+  it('F-06-AC3 dragged out while playing, remove after playing off: still the entry after it', async () => {
     const h = await setup({ lists: LISTS, profile: { ...PLAYLIST, removeWatched: false }, before: (yt) => yt.load('b', 'PLq') });
     await dropOut(h, 'b');
     await h.settle();
@@ -133,7 +133,7 @@ describe('the entry playing removed (§47, §48)', () => {
     expect(h.yt.navigations).toEqual(['/watch?v=c&list=PLq']);
   });
 
-  it('a different entry dragged out: the one playing carries on as usual', async () => {
+  it('F-06-AC3 a different entry dragged out: the one playing carries on as usual', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('b', 'PLq') });
     await dropOut(h, 'c');
     await h.settle();
@@ -143,7 +143,7 @@ describe('the entry playing removed (§47, §48)', () => {
     expect(h.yt.truth('PLq')).toEqual(['a', 'd']);
   });
 
-  it('the next video starts: what was known about the removed one is dropped', async () => {
+  it('F-06-AC3 the next video starts: what was known about the removed one is dropped', async () => {
     const h = await setup({ lists: LISTS, profile: { ...PLAYLIST, removeWatched: false }, before: (yt) => yt.load('b', 'PLq') });
     await dropOut(h, 'b');
     h.yt.load('c', 'PLq');
@@ -155,7 +155,7 @@ describe('the entry playing removed (§47, §48)', () => {
 });
 
 describe('drag out to delete (§48)', () => {
-  it('failed: a notice and the log say so; nothing else changes', async () => {
+  it('F-06-AC5 failed: a notice and the log say so; nothing else changes', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('b', 'PLq') });
     await dropOut(h, 'c', false);
     expect(h.toasts.at(-1)).toEqual({ text: t('queue.dropFailed'), error: true });
@@ -163,7 +163,7 @@ describe('drag out to delete (§48)', () => {
     expect(h.yt.truth('PLq')).toEqual(['a', 'b', 'c', 'd']);
   });
 
-  it('succeeded: no notice; the count follows', async () => {
+  it('F-06-AC5 F-05-AC13 succeeded: no notice; the count follows', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     const before = h.toasts.length;
     await dropOut(h, 'c');

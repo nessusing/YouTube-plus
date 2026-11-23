@@ -18,7 +18,7 @@ function fakeRpc(pages: Record<string, CommentPage>, opts: { token?: string } = 
 }
 
 describe('CommentFeed', () => {
-  it('loads a page per call, keeps YouTube\'s order, skips repeats, stops at the end', async () => {
+  it('F-12-AC14 loads a page per call, keeps YouTube\'s order, skips repeats, stops at the end', async () => {
     const rpc = fakeRpc({
       P1: { comments: [comment('one'), comment('two')], next: 'P2', total: 3 },
       P2: { comments: [comment('two'), comment('three')] },
@@ -37,13 +37,13 @@ describe('CommentFeed', () => {
     expect(changed).toHaveBeenCalled();
   });
 
-  it('is done at once without a comments section', async () => {
+  it('F-12-AC14 is done at once without a comments section', async () => {
     const f = new CommentFeed('vid', fakeRpc({}, {}), () => {});
     await f.more();
     expect([f.done, f.comments.length, f.error]).toEqual([true, 0, '']);
   });
 
-  it('keeps the error and retries the same page', async () => {
+  it('F-12-AC14 keeps the error and retries the same page', async () => {
     const pages: Record<string, CommentPage> = {};
     const f = new CommentFeed('vid', fakeRpc(pages), () => {});
     await f.more();
@@ -53,7 +53,7 @@ describe('CommentFeed', () => {
     expect([f.error, f.comments.length, f.done]).toEqual(['', 1, true]);
   });
 
-  it('loads replies page by page as level 1', async () => {
+  it('F-12-AC14 loads replies page by page as level 1', async () => {
     const rpc = fakeRpc({ R1: { comments: [comment('r1')], next: 'R2' }, R2: { comments: [comment('r2')] } });
     const f = new CommentFeed('vid', rpc, () => {});
     const c = comment('parent', { replies: 2, replyToken: 'R1' });
@@ -67,7 +67,7 @@ describe('CommentFeed', () => {
 });
 
 describe('CommentFeed replies of replies', () => {
-  it('starts from the replies that came inline and loads more one level down', async () => {
+  it('F-12-AC14 starts from the replies that came inline and loads more one level down', async () => {
     const rpc = fakeRpc({ M: { comments: [comment('s3', { level: 2 })] } });
     const f = new CommentFeed('vid', rpc, () => {});
     const reply = comment('reply', { level: 1, subReplies: [comment('s1', { level: 2 }), comment('s2', { level: 2 })], replyToken: 'M' });
@@ -79,18 +79,18 @@ describe('CommentFeed replies of replies', () => {
 });
 
 describe('ageText', () => {
-  it('says YouTube\'s English age in the UI language, edited apart', () => {
+  it('F-12-AC14 says YouTube\'s English age in the UI language, edited apart', () => {
     expect(ageText('7 years ago (edited)', 'en')).toEqual({ age: '7 years ago', edited: true });
     expect(ageText('1 day ago', 'en')).toEqual({ age: '1 day ago', edited: false });
     expect(ageText('3 months ago', 'zh-CN').age).toBe('3个月前');
   });
-  it('passes through what it cannot read', () => {
+  it('F-12-AC14 passes through what it cannot read', () => {
     expect(ageText('Streamed live', 'en')).toEqual({ age: 'Streamed live', edited: false });
   });
 });
 
 describe('countText', () => {
-  it('is compact', () => {
+  it('F-12-AC14 is compact', () => {
     expect(countText(571000, 'en')).toBe('571K');
     expect(countText(42, 'en')).toBe('42');
     expect(countText(571000, 'zh-CN')).toBe('57.1万');

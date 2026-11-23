@@ -47,7 +47,7 @@ test.describe('miniplayer drag', () => {
   test.beforeEach(async ({ ctx }) => storageRemove(ctx, 'local', POS_KEY));
   test.afterEach(async ({ ctx }) => storageRemove(ctx, 'local', POS_KEY));
 
-  test('dragged to the middle: stays where dropped, keeps playing, position saved', async ({ page, open, ctx }) => {
+  test('F-07-AC2 dragged to the middle: stays where dropped, keeps playing, position saved', async ({ page, open, ctx }) => {
     await miniOn(page, open, VIDEOS.a);
     await page.evaluate(() => document.querySelector<HTMLVideoElement>('#movie_player video')!.play());
     const vp = await viewport(page);
@@ -63,7 +63,7 @@ test.describe('miniplayer drag', () => {
     expect(near(saved!.width, after.width)).toBe(true);
   });
 
-  test('dropped near an edge: snaps to it; near a corner: snaps to the corner', async ({ page, open }) => {
+  test('F-07-AC2 dropped near an edge: snaps to it; near a corner: snaps to the corner', async ({ page, open }) => {
     await miniOn(page, open, VIDEOS.a);
     const vp = await viewport(page);
     const b = await miniBox(page);
@@ -78,7 +78,7 @@ test.describe('miniplayer drag', () => {
     expect(near(r.x, GAP) && near(r.y, vp.top + GAP), `top-left corner: ${JSON.stringify(r)}`).toBe(true);
   });
 
-  test('the position is remembered on the next page load; clearing it puts the miniplayer back', async ({ page, open, ctx }) => {
+  test('F-07-AC3 the position is remembered on the next page load; clearing it puts the miniplayer back', async ({ page, open, ctx }) => {
     await miniOn(page, open, VIDEOS.a);
     const home = await miniBox(page);
     const vp = await viewport(page);
@@ -150,7 +150,7 @@ test.describe('watch page', () => {
     await storageRemove(ctx, 'local', FLOAT_KEY);
   });
 
-  test('normal mode: scrolled down, the player floats bottom right left of "back to top"; back up, it returns', async ({ page, open, ctx }) => {
+  test('F-08-AC1 normal mode: scrolled down, the player floats bottom right left of "back to top"; back up, it returns', async ({ page, open, ctx }) => {
     await watch(page, open, ctx, '0');
     const inPage = await floatBox(page);
     await scrollTo(page, Math.round(inPage.height * 0.2));
@@ -172,7 +172,7 @@ test.describe('watch page', () => {
     await expect.poll(async () => (await videoBox(page)).width > FLOAT.w + 100).toBe(true);
   });
 
-  test('theater mode: floats too, and stays in theater mode', async ({ page, open, ctx }) => {
+  test('F-08-AC1 theater mode: floats too, and stays in theater mode', async ({ page, open, ctx }) => {
     await watch(page, open, ctx, '1');
     await expect.poll(() => theater(page)).toBe(true);
     await floatIt(page);
@@ -192,7 +192,7 @@ test.describe('watch page', () => {
     expect(await cookie(ctx, 'wide')).toBe('1');
   });
 
-  test('floating, pressing t: back to the top in theater mode', async ({ page, open, ctx }) => {
+  test('F-08-AC4 floating, pressing t: back to the top in theater mode', async ({ page, open, ctx }) => {
     await watch(page, open, ctx, '0');
     await floatIt(page, 900);
     // The shortcut goes to the page, not to a text field.
@@ -203,7 +203,7 @@ test.describe('watch page', () => {
     await expect.poll(() => floating(page)).toBe(false);
   });
 
-  test('floating: the Expand button goes back to the top', async ({ page, open, ctx }) => {
+  test('F-08-AC3 floating: the Expand button goes back to the top', async ({ page, open, ctx }) => {
     await watch(page, open, ctx, '0');
     await floatIt(page);
     const b = await floatBox(page);
@@ -216,7 +216,7 @@ test.describe('watch page', () => {
     expect((await player(page)).paused, 'the click must not pause').toBe(false);
   });
 
-  test('floating: dragged to the middle it stays there, keeps playing, and is remembered', async ({ page, open, ctx }) => {
+  test('F-08-AC2 floating: dragged to the middle it stays there, keeps playing, and is remembered', async ({ page, open, ctx }) => {
     await watch(page, open, ctx, '0');
     await floatIt(page);
     const vp = await viewport(page);
@@ -251,7 +251,7 @@ test.describe('watch page', () => {
     }).toBe(true);
   });
 
-  test('floating: a timestamp link seeks without scrolling the page', async ({ page, open, ctx }) => {
+  test('F-08-AC5 floating: a timestamp link seeks without scrolling the page', async ({ page, open, ctx }) => {
     await watch(page, open, ctx, '0');
     // A timestamp like the ones YouTube makes in descriptions and comments.
     await page.locator('#primary-inner').evaluate((inner, v) => {
@@ -284,7 +284,7 @@ test.describe('watch page', () => {
 
 // ---------- back to top ----------
 
-test('back to top: shows after scrolling, jumps to the top, hides again', async ({ page, open }) => {
+test('F-09-AC1 back to top: shows after scrolling, jumps to the top, hides again', async ({ page, open }) => {
   await open('/');
   await expect(page.locator('ytd-rich-item-renderer').first()).toBeVisible({ timeout: 30_000 });
   const btn = () => inClosedShadow(page, 'ytpp-back-to-top', 'button');

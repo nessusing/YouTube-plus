@@ -3,7 +3,7 @@ import { setLang, t } from '@/core/i18n';
 import { withDefaults } from '@/core/settings';
 
 describe('t', () => {
-  it('follows the current language and fills in variables', () => {
+  it('F-04-AC1 follows the current language and fills in variables', () => {
     setLang('zh');
     expect(t('verdict.match')).toBe('标题相符');
     expect(t('queue.deleted', { n: 3 })).toBe('已删除 3 个');
@@ -14,7 +14,7 @@ describe('t', () => {
 });
 
 describe('settings.lang', () => {
-  it('keeps a stored language and replaces unknown ones', () => {
+  it('F-04-AC1 keeps a stored language and replaces unknown ones', () => {
     expect(withDefaults({ lang: 'zh' }).lang).toBe('zh');
     expect(['en', 'zh']).toContain(withDefaults({ lang: 'fr' as never }).lang);
   });

@@ -16,7 +16,7 @@ const ENTRIES: { name: string; path: (other: string) => string; items: (page: Pa
 ];
 
 for (const e of ENTRIES) {
-  test(`${e.name}: relabelled, adds to the list`, async ({ page, open, lists, setProfile }) => {
+  test(`F-05-AC5 F-05-AC7 ${e.name}: relabelled, adds to the list`, async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.zoo], `entry ${e.name}`);
     const other = await lists.create([VIDEOS.b, VIDEOS.c], 'other');
     await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
@@ -38,7 +38,7 @@ for (const e of ENTRIES) {
   });
 }
 
-test('hover button on a thumbnail: adds to the list and says so', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC5 hover button on a thumbnail: adds to the list and says so', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.zoo], 'hover');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open('/@RickAstleyYT/videos');
@@ -53,7 +53,7 @@ test('hover button on a thumbnail: adds to the list and says so', async ({ page,
   await expect.poll(() => lists.videos(id)).toEqual([VIDEOS.zoo, videoId]);
 });
 
-test('hover button label says where it goes', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC7 hover button label says where it goes', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.zoo], 'hover-label');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open('/@RickAstleyYT/videos');

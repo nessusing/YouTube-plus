@@ -8,30 +8,30 @@ const run = (...cs: ReturnType<typeof comment>[]) => filterComments(cs, P);
 const reasons = (r: ReturnType<typeof run>) => r.dropped.map((d) => [d.comment.text, d.reason]);
 
 describe('filterComments', () => {
-  it('drops links', () => {
+  it('F-12-AC5 drops links', () => {
     expect(reasons(run(comment('a long enough comment', { hasLink: true })))).toEqual([['a long enough comment', 'link']]);
   });
 
-  it('drops pure emoji, custom emoji codes and member emoji', () => {
+  it('F-12-AC5 drops pure emoji, custom emoji codes and member emoji', () => {
     const member = comment('❤❤❤', { images: [{ start: 0, len: 3, url: 'u', alt: '❤' }] });
     const r = run(comment('😂😂😂 !!! 👍🏽'), comment(':face-blue-smiling: :hand-pink-waving:'), member, comment('🇨🇦🇨🇦'));
     expect(r.kept).toEqual([]);
     expect(r.dropped.every((d) => d.reason === 'emoji')).toBe(true);
   });
 
-  it('drops short comments, counting a CJK letter as three', () => {
+  it('F-12-AC5 drops short comments, counting a CJK letter as three', () => {
     const r = run(comment('eleven char'), comment('twelve chars'), comment('哈哈哈'), comment('木蘭當戶織'));
     expect(r.kept.map((c) => c.text)).toEqual(['twelve chars', '木蘭當戶織']);
     expect(reasons(r)).toEqual([['eleven char', 'short'], ['哈哈哈', 'short']]);
   });
 
-  it('does not count the timestamp as words', () => {
+  it('F-12-AC5 does not count the timestamp as words', () => {
     const c = comment('2:35 so good');
     expect(ownText(c)).toBe('so good');
     expect(reasons(run(c))).toEqual([['2:35 so good', 'short']]);
   });
 
-  it('keeps the most liked of duplicates, in the original order', () => {
+  it('F-12-AC5 keeps the most liked of duplicates, in the original order', () => {
     const a = comment('Never gonna give you up', { id: 'a', likes: 3 });
     const b = comment('other comment here', { id: 'b' });
     const c = comment('never gonna give you up!!! 😂', { id: 'c', likes: 50 });

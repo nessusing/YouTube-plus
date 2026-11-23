@@ -4,7 +4,7 @@ import { VIDEOS } from '../support/env';
 import { addFromMenu, pickItem, related } from '../support/ui';
 import { panelRowsShown, playButton, player, seekToEnd, waitForVideo } from '../support/yt';
 
-test('watched to the end: the next entry plays, the watched one is removed', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC10 F-05-AC11 watched to the end: the next entry plays, the watched one is removed', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.zoo, VIDEOS.a, VIDEOS.b], 'ended');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.zoo}&list=${id}`);
@@ -20,7 +20,7 @@ test('watched to the end: the next entry plays, the watched one is removed', asy
 
 // The last entry: removed; what plays next is up to YouTube's own autoplay
 // (with it on, a recommended video after the end screen). Decided 2026-11-21 (F9).
-test('the last entry: removed, the button goes, YouTube decides what plays next', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC11 the last entry: removed, the button goes, YouTube decides what plays next', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.zoo], 'last');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.zoo}&list=${id}`);
@@ -30,7 +30,7 @@ test('the last entry: removed, the button goes, YouTube decides what plays next'
   await expect.poll(() => playButton(page).count()).toBe(0);
 });
 
-test('left with under 10 s to go: removed, the video picked plays', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC10 left with under 10 s to go: removed, the video picked plays', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.a, VIDEOS.zoo, VIDEOS.b], 'left');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}&list=${id}`);
@@ -44,7 +44,7 @@ test('left with under 10 s to go: removed, the video picked plays', async ({ pag
   expect((await player(page)).videoId).toBe(VIDEOS.b);
 });
 
-test('left early: nothing removed', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC10 left early: nothing removed', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.a, VIDEOS.b], 'left-early');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}&list=${id}`);
@@ -55,7 +55,7 @@ test('left early: nothing removed', async ({ page, open, lists, setProfile }) =>
   expect(await lists.videos(id)).toEqual([VIDEOS.a, VIDEOS.b]);
 });
 
-test('remove after playing off: YouTube plays on, nothing removed', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC11 remove after playing off: YouTube plays on, nothing removed', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.zoo, VIDEOS.a], 'keep');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: false });
   await open(`/watch?v=${VIDEOS.zoo}&list=${id}`);
@@ -66,7 +66,7 @@ test('remove after playing off: YouTube plays on, nothing removed', async ({ pag
   expect(await lists.videos(id)).toEqual([VIDEOS.zoo, VIDEOS.a]);
 });
 
-test('the video the list was attached to ends: the list plays from its first entry, nothing removed', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC10 the video the list was attached to ends: the list plays from its first entry, nothing removed', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.a, VIDEOS.b], 'attached-end');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.zoo}`);

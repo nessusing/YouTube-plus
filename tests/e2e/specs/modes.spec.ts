@@ -18,7 +18,7 @@ async function queueLabel(page: import('@playwright/test').Page, items: import('
 }
 
 test.describe('native → playlist', () => {
-  test('② single video in the miniplayer: relabelled at once, the button shows, Add attaches the list under it', async ({ page, open, lists, setProfile }) => {
+  test('F-05-AC8 F-05-AC7 ② single video in the miniplayer: relabelled at once, the button shows, Add attaches the list under it', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.b, VIDEOS.c], 'mode-2');
     const p: QueueProfile = { mode: 'native', listId: id, listName: 'x', removeWatched: true };
     await setProfile(p);
@@ -35,7 +35,7 @@ test.describe('native → playlist', () => {
     expect(await miniRows(page)).toEqual([VIDEOS.a, VIDEOS.b, VIDEOS.c, videoId]);
   });
 
-  test('③ native queue in the miniplayer: Add goes into the list, the native queue stays', async ({ page, open, lists, setProfile }) => {
+  test('F-05-AC8 ③ native queue in the miniplayer: Add goes into the list, the native queue stays', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.b], 'mode-3');
     const p: QueueProfile = { mode: 'native', listId: id, listName: 'x', removeWatched: true };
     await setProfile(p);
@@ -50,7 +50,7 @@ test.describe('native → playlist', () => {
     expect(await miniRows(page)).toEqual(queue);
   });
 
-  test('④ our list already playing: watched entries are removed from now on', async ({ page, open, lists, setProfile }) => {
+  test('F-05-AC8 ④ our list already playing: watched entries are removed from now on', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.zoo, VIDEOS.a], 'mode-4');
     const p: QueueProfile = { mode: 'native', listId: id, listName: 'x', removeWatched: true };
     await setProfile(p);
@@ -65,7 +65,7 @@ test.describe('native → playlist', () => {
 });
 
 test.describe('playlist → native', () => {
-  test('② the menu label goes back, the button goes away', async ({ page, open, lists, setProfile }) => {
+  test('F-05-AC8 F-05-AC7 ② the menu label goes back, the button goes away', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.b], 'mode-back-2');
     const p: QueueProfile = { mode: 'playlist', listId: id, listName: 'x', removeWatched: true };
     await setProfile(p);
@@ -80,7 +80,7 @@ test.describe('playlist → native', () => {
     expect(await queueLabel(page, homeItems(page))).toMatch(NATIVE_QUEUE_ITEM);
   });
 
-  test('④ our list playing: a watched entry is left in the list', async ({ page, open, lists, setProfile }) => {
+  test('F-05-AC8 ④ our list playing: a watched entry is left in the list', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.zoo, VIDEOS.a], 'mode-back-4');
     const p: QueueProfile = { mode: 'playlist', listId: id, listName: 'x', removeWatched: true };
     await setProfile(p);
@@ -96,7 +96,7 @@ test.describe('playlist → native', () => {
 });
 
 test.describe('switching quickly', () => {
-  test('native → playlist → native: ends native', async ({ page, open, lists, setProfile }) => {
+  test('F-05-AC8 native → playlist → native: ends native', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.b], 'quick-1');
     const p: QueueProfile = { mode: 'native', listId: id, listName: 'x', removeWatched: true };
     await setProfile(p);
@@ -109,7 +109,7 @@ test.describe('switching quickly', () => {
     expect(await queueLabel(page, related(page))).toMatch(NATIVE_QUEUE_ITEM);
   });
 
-  test('playlist → native → playlist: ends taking over, right count', async ({ page, open, lists, setProfile }) => {
+  test('F-05-AC8 playlist → native → playlist: ends taking over, right count', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.b, VIDEOS.c], 'quick-2');
     const p: QueueProfile = { mode: 'playlist', listId: id, listName: 'x', removeWatched: true };
     await setProfile(p);

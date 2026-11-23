@@ -20,7 +20,7 @@ describe('hlFromPrefCookie', () => {
     expect(hlFromPrefCookie('VISITOR_INFO1_LIVE=x; PREF=f6=40000000&hl=zh-CN&tz=Asia.Shanghai; YSC=y')).toBe('zh-CN');
     expect(hlFromPrefCookie('PREF=hl%3Dvi%26f5%3D30000')).toBe('vi');
   });
-  it('gives nothing without PREF or hl', () => {
+  it('F-04-AC1 gives nothing without PREF or hl', () => {
     expect(hlFromPrefCookie('YSC=y')).toBeUndefined();
     expect(hlFromPrefCookie('PREF=f6=40000000')).toBeUndefined();
   });

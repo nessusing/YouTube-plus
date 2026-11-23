@@ -48,7 +48,7 @@ async function pick(page: Page, more: Locator, item: 'Clear all' | 'Remove watch
 }
 
 test.describe('list page', () => {
-  test('Clear all: at the bottom of the official ⋮; everything goes at once, no confirm', async ({ page, open, lists }) => {
+  test('F-06-AC1 F-06-AC2 Clear all: at the bottom of the official ⋮; everything goes at once, no confirm', async ({ page, open, lists }) => {
     const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c, VIDEOS.d], 'clear');
     await openList(page, open, id, 4);
     await pick(page, headerMore(page), 'Clear all');
@@ -57,7 +57,7 @@ test.describe('list page', () => {
     await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([]);
   });
 
-  test('Remove watched: only the entries watched to the end go', async ({ page, open, lists }) => {
+  test('F-06-AC2 Remove watched: only the entries watched to the end go', async ({ page, open, lists }) => {
     // Watch VIDEOS.zoo (0:19) to the end first, so the history has it as watched.
     await open(`/watch?v=${VIDEOS.zoo}`);
     await waitForVideo(page, VIDEOS.zoo);
@@ -76,7 +76,7 @@ test.describe('list page', () => {
     await expect.poll(() => pageRows(page)).toEqual([VIDEOS.c, VIDEOS.d]);
   });
 
-  test('Remove watched with none watched: says so', async ({ page, open, lists }) => {
+  test('F-06-AC2 Remove watched with none watched: says so', async ({ page, open, lists }) => {
     const id = await lists.create([VIDEOS.c, VIDEOS.d], 'none-watched');
     await openList(page, open, id, 2);
     await pick(page, headerMore(page), 'Remove watched');
@@ -84,7 +84,7 @@ test.describe('list page', () => {
     expect(await lists.videos(id)).toEqual([VIDEOS.c, VIDEOS.d]);
   });
 
-  test('a list we cannot edit: its ⋮ stays as YouTube made it', async ({ page, open }) => {
+  test('F-06-AC1 a list we cannot edit: its ⋮ stays as YouTube made it', async ({ page, open }) => {
     // Someone else's public list: the first playlist a search finds.
     await open('/results?search_query=music+playlist&sp=EgIQAw%3D%3D');
     const href = await page.locator('ytd-search a[href*="list=PL"]').first().getAttribute('href', { timeout: 30_000 });
@@ -119,7 +119,7 @@ test.describe('panel beside the watch page', () => {
     expect(after.time).toBeGreaterThanOrEqual(before.time); // no reload
   });
 
-  test('another list: its ⋮ stays as YouTube made it', async ({ page, open, lists, setProfile }) => {
+  test('F-06-AC1 another list: its ⋮ stays as YouTube made it', async ({ page, open, lists, setProfile }) => {
     const mine = await lists.create([VIDEOS.b], 'panel-mine');
     const other = await lists.create([VIDEOS.a, VIDEOS.c], 'panel-other');
     await setProfile({ mode: 'playlist', listId: mine, listName: 'x', removeWatched: true });
@@ -148,7 +148,7 @@ test.describe('drag out of the panel (§48)', () => {
     return marked;
   }
 
-  test('dropped outside: the entry is removed, no notice; dropped inside: a plain reorder', async ({ page, open, lists, setProfile }) => {
+  test('F-06-AC4 F-06-AC5 dropped outside: the entry is removed, no notice; dropped inside: a plain reorder', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c], 'drag');
     await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
     await open(`/watch?v=${VIDEOS.a}&list=${id}`);

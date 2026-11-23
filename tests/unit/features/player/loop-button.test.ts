@@ -55,7 +55,7 @@ function start(): LoopButton {
 }
 
 describe('loop button', () => {
-  it('sits right of ▶ in the bar and in the middle of the miniplayer, off', () => {
+  it('F-10-AC1 sits right of ▶ in the bar and in the middle of the miniplayer, off', () => {
     start();
     expect(bar()?.previousElementSibling?.matches('.ytp-play-button')).toBe(true);
     expect(bar()?.nextElementSibling?.matches('.ytp-next-button')).toBe(true);
@@ -66,7 +66,7 @@ describe('loop button', () => {
     }
   });
 
-  it('a click turns loop on through the page, and both buttons show it', async () => {
+  it('F-10-AC2 a click turns loop on through the page, and both buttons show it', async () => {
     start();
     bar()!.click();
     await tick();
@@ -81,7 +81,7 @@ describe('loop button', () => {
     expect(bar()!.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('follows loop set elsewhere (right-click menu, a new video)', async () => {
+  it('F-10-AC2 follows loop set elsewhere (right-click menu, a new video)', async () => {
     start();
     video().loop = true;
     await tick();
@@ -91,7 +91,7 @@ describe('loop button', () => {
     expect(bar()!.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('a click does not reach the player (the miniplayer scrim pauses on click)', () => {
+  it('F-10-AC1 a click does not reach the player (the miniplayer scrim pauses on click)', () => {
     start();
     let reached = 0;
     document.querySelector('#movie_player')!.addEventListener('click', () => reached++);
@@ -99,7 +99,7 @@ describe('loop button', () => {
     expect(reached).toBe(0);
   });
 
-  it('comes back when YouTube re-renders the bar', async () => {
+  it('F-10-AC1 comes back when YouTube re-renders the bar', async () => {
     start();
     const controls = document.querySelector('.ytp-left-controls')!;
     const play = document.createElement('button');
@@ -110,7 +110,7 @@ describe('loop button', () => {
     expect(bar()?.previousElementSibling).toBe(play);
   });
 
-  it('waits for a player that is not there yet', async () => {
+  it('F-10-AC1 waits for a player that is not there yet', async () => {
     const html = document.body.innerHTML;
     document.body.innerHTML = '';
     start();
@@ -122,7 +122,7 @@ describe('loop button', () => {
     expect(mini()).not.toBeNull();
   });
 
-  it('turned off: buttons go, and a running loop stops', async () => {
+  it('F-10-AC3 turned off: buttons go, and a running loop stops', async () => {
     const p = start();
     bar()!.click();
     await tick();
@@ -134,14 +134,14 @@ describe('loop button', () => {
     expect(document.getElementById('ytpp-loop-button')).toBeNull();
   });
 
-  it('turned off while not looping: leaves loop alone', () => {
+  it('F-10-AC3 turned off while not looping: leaves loop alone', () => {
     const p = start();
     p.disable();
     part = undefined;
     expect(sent).toEqual([]);
   });
 
-  it('shows the player-style tooltip on hover, with the current label', async () => {
+  it('F-10-AC1 shows the player-style tooltip on hover, with the current label', async () => {
     start();
     bar()!.dispatchEvent(new MouseEvent('mouseenter'));
     const tip = document.querySelector<HTMLElement>('#movie_player > .ytp-tooltip.ytpp-loop-tip')!;

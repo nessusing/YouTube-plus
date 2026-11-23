@@ -5,7 +5,7 @@ import { VIDEOS } from '../support/env';
 import { addFromMenu, homeItems, miniInfo, miniRows, NATIVE_QUEUE_ITEM, OUR_ITEM, pickItem, related, startNativeQueue, toMini, toWatch } from '../support/ui';
 import { lastToast, panelData, panelRowsShown, playButton, player, waitForVideo } from '../support/yt';
 
-test('native mode: Add to queue in the miniplayer gives the native queue under it', async ({ page, open, setProfile }) => {
+test('F-05-AC5 native mode: Add to queue in the miniplayer gives the native queue under it', async ({ page, open, setProfile }) => {
   await setProfile({ mode: 'native', removeWatched: true });
   await open('/');
   const ids = await startNativeQueue(page, VIDEOS.a);
@@ -14,7 +14,7 @@ test('native mode: Add to queue in the miniplayer gives the native queue under i
   await expect(playButton(page).host).toHaveCount(0);
 });
 
-test('playlist mode, watching a video outside any list: Add shows the list beside it, this video on top, no reload', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC6 playlist mode, watching a video outside any list: Add shows the list beside it, this video on top, no reload', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.b, VIDEOS.c], 'attach-watch');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}`);
@@ -34,7 +34,7 @@ test('playlist mode, watching a video outside any list: Add shows the list besid
   expect(await lists.videos(id)).toEqual([VIDEOS.b, VIDEOS.c, videoId]);
 });
 
-test('playlist mode, a single video in the miniplayer: Add shows the list under it', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC6 playlist mode, a single video in the miniplayer: Add shows the list under it', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.b, VIDEOS.c], 'attach-mini');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}`);
@@ -48,7 +48,7 @@ test('playlist mode, a single video in the miniplayer: Add shows the list under 
   expect((await player(page)).mini).toBe(true);
 });
 
-test('playlist mode, another list playing: Add leaves its panel alone', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC6 playlist mode, another list playing: Add leaves its panel alone', async ({ page, open, lists, setProfile }) => {
   const mine = await lists.create([VIDEOS.b], 'mine');
   const other = await lists.create([VIDEOS.a, VIDEOS.c], 'other');
   await setProfile({ mode: 'playlist', listId: mine, listName: 'x', removeWatched: true });
@@ -63,7 +63,7 @@ test('playlist mode, another list playing: Add leaves its panel alone', async ({
   expect((await player(page)).playlistId).toBe(other);
 });
 
-test('the attached list survives watch → miniplayer → watch', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC6 the attached list survives watch → miniplayer → watch', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.b, VIDEOS.c], 'roundtrip');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}`);
@@ -80,7 +80,7 @@ test('the attached list survives watch → miniplayer → watch', async ({ page,
   expect(await miniRows(page)).toEqual(rows);
 });
 
-test('our list playing: the panel survives watch → miniplayer → watch', async ({ page, open, lists, setProfile }) => {
+test('F-05-AC13 our list playing: the panel survives watch → miniplayer → watch', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c], 'roundtrip-list');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}&list=${id}`);
@@ -93,7 +93,7 @@ test('our list playing: the panel survives watch → miniplayer → watch', asyn
   await expect.poll(() => panelRowsShown(page, 'watch')).toEqual(rows);
 });
 
-test('native mode: Add to queue keeps YouTube\'s own label', async ({ page, open, setProfile }) => {
+test('F-05-AC7 native mode: Add to queue keeps YouTube\'s own label', async ({ page, open, setProfile }) => {
   await setProfile({ mode: 'native', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}`);
   await waitForVideo(page, VIDEOS.a);

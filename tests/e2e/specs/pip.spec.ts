@@ -80,7 +80,7 @@ async function escClosesMini(page: Page): Promise<boolean> {
 test.describe('pop-out (§50)', () => {
   test.afterEach(async ({ ctx }) => setPipShortcut(ctx, 'Shift+I'));
 
-  test('watch page → Shift+I → PiP: keys, buttons, back in', async ({ ctx, open }) => {
+  test('F-11-AC2 F-11-AC3 F-11-AC4 watch page → Shift+I → PiP: keys, buttons, back in', async ({ ctx, open }) => {
     const page = await open(`/watch?v=${VIDEOS.a}`);
     await expect.poll(async () => (await pipState(page)).t ?? 0, { timeout: 30_000 }).toBeGreaterThan(1);
     await page.locator('#movie_player').hover();
@@ -121,7 +121,7 @@ test.describe('pop-out (§50)', () => {
     });
   });
 
-  test('miniplayer button, Shift+I back, Esc, shortcut off', async ({ ctx, open }) => {
+  test('F-11-AC2 F-11-AC4 miniplayer button, Shift+I back, Esc, shortcut off', async ({ ctx, open }) => {
     const page = await open(`/watch?v=${VIDEOS.b}`);
     await expect.poll(async () => (await pipState(page)).t ?? 0, { timeout: 30_000 }).toBeGreaterThan(1);
     await toMini(page);
@@ -163,7 +163,7 @@ test.describe('pop-out (§50)', () => {
     });
   });
 
-  test('full screen from PiP: the tab, the watch page covered; f back into PiP', async ({ ctx, open }) => {
+  test('F-11-AC5 full screen from PiP: the tab, the watch page covered; f back into PiP', async ({ ctx, open }) => {
     const page = await open(`/watch?v=${VIDEOS.c}`);
     await expect.poll(async () => (await pipState(page)).t ?? 0, { timeout: 30_000 }).toBeGreaterThan(1);
     await page.locator('#movie_player').hover();

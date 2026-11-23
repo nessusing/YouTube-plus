@@ -13,7 +13,7 @@ function frame(inner: unknown): string {
 }
 
 describe('parseStream', () => {
-  it('takes cid and the last full text from length-prefixed frames', () => {
+  it('F-03-AC7 takes cid and the last full text from length-prefixed frames', () => {
     const raw = ")]}'\n\n"
       + frame([null, ['c_abc', 'r_1']])
       + frame([null, ['c_abc', 'r_1'], null, null, [['rc_1', ['{"status":"ok","po']]]])
@@ -25,13 +25,13 @@ describe('parseStream', () => {
     expect(p.errorCode).toBeUndefined();
   });
 
-  it('uses candidate[22] when [1] is a card placeholder', () => {
+  it('F-03-AC7 uses candidate[22] when [1] is a card placeholder', () => {
     const cand: unknown[] = ['rc', ['http://googleusercontent.com/card_content/0']];
     cand[22] = ['real text'];
     expect(parseStream(")]}'\n" + frame([null, ['c_x'], null, null, [cand]])).text).toBe('real text');
   });
 
-  it('reports BardErrorInfo codes', () => {
+  it('F-03-AC7 reports BardErrorInfo codes', () => {
     expect(parseStream(")]}'\n31\n[[\"x\",\"BardErrorInfo [1037]\"]]\n").errorCode).toBe(1037);
     expect(mapErrorCode(1037)).toEqual({ code: 'quota' });
     expect(mapErrorCode(1152)).toEqual({ code: 'blocked' });
@@ -40,7 +40,7 @@ describe('parseStream', () => {
 });
 
 describe('request building', () => {
-  it('fills the known slots and leaves temporary chat and model unset', () => {
+  it('F-03-AC8 fills the known slots and leaves temporary chat and model unset', () => {
     const inner = buildInner('hi', 'U');
     expect(inner).toHaveLength(80);
     expect(inner[0]).toEqual(['hi', 0, null, null, null, null, 0]);
@@ -48,7 +48,7 @@ describe('request building', () => {
     expect(inner[45]).toBeNull();
     expect(inner[79]).toBeNull();
   });
-  it('builds the prompt from settings', () => {
+  it('F-03-AC4 builds the prompt from settings', () => {
     const p = buildPrompt({ videoId: 'abc', title: 'T "q"', titleCheck: false });
     expect(p).toContain('watch?v=abc');
     // The video's own language, never a fixed one (plans P23).
@@ -57,7 +57,7 @@ describe('request building', () => {
     expect(p).not.toContain('titleMatch');
     expect(buildPrompt({ videoId: 'abc', title: 't', titleCheck: true })).toContain('titleMatch');
   });
-  it('extracts tokens from the app HTML', () => {
+  it('F-03-AC7 extracts tokens from the app HTML', () => {
     expect(extractTokens('x"SNlM0e":"AT1"y"cfb2h":"boq_1"z"FdrFJe":"-42"w"d2zJAe":"AIzaK"')).toEqual({ at: 'AT1', bl: 'boq_1', sid: '-42', key: 'AIzaK' });
     expect(extractTokens('<html>guest</html>').at).toBeUndefined();
   });
@@ -75,7 +75,7 @@ function content(answer: unknown, done = false): unknown {
 }
 
 describe('processSession', () => {
-  it('splits frames exactly as recorded and keeps an incomplete tail', () => {
+  it('F-03-AC7 splits frames exactly as recorded and keeps an incomplete tail', () => {
     expect(splitChannelFrames('14\n[[1,["noop"]]]')).toEqual({ items: [[1, ['noop']]], rest: '' });
     const two = chFrame([[2, ['noop']]]) + chFrame([[3, ['x 中文 😀']]]);
     expect(splitChannelFrames(two).items).toEqual([[2, ['noop']], [3, ['x 中文 😀']]]);
@@ -85,12 +85,12 @@ describe('processSession', () => {
     expect(splitChannelFrames(r.rest + two.slice(-3)).items).toEqual([[3, ['x 中文 😀']]]);
   });
 
-  it('reads SID from the handshake body', () => {
+  it('F-03-AC7 reads SID from the handshake body', () => {
     expect(channelSid(`${chFrame([[0, ['c', 'SID-1', '', 8, 15, 30000]]])}\n`)).toBe('SID-1');
     expect(channelSid('garbage')).toBeUndefined();
   });
 
-  it('classifies downstream payloads', () => {
+  it('F-03-AC7 classifies downstream payloads', () => {
     expect(classifyChannel(['noop'])).toEqual({ kind: 'noop' });
     expect(classifyChannel([[[]]])).toEqual({ kind: 'ack' });
     expect(classifyChannel([[null, null, null, []]])).toEqual({ kind: 'end' });
@@ -103,7 +103,7 @@ describe('processSession', () => {
     expect(mapChannelStatus(400)).toEqual({ code: 'protocol' });
   });
 
-  it('builds the three upstream messages', () => {
+  it('F-03-AC7 builds the three upstream messages', () => {
     const open = channelOpen('U') as unknown[][][];
     expect(open[0]![0]).toEqual([1, null, 'en', 'U']);
     const inner = (open[0]![7] as unknown[])[4] as unknown[];
@@ -113,7 +113,7 @@ describe('processSession', () => {
     expect(CHANNEL_CLOSE).toEqual([null, null, null, [1]]);
   });
 
-  it('signs with SAPISIDHASH and picks the account by header', async () => {
+  it('F-03-AC7 signs with SAPISIDHASH and picks the account by header', async () => {
     const want = createHash('sha1').update('1700000000 abc https://gemini.google.com').digest('hex');
     expect(await sapisidHash('abc', 1700000000)).toBe(`SAPISIDHASH 1700000000_${want}`);
     const h = channelHeaders('KEY', 'SAPISIDHASH x', 2);
@@ -123,7 +123,7 @@ describe('processSession', () => {
     ]);
   });
 
-  it('parses answers like parseStream: ids, last text, card fallback, errors', () => {
+  it('F-03-AC7 parses answers like parseStream: ids, last text, card fallback, errors', () => {
     const card: unknown[] = ['rc', ['http://googleusercontent.com/card_content/0']];
     card[22] = ['card text'];
     const answers = [
@@ -141,28 +141,28 @@ describe('processSession', () => {
 });
 
 describe('parseSummary', () => {
-  it('parses clean JSON', () => {
+  it('F-03-AC5 parses clean JSON', () => {
     const r = parseSummary('{"status":"ok","lang":"en","points":["a","b","c"],"titleMatch":{"verdict":"match","reason":"r"}}', 'x');
     expect(r).toEqual({ kind: 'ok', data: { points: ['a', 'b', 'c'], lang: 'en', titleMatch: { verdict: 'match', reason: 'r' } } });
   });
-  it('digs JSON out of fences or chatter', () => {
+  it('F-03-AC5 digs JSON out of fences or chatter', () => {
     expect(parseSummary('```json\n{"status":"ok","points":["a"]}\n```', 'zh')).toMatchObject({ kind: 'ok', data: { points: ['a'], lang: 'zh' } });
     expect(parseSummary('Sure! {"status":"ok","points":["a"]} Hope this helps', 'zh')).toMatchObject({ kind: 'ok', data: { points: ['a'] } });
   });
-  it('takes the first object when the answer is written twice', () => {
+  it('F-03-AC5 takes the first object when the answer is written twice', () => {
     expect(parseSummary('{"status":"ok","points":["a }"]}{"status":"ok","points":["b"]}', 'en')).toMatchObject({ kind: 'ok', data: { points: ['a }'] } });
   });
-  it('maps no_transcript to unreadable', () => {
+  it('F-03-AC5 maps no_transcript to unreadable', () => {
     expect(parseSummary('{"status":"no_transcript"}', 'en').kind).toBe('unreadable');
   });
-  it('keeps unparsable text as raw', () => {
+  it('F-03-AC5 keeps unparsable text as raw', () => {
     expect(parseSummary('just prose', 'en')).toEqual({ kind: 'ok', data: { points: [], lang: 'en', raw: 'just prose' } });
   });
 });
 
 describe('batch', () => {
   const ids = ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc'];
-  it('lists every video in order and asks for an array', () => {
+  it('F-03-AC9 lists every video in order and asks for an array', () => {
     const p = buildBatchPrompt(ids.map((videoId) => ({ videoId, title: `T ${videoId}`, titleCheck: true })));
     expect(p.indexOf('v=aaaaaaaaaaa')).toBeLessThan(p.indexOf('v=bbbbbbbbbbb'));
     expect(p).toContain('JSON array');
@@ -170,7 +170,7 @@ describe('batch', () => {
     expect(p).toContain('titleMatch');
     expect(p).toContain('Each video uses its own language');
   });
-  it('matches answers by id, keeps no_transcript, leaves out what is missing', () => {
+  it('F-03-AC5 F-03-AC9 matches answers by id, keeps no_transcript, leaves out what is missing', () => {
     const text = '```json\n' + JSON.stringify([
       { id: 'bbbbbbbbbbb', status: 'no_transcript' },
       { id: 'aaaaaaaaaaa', status: 'ok', lang: 'en', points: ['x'], titleMatch: { verdict: 'match', reason: 'r' } },
@@ -182,19 +182,19 @@ describe('batch', () => {
     expect(m.has('ccccccccccc')).toBe(false);
     expect(m.size).toBe(2);
   });
-  it('falls back to position when ids are dropped and the count matches', () => {
+  it('F-03-AC9 falls back to position when ids are dropped and the count matches', () => {
     const m = parseBatch(JSON.stringify(ids.map((_, n) => ({ status: 'ok', points: [`p${n}`] }))), ids, 'en');
     expect(ids.map((id) => (m.get(id) as { data: { points: string[] } }).data.points[0])).toEqual(['p0', 'p1', 'p2']);
   });
-  it('returns nothing for text that is not an array', () => {
+  it('F-03-AC9 returns nothing for text that is not an array', () => {
     expect(parseBatch('sorry, I cannot', ids, 'en').size).toBe(0);
   });
-  it('takes the first array when the answer is written twice (seen 2026-11-21)', () => {
+  it('F-03-AC9 takes the first array when the answer is written twice (seen 2026-11-21)', () => {
     const one = JSON.stringify(ids.map((id, n) => ({ id, status: 'ok', points: [`p${n}`] })));
     const m = parseBatch(one + one, ids, 'en');
     expect(ids.map((id) => (m.get(id) as { data: { points: string[] } }).data.points[0])).toEqual(['p0', 'p1', 'p2']);
   });
-  it('keeps the good objects when one is broken (seen 2026-11-21)', () => {
+  it('F-03-AC9 keeps the good objects when one is broken (seen 2026-11-21)', () => {
     const text = '[{"id":"aaaaaaaaaaa","status":"ok","lang":"zh","yue","points":["x"]},'
       + '{"id":"bbbbbbbbbbb","status":"ok","points":["y [z] {w}"],"titleMatch":{"verdict":"match","reason":"r"}},'
       + '{"id":"ccccccccccc","status":"no_transcript"}]';
@@ -203,7 +203,7 @@ describe('batch', () => {
     expect(m.get('bbbbbbbbbbb')).toMatchObject({ kind: 'ok', data: { points: ['y [z] {w}'], titleMatch: { verdict: 'match' } } });
     expect(m.get('ccccccccccc')?.kind).toBe('unreadable');
   });
-  it('skips brackets in prose before the array', () => {
+  it('F-03-AC9 skips brackets in prose before the array', () => {
     const m = parseBatch('Note [1]: done [{"id":"aaaaaaaaaaa","status":"ok","points":["x"]}] bye', ids, 'en');
     expect(m.get('aaaaaaaaaaa')?.kind).toBe('ok');
   });

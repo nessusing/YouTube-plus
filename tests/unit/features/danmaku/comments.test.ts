@@ -7,14 +7,14 @@ describe('parseCount', () => {
   it.each([
     ['9.3K', 9300], ['283K', 283000], ['1.2M', 1200000], ['2B', 2e9], ['451', 451], ['1', 1],
     ['', 0], [' ', 0], ['1,234', 1234], ['9.3k', 9300],
-  ])('%j → %d', (s, n) => expect(parseCount(s)).toBe(n));
+  ])('F-12-AC5 %j → %d', (s, n) => expect(parseCount(s)).toBe(n));
 });
 
 describe('parseAge', () => {
   it.each([
     ['3 months ago', 90], ['7 years ago (edited)', 7 * 365], ['1 day ago', 1], ['2 weeks ago', 14], ['12 hours ago', 0.5],
-  ])('%j → %d days', (s, d) => expect(parseAge(s)).toBeCloseTo(d));
-  it('is null when unreadable', () => expect(parseAge('Streamed live')).toBeNull());
+  ])('F-12-AC5 %j → %d days', (s, d) => expect(parseAge(s)).toBeCloseTo(d));
+  it('F-12-AC5 is null when unreadable', () => expect(parseAge('Streamed live')).toBeNull());
 });
 
 /** First `next` response: the comments section and the heat map. */
@@ -34,10 +34,10 @@ function watch(opts: { comments?: boolean; heat?: boolean } = {}) {
 }
 
 describe('parseWatch', () => {
-  it('finds the first comments token and the Most replayed curve', () => {
+  it('F-12-AC4 F-12-AC8 finds the first comments token and the Most replayed curve', () => {
     expect(parseWatch(watch())).toEqual({ token: 'TOKEN1', heatmap: [{ start: 0, dur: 2.14, score: 1 }, { start: 2.14, dur: 2.14, score: 0.42 }] });
   });
-  it('copes with comments off and no heat map', () => {
+  it('F-12-AC2 F-12-AC4 copes with comments off and no heat map', () => {
     expect(parseWatch(watch({ comments: false, heat: false }))).toEqual({ token: undefined, heatmap: [] });
   });
 });
@@ -69,7 +69,7 @@ function page(o: { entities: unknown[]; threads: string[]; header?: string; last
 }
 
 describe('parsePage', () => {
-  it('reads comments in ranking order, with counts, age and author', () => {
+  it('F-12-AC4 reads comments in ranking order, with counts, age and author', () => {
     const p = parsePage(page({
       entities: [entity({ key: 'A', text: 'first entity', likes: '9.3K', replies: '66' }), entity({ key: 'B', text: 'second entity', likes: '12', age: '2 days ago' })],
       threads: ['B', 'A'],
@@ -82,7 +82,7 @@ describe('parsePage', () => {
     expect(p.next).toBe('NEXT');
   });
 
-  it('falls back to entity order without threads, skips replies, takes the button token', () => {
+  it('F-12-AC4 falls back to entity order without threads, skips replies, takes the button token', () => {
     const p = parsePage(page({
       entities: [entity({ key: 'A', text: 'top' }), entity({ key: 'R', text: 'a reply', level: 1 })],
       threads: [],
@@ -93,11 +93,11 @@ describe('parsePage', () => {
     expect(p.total).toBeUndefined();
   });
 
-  it('has no next token on the last page', () => {
+  it('F-12-AC4 has no next token on the last page', () => {
     expect(parsePage(page({ entities: [], threads: [], last: 'none' }), VID).next).toBeUndefined();
   });
 
-  it('takes timestamps to this video only; 0:00 has no startTimeSeconds', () => {
+  it('F-12-AC6 takes timestamps to this video only; 0:00 has no startTimeSeconds', () => {
     const text = '0:00 intro\n2:35 the jump\nsee also 1:00';
     const p = parsePage(page({
       entities: [entity({ key: 'A', text, commandRuns: [watchRun(11, 4, VID, 155), watchRun(0, 4, VID), watchRun(33, 4, 'otherVideo1', 60)] })],
@@ -109,7 +109,7 @@ describe('parsePage', () => {
     expect(c.hasLink).toBe(true);
   });
 
-  it('marks web links, from runs or from the text', () => {
+  it('F-12-AC5 marks web links, from runs or from the text', () => {
     const viaRun = entity({ key: 'A', text: 'my channel here', commandRuns: [{ startIndex: 3, length: 7, onTap: { innertubeCommand: { urlEndpoint: { url: 'https://x.test' } } } }] });
     const viaText = entity({ key: 'B', text: 'go to www.example.com now' });
     const plain = entity({ key: 'C', text: 'Node.js is fine' });
@@ -117,7 +117,7 @@ describe('parsePage', () => {
     expect(p.comments.map((c) => c.hasLink)).toEqual([true, true, false]);
   });
 
-  it('keeps inline member emoji with their place in the text', () => {
+  it('F-12-AC5 keeps inline member emoji with their place in the text', () => {
     const img = (start: number) => ({ startIndex: start, length: 1, element: { type: { imageType: { image: { sources: [{ url: 'https://e.test/heart.png', width: 16, height: 16 }] } } }, properties: { accessibilityProperties: { label: '❤' } } } });
     const p = parsePage(page({ entities: [entity({ key: 'A', text: 'Freddy..❤❤', attachmentRuns: [img(8), img(9)] })], threads: ['A'] }), VID);
     expect(p.comments[0]!.images).toEqual([{ start: 8, len: 1, url: 'https://e.test/heart.png', alt: '❤' }, { start: 9, len: 1, url: 'https://e.test/heart.png', alt: '❤' }]);
@@ -131,7 +131,7 @@ describe('fields for the comments panel (§52)', () => {
     return e;
   };
 
-  it('gives each comment its avatar, publish text and replies token', () => {
+  it('F-12-AC14 gives each comment its avatar, publish text and replies token', () => {
     const replies = { commentRepliesRenderer: { contents: [{ continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token: 'REPLIES-A' } } } }] } };
     const j = page({ entities: [withAvatar('A'), withAvatar('B')], threads: ['A', 'B'] });
     const items = (j.onResponseReceivedEndpoints[0] as { appendContinuationItemsAction: { continuationItems: Record<string, Record<string, unknown>>[] } }).appendContinuationItemsAction.continuationItems;
@@ -141,14 +141,14 @@ describe('fields for the comments panel (§52)', () => {
     expect(p.comments[1]!.replyToken).toBeUndefined();
   });
 
-  it('finds the replies token under subThreads too (what the page itself gets)', () => {
+  it('F-12-AC14 finds the replies token under subThreads too (what the page itself gets)', () => {
     const j = page({ entities: [withAvatar('A')], threads: ['A'] });
     const items = (j.onResponseReceivedEndpoints[0] as { appendContinuationItemsAction: { continuationItems: Record<string, Record<string, unknown>>[] } }).appendContinuationItemsAction.continuationItems;
     items[0]!.commentThreadRenderer!.replies = { commentRepliesRenderer: { subThreads: [{ continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token: 'SUB-A' } } } }] } };
     expect(parsePage(j, VID).comments[0]!.replyToken).toBe('SUB-A');
   });
 
-  it('reads a page of replies: bare comment view models, level 1, a "Show more replies" button', () => {
+  it('F-12-AC14 reads a page of replies: bare comment view models, level 1, a "Show more replies" button', () => {
     const items: unknown[] = [
       { commentViewModel: { commentKey: 'R2' } }, { commentViewModel: { commentKey: 'R1' } },
       { continuationItemRenderer: { button: { buttonRenderer: { command: { continuationCommand: { token: 'MORE' } } } } } },
@@ -161,7 +161,7 @@ describe('fields for the comments panel (§52)', () => {
     expect(parsePage(j, VID).comments).toEqual([]);
   });
 
-  it('reads the page client\'s nested reply threads: replies with their own replies inline and a token for more', () => {
+  it('F-12-AC14 reads the page client\'s nested reply threads: replies with their own replies inline and a token for more', () => {
     const thread = (key: string, subThreads?: unknown[]) => ({ commentThreadRenderer: { commentViewModel: { commentViewModel: { commentKey: key } }, ...(subThreads ? { replies: { commentRepliesRenderer: { subThreads } } } : {}) } });
     const more = (token: string) => ({ continuationItemRenderer: { button: { buttonRenderer: { command: { continuationCommand: { token } } } } } });
     const items = [
@@ -180,7 +180,7 @@ describe('fields for the comments panel (§52)', () => {
     expect(p.next).toBe('NEXT-REPLIES');
   });
 
-  it('lean() drops them for the danmaku cache', () => {
+  it('F-12-AC15 lean() drops them for the danmaku cache', () => {
     const c = parsePage(page({ entities: [withAvatar('A')], threads: ['A'] }), VID).comments[0]!;
     const l = lean({ ...c, replyToken: 'T', level: 1, subReplies: [c] });
     expect(l).not.toHaveProperty('avatar');

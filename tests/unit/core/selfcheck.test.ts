@@ -6,7 +6,7 @@ import { runChecks, type SelfCheck } from '@/core/selfcheck';
 const log = (): Logger => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
 
 describe('runChecks', () => {
-  it('runs enabled features in order, skips disabled ones, and turns throws into failures', async () => {
+  it('F-01-AC1 F-01-AC6 runs enabled features in order, skips disabled ones, and turns throws into failures', async () => {
     setLang('en');
     const order: string[] = [];
     const checks: SelfCheck[] = [

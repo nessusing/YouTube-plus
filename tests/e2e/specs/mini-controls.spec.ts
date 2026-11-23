@@ -129,21 +129,21 @@ async function checkAll(page: Page): Promise<void> {
   });
 }
 
-test('a single video', async ({ page, open }) => {
+test('F-07-AC1 a single video', async ({ page, open }) => {
   await open(`/watch?v=${VIDEOS.a}`);
   await waitForVideo(page, VIDEOS.a);
   await toMini(page);
   await checkAll(page);
 });
 
-test('the native queue', async ({ page, open, setProfile }) => {
+test('F-07-AC1 the native queue', async ({ page, open, setProfile }) => {
   await setProfile({ mode: 'native', removeWatched: true });
   await open('/');
   await startNativeQueue(page, VIDEOS.a);
   await checkAll(page);
 });
 
-test('our list', async ({ page, open, lists, setProfile }) => {
+test('F-07-AC1 our list', async ({ page, open, lists, setProfile }) => {
   const id = await lists.create([VIDEOS.a, VIDEOS.b, VIDEOS.c], 'controls');
   await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
   await open(`/watch?v=${VIDEOS.a}&list=${id}`);

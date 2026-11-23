@@ -69,7 +69,7 @@ test.describe('loop button', () => {
   test.beforeEach(async ({ ctx }) => setPlayer(ctx, { loopButton: true, miniControls: true }));
   test.afterEach(async ({ ctx }) => setPlayer(ctx, { loopButton: false, miniControls: true }));
 
-  test('setting off (the default): no button', async ({ page, open, ctx }) => {
+  test('F-10-AC1 setting off (the default): no button', async ({ page, open, ctx }) => {
     await setPlayer(ctx, { loopButton: false });
     await open(`/watch?v=${VIDEOS.a}`);
     await waitForVideo(page, VIDEOS.a);
@@ -77,7 +77,7 @@ test.describe('loop button', () => {
     expect(await page.locator('.ytpp-loop').count()).toBe(0);
   });
 
-  test('watch page: right of ▶, in line; it is the right-click Loop, both ways', async ({ page, open }) => {
+  test('F-10-AC1 F-10-AC2 watch page: right of ▶, in line; it is the right-click Loop, both ways', async ({ page, open }) => {
     await open(`/watch?v=${VIDEOS.a}`);
     await waitForVideo(page, VIDEOS.a);
     await expect(page.locator(BAR)).toHaveCount(1);
@@ -98,7 +98,7 @@ test.describe('loop button', () => {
     await expect(page.locator(BAR)).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('tooltip in the player style: "Loop", then "Turn off loop"', async ({ page, open }) => {
+  test('F-10-AC1 tooltip in the player style: "Loop", then "Turn off loop"', async ({ page, open }) => {
     await open(`/watch?v=${VIDEOS.a}`);
     await waitForVideo(page, VIDEOS.a);
     await showBar(page);
@@ -115,7 +115,7 @@ test.describe('loop button', () => {
     await expect(tip).toBeHidden();
   });
 
-  test('on loop the video starts again instead of the next one in a list', async ({ page, open, lists }) => {
+  test('F-10-AC2 on loop the video starts again instead of the next one in a list', async ({ page, open, lists }) => {
     const id = await lists.create([VIDEOS.zoo, VIDEOS.a], 'loop-list');
     await open(`/watch?v=${VIDEOS.zoo}&list=${id}`);
     await waitForVideo(page, VIDEOS.zoo);
@@ -130,7 +130,7 @@ test.describe('loop button', () => {
     expect(p.paused).toBe(false);
   });
 
-  test('another video: loop is off again', async ({ page, open }) => {
+  test('F-10-AC2 another video: loop is off again', async ({ page, open }) => {
     await open(`/watch?v=${VIDEOS.a}`);
     await waitForVideo(page, VIDEOS.a);
     await showBar(page);
@@ -144,7 +144,7 @@ test.describe('loop button', () => {
     await expect(page.locator(BAR)).toHaveAttribute('aria-pressed', 'false');
   });
 
-  test('theater and fullscreen: still right of ▶ and in line', async ({ page, open }) => {
+  test('F-10-AC1 theater and fullscreen: still right of ▶ and in line', async ({ page, open }) => {
     await open(`/watch?v=${VIDEOS.a}`);
     await waitForVideo(page, VIDEOS.a);
     const flexy = page.locator('ytd-watch-flexy');
@@ -169,7 +169,7 @@ test.describe('loop button', () => {
     await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(false);
   });
 
-  test('miniplayer with our controls: in the bar beside ▶; the middle one stays hidden', async ({ page, open }) => {
+  test('F-10-AC1 miniplayer with our controls: in the bar beside ▶; the middle one stays hidden', async ({ page, open }) => {
     await open(`/watch?v=${VIDEOS.a}`);
     await waitForVideo(page, VIDEOS.a);
     await toMini(page);
@@ -181,7 +181,7 @@ test.describe('loop button', () => {
     expect((await player(page)).mini).toBe(true);
   });
 
-  test('miniplayer without our controls: right of the big ▶, which stays put; a click does not pause', async ({ page, open, ctx }) => {
+  test('F-10-AC1 miniplayer without our controls: right of the big ▶, which stays put; a click does not pause', async ({ page, open, ctx }) => {
     await setPlayer(ctx, { miniControls: false });
     await open(`/watch?v=${VIDEOS.a}`);
     await waitForVideo(page, VIDEOS.a);
@@ -202,7 +202,7 @@ test.describe('loop button', () => {
     expect((await player(page)).paused).toBe(false);
   });
 
-  test('setting turned off while looping: the button goes and the loop stops', async ({ page, open, ctx }) => {
+  test('F-10-AC3 setting turned off while looping: the button goes and the loop stops', async ({ page, open, ctx }) => {
     await open(`/watch?v=${VIDEOS.a}`);
     await waitForVideo(page, VIDEOS.a);
     await showBar(page);
@@ -218,7 +218,7 @@ test.describe('loop and remove after playing (§40.2)', () => {
   test.beforeEach(async ({ ctx }) => setPlayer(ctx, { loopButton: true }));
   test.afterEach(async ({ ctx }) => setPlayer(ctx, { loopButton: false }));
 
-  test('looped once, then another entry picked: the looped one is removed', async ({ page, open, lists, setProfile }) => {
+  test('F-10-AC4 looped once, then another entry picked: the looped one is removed', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.zoo, VIDEOS.a, VIDEOS.b], 'loop-watched');
     await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
     await open(`/watch?v=${VIDEOS.zoo}&list=${id}`);
@@ -236,7 +236,7 @@ test.describe('loop and remove after playing (§40.2)', () => {
     await expect.poll(() => lists.videos(id), { timeout: 30_000 }).toEqual([VIDEOS.a, VIDEOS.b]);
   });
 
-  test('on loop, left in its last 10 s before it looped: kept', async ({ page, open, lists, setProfile }) => {
+  test('F-10-AC4 on loop, left in its last 10 s before it looped: kept', async ({ page, open, lists, setProfile }) => {
     const id = await lists.create([VIDEOS.a, VIDEOS.zoo, VIDEOS.b], 'loop-kept');
     await setProfile({ mode: 'playlist', listId: id, listName: 'x', removeWatched: true });
     await open(`/watch?v=${VIDEOS.a}&list=${id}`);

@@ -63,7 +63,7 @@ async function start(): Promise<MiniMinimize> {
 }
 
 describe('miniplayer minimize', () => {
-  it('sits right before ✕, labelled, and nothing is minimized yet', async () => {
+  it('F-07-AC4 sits right before ✕, labelled, and nothing is minimized yet', async () => {
     await start();
     expect(btn()?.nextElementSibling?.matches('.ytp-miniplayer-close-button')).toBe(true);
     expect(btn()?.getAttribute('aria-label')).toBe(t('player.miniMinimize'));
@@ -71,7 +71,7 @@ describe('miniplayer minimize', () => {
     expect(barShown()).toBe(false);
   });
 
-  it('minimize: miniplayer hidden, bar with the title, remembered', async () => {
+  it('F-07-AC4 F-07-AC5 minimize: miniplayer hidden, bar with the title, remembered', async () => {
     await start();
     btn()!.click();
     await settle();
@@ -81,7 +81,7 @@ describe('miniplayer minimize', () => {
     expect(await stored()).toBe(true);
   });
 
-  it('a click does not reach the player (the miniplayer scrim pauses on click)', async () => {
+  it('F-07-AC4 a click does not reach the player (the miniplayer scrim pauses on click)', async () => {
     await start();
     let reached = 0;
     document.querySelector('#movie_player')!.addEventListener('click', () => reached++);
@@ -89,7 +89,7 @@ describe('miniplayer minimize', () => {
     expect(reached).toBe(0);
   });
 
-  it('the bar follows the title of the next video', async () => {
+  it('F-07-AC4 the bar follows the title of the next video', async () => {
     await start();
     btn()!.click();
     await settle();
@@ -98,7 +98,7 @@ describe('miniplayer minimize', () => {
     expect(barText()).toBe('Second video');
   });
 
-  it('clicking the bar restores and forgets', async () => {
+  it('F-07-AC4 clicking the bar restores and forgets', async () => {
     await start();
     btn()!.click();
     await settle();
@@ -109,14 +109,14 @@ describe('miniplayer minimize', () => {
     expect(await stored()).toBeUndefined();
   });
 
-  it('remembered: starts as the bar', async () => {
+  it('F-07-AC5 remembered: starts as the bar', async () => {
     await fakeBrowser.storage.local.set({ [MINI_MIN_KEY]: true });
     await start();
     expect(hidden()).toBe(true);
     expect(barShown()).toBe(true);
   });
 
-  it('no miniplayer (watch page): no bar; it comes back with the miniplayer', async () => {
+  it('F-07-AC5 no miniplayer (watch page): no bar; it comes back with the miniplayer', async () => {
     await fakeBrowser.storage.local.set({ [MINI_MIN_KEY]: true });
     await start();
     app().removeAttribute('miniplayer-is-active');
@@ -129,7 +129,7 @@ describe('miniplayer minimize', () => {
     expect(barShown()).toBe(true);
   });
 
-  it('follows another tab minimizing or restoring', async () => {
+  it('F-07-AC5 follows another tab minimizing or restoring', async () => {
     await start();
     await fakeBrowser.storage.local.set({ [MINI_MIN_KEY]: true });
     await settle();
@@ -139,7 +139,7 @@ describe('miniplayer minimize', () => {
     expect(barShown()).toBe(false);
   });
 
-  it('comes back when YouTube re-renders the scrim', async () => {
+  it('F-07-AC4 comes back when YouTube re-renders the scrim', async () => {
     await start();
     const scrim = document.querySelector('.ytp-miniplayer-scrim')!;
     const close = document.createElement('button');
@@ -149,7 +149,7 @@ describe('miniplayer minimize', () => {
     expect(btn()?.nextElementSibling).toBe(close);
   });
 
-  it('turned off: button and bar go, the miniplayer shows, the state is kept', async () => {
+  it('F-07-AC5 turned off: button and bar go, the miniplayer shows, the state is kept', async () => {
     const p = await start();
     btn()!.click();
     await settle();

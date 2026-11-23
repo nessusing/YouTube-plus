@@ -18,7 +18,7 @@ async function openSettings(ctx: BrowserContext, yt: Page): Promise<Page> {
 
 const listSelect = (opts: Page) => opts.locator('section:visible select.list-select');
 
-test('choose a playlist: saved for this identity, and the open tab switches at once', async ({ page, open, lists, ctx, account }) => {
+test('F-05-AC1 F-05-AC2 F-05-AC8 choose a playlist: saved for this identity, and the open tab switches at once', async ({ page, open, lists, ctx, account }) => {
   const id = await lists.create([VIDEOS.a, VIDEOS.b], 'pick');
   const title = (await lists.read(id)).title;
   await open(`/watch?v=${VIDEOS.c}`);
@@ -43,7 +43,7 @@ test('choose a playlist: saved for this identity, and the open tab switches at o
   expect(await playButton(page).name()).toBe(title);
 });
 
-test('New…: creates a private playlist with the name given and chooses it', async ({ page, open, lists, ctx, account }) => {
+test('F-05-AC2 New…: creates a private playlist with the name given and chooses it', async ({ page, open, lists, ctx, account }) => {
   await open('/');
   const opts = await openSettings(ctx, page);
   const name = `${LIST_PREFIX} ${new Date().toISOString()} created-in-settings`;
@@ -68,7 +68,7 @@ test('New…: creates a private playlist with the name given and chooses it', as
   }
 });
 
-test('the settings page opens on General, whichever tab was open last (design §3)', async ({ ctx }) => {
+test('F-01-AC3 the settings page opens on General, whichever tab was open last (design §3)', async ({ ctx }) => {
   const extId = new URL((await serviceWorker(ctx)).url()).host;
   const general = (p: Page) => p.getByRole('tab', { name: 'General' });
   const opts = await ctx.newPage();

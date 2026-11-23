@@ -207,6 +207,59 @@ test.describe('comment danmaku', () => {
     expect(c.bottom).toBeLessThanOrEqual(barTop);
   });
 
+  test('F-12-AC2 F-12-AC12 in fullscreen: at the top of the screen, below the title, clear of the control bar', async ({ page, open, ctx }) => {
+    await seed(ctx, VIDEOS.a, [{ id: 's', text: LONG, stamped: true }]);
+    await setDanmaku(ctx, true);
+    await openWatch(page, open, VIDEOS.a);
+    await pauseAt(page, 22);
+    await expectCard(page, 'everyone waits for');
+    await page.locator('#movie_player .ytp-fullscreen-button').click();
+    await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(true);
+    try {
+      await showBar(page);
+      await expectCard(page, 'everyone waits for');
+      await page.waitForTimeout(400); // the card eases to its place (top 200 ms)
+      const [playerTop, playerH, barTop, titleBottom] = await page.evaluate(() => {
+        const p = document.querySelector('#movie_player')!;
+        const r = p.getBoundingClientRect();
+        const title = [...p.querySelectorAll<HTMLElement>('.ytp-chrome-top, .ytp-fullscreen-metadata')]
+          .map((e) => e.getBoundingClientRect()).filter((b) => b.height && b.top - r.top < r.height / 4);
+        return [r.top, r.height, p.querySelector('.ytp-chrome-bottom')!.getBoundingClientRect().top, Math.max(0, ...title.map((b) => b.bottom))];
+      });
+      expect(playerH, 'the player fills the screen').toBeGreaterThan(800);
+      const c = (await card(page))!;
+      expect(c.top).toBeGreaterThanOrEqual(Math.max(playerTop, titleBottom));
+      expect(c.top - playerTop).toBeLessThan(playerH / 4);
+      expect(c.bottom).toBeLessThanOrEqual(barTop);
+    } finally {
+      await page.evaluate(() => document.exitFullscreen().catch(() => {}));
+    }
+  });
+
+  test('F-12-AC12 captions in the upper half: the card goes below them', async ({ page, open, ctx }) => {
+    await seed(ctx, VIDEOS.a, [{ id: 's', text: LONG, stamped: true }]);
+    await setDanmaku(ctx, true);
+    await openWatch(page, open, VIDEOS.a);
+    await pauseAt(page, 22);
+    await expectCard(page, 'everyone waits for');
+    const before = (await card(page))!;
+    // A caption window the user dragged near the top, as YouTube lays it out.
+    const capBottom = await page.evaluate((top) => {
+      const p = document.querySelector('#movie_player')!;
+      let box = p.querySelector('.ytp-caption-window-container');
+      if (!box) { box = document.createElement('div'); box.className = 'ytp-caption-window-container'; p.append(box); }
+      const w = document.createElement('div');
+      w.className = 'caption-window ytp-caption-window-top ytpp-e2e-caption';
+      const pr = p.getBoundingClientRect();
+      w.style.cssText = `position:absolute;left:30%;width:40%;top:${top - pr.top + 4}px;height:60px;`;
+      box.append(w);
+      return w.getBoundingClientRect().bottom;
+    }, before.top);
+    await page.locator('#movie_player').hover(); // a frame or two to redraw
+    await expect.poll(async () => (await card(page))?.top ?? 0).toBeGreaterThanOrEqual(capBottom);
+    await page.evaluate(() => document.querySelector('.ytpp-e2e-caption')?.remove());
+  });
+
   test('AI mode uses Gemini\'s confident times; hidden comments never show', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [
       { id: 'ai', text: AI_TEXT, likes: 50 },

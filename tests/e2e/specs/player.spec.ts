@@ -126,10 +126,16 @@ async function watch(page: Page, open: (p: string) => Promise<Page>, ctx: Browse
   await page.evaluate(() => document.querySelector<HTMLVideoElement>('#movie_player video')!.play());
 }
 
-/** Scroll down to the comments and wait for the window to float. */
+/**
+ * Scroll down to the comments and wait for the window to float. The scroll is
+ * repeated while waiting: right after load the page can be too short to reach
+ * `y`, and stopping where the player is still mostly on screen never floats.
+ */
 async function floatIt(page: Page, y = 1500): Promise<void> {
-  await scrollTo(page, y);
-  await expect.poll(() => floating(page)).toBe(true);
+  await expect.poll(async () => {
+    await scrollTo(page, y);
+    return floating(page);
+  }).toBe(true);
   await page.waitForTimeout(500);
 }
 

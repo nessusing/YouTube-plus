@@ -1,5 +1,5 @@
-// The extension's language is YouTube's interface language (design §2 "follow
-// the official site", plans P23): there is no language setting of our own.
+// The extension's language is YouTube's interface language (F-04, D-003):
+// there is no language setting of our own.
 // Every YouTube page reports what it is shown in; settings.lang stores it and
 // initLang() makes every context follow. Before YouTube has been opened once,
 // settings.lang falls back to the browser language (detectLang).

@@ -336,3 +336,32 @@ export async function lastToast(page: Page): Promise<string | undefined> {
 export async function comeBack(page: Page): Promise<void> {
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 }
+
+/**
+ * YouTube's interface language for this profile, the way YouTube's own
+ * language picker stores it: `hl` in the PREF cookie. Takes effect on the
+ * next page load. Other PREF fields are kept.
+ */
+export async function setYouTubeLang(ctx: BrowserContext, hl: string): Promise<void> {
+  const old = (await ctx.cookies('https://www.youtube.com')).find((c) => c.name === 'PREF');
+  // Kept as YouTube wrote it (`f6=40000000&tz=Asia.Shanghai&hl=zh-CN`), only hl replaced.
+  const fields = (old?.value ?? '').split('&').filter((f) => f && !f.startsWith('hl='));
+  fields.push(`hl=${hl}`);
+  await ctx.addCookies([{
+    name: 'PREF',
+    value: fields.join('&'),
+    domain: old?.domain ?? '.youtube.com',
+    path: old?.path ?? '/',
+    expires: old && old.expires > 0 ? old.expires : Math.floor(Date.now() / 1000) + 365 * 86400,
+    secure: true,
+    sameSite: old?.sameSite ?? 'None',
+  }]);
+}
+
+/** `<html lang>` of a YouTube page, i.e. the language YouTube is showing. */
+export const pageLang = (page: Page) => page.evaluate(() => document.documentElement.lang);
+
+/** The extension's language as stored (settings.lang). */
+export async function extensionLang(ctx: BrowserContext): Promise<unknown> {
+  return ((await storageGet(ctx, 'sync', 'settings')) as { lang?: unknown } | undefined)?.lang;
+}

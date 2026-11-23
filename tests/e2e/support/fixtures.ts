@@ -2,9 +2,9 @@
 // profile per run; a fresh tab per test; test lists from a pool kept between runs.
 
 import { existsSync } from 'node:fs';
-import { chromium, test as base, type BrowserContext, type Page } from '@playwright/test';
+import { chromium, expect, test as base, type BrowserContext, type Page } from '@playwright/test';
 import { EXTENSION_DIR, LAUNCH_ARGS, PROFILE_DIR, WINDOW } from './env';
-import { rpc, serviceWorker, setQueueProfile, storageGet, storageSet, TestLists, waitForExtension, type Identity, type QueueProfile } from './yt';
+import { extensionLang, pageLang, rpc, serviceWorker, setQueueProfile, setYouTubeLang, storageGet, storageSet, TestLists, waitForExtension, type Identity, type QueueProfile } from './yt';
 
 export interface Account {
   me: Identity & { key: string };
@@ -54,16 +54,22 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
   account: [async ({ ctx }, use) => {
     await serviceWorker(ctx);
+    // The extension's language follows YouTube's (F-04), and the suite reads
+    // our English texts, so YouTube itself is put in English for this profile.
+    await setYouTubeLang(ctx, 'en');
     const helper = await ctx.newPage();
     await helper.goto('https://www.youtube.com/');
     await waitForExtension(helper);
+    const hl = await pageLang(helper);
+    if (!/^en\b/i.test(hl)) throw new Error(`YouTube is shown in "${hl}" even with PREF hl=en: set this account's YouTube language to English (avatar → Language) in the e2e profile`);
+    await expect.poll(() => extensionLang(ctx), { message: 'the extension did not follow YouTube to English' }).toBe('en');
     const me = await rpc<Identity>(helper, 'identity');
     if (!me.loggedIn || !me.key) throw new Error('not signed in to YouTube in the e2e profile: run npm run e2e:login');
     const left = await TestLists.sweep(helper);
     if (left.length) console.log(`deleted ${left.length} test list(s) left by an earlier run`);
-    // English UI for the extension; TL;DR off (it would call Gemini for every thumbnail).
+    // TL;DR off (it would call Gemini for every thumbnail).
     const settings = ((await storageGet(ctx, 'sync', 'settings')) ?? {}) as { features?: Record<string, boolean> };
-    await storageSet(ctx, 'sync', { settings: { ...settings, lang: 'en', features: { ...settings.features, tldr: false, queue: true, player: true } } });
+    await storageSet(ctx, 'sync', { settings: { ...settings, features: { ...settings.features, tldr: false, queue: true, player: true } } });
     await use({ me: me as Account['me'], helper });
     await helper.close();
   }, { scope: 'worker' }],

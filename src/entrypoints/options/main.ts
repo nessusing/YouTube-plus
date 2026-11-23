@@ -22,7 +22,7 @@ import { FlyView } from '@/features/danmaku/fly-view';
 import { slotAt } from '@/features/danmaku/frame';
 import { DEFAULT_PARAMS, DEFAULT_PROMPT, promptOf, type DanmakuParams } from '@/features/danmaku/params';
 
-// Build the page in YouTube's language (plans P23); rebuild (reload) when it changes.
+// Build the page in YouTube's language (F-04-AC4); rebuild (reload) when it changes.
 await initLang(() => location.reload());
 document.documentElement.lang = getLang() === 'zh' ? 'zh-CN' : 'en';
 document.title = t('opt.title');

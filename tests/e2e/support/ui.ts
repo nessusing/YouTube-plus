@@ -1,6 +1,6 @@
-// Driving YouTube's own UI. The account's UI language is whatever it is
-// (measured: Chinese), so these find things by structure, not by text,
-// except for the menu item the extension relabels.
+// Driving YouTube's own UI. The fixture puts YouTube in English (F-04: our
+// texts follow it), but these still find things by structure, not by text,
+// and the few texts they match accept Chinese too.
 
 import { expect, type Locator, type Page } from '@playwright/test';
 import { panelRowsShown, player } from './yt';

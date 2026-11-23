@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { hlFromPrefCookie, langFromHl } from '@/core/youtube-lang';
 
 describe('langFromHl', () => {
-  it('maps any Chinese to zh and everything else to en', () => {
+  it('F-04-AC1 maps any Chinese to zh and everything else to en', () => {
     expect(langFromHl('zh-Hans-CN')).toBe('zh');
     expect(langFromHl('zh-CN')).toBe('zh');
     expect(langFromHl('zh-TW')).toBe('zh');
     expect(langFromHl('en')).toBe('en');
     expect(langFromHl('vi')).toBe('en');
   });
-  it('gives nothing when YouTube does not say', () => {
+  it('F-04-AC1 gives nothing when YouTube does not say', () => {
     expect(langFromHl('')).toBeUndefined();
     expect(langFromHl(null)).toBeUndefined();
   });
 });
 
 describe('hlFromPrefCookie', () => {
-  it('reads hl from the PREF cookie', () => {
+  it('F-04-AC1 reads hl from the PREF cookie', () => {
     expect(hlFromPrefCookie('VISITOR_INFO1_LIVE=x; PREF=f6=40000000&hl=zh-CN&tz=Asia.Shanghai; YSC=y')).toBe('zh-CN');
     expect(hlFromPrefCookie('PREF=hl%3Dvi%26f5%3D30000')).toBe('vi');
   });

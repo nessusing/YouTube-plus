@@ -228,7 +228,7 @@ input.field.num { width: 5.5em; }
 input.field.text { width: min(20em, 100%); }
 input.field.text.wide { width: min(36em, 100%); }
 
-/* Danmaku prompt (§51) */
+/* Danmaku prompt (F-12) */
 textarea.prompt {
   width: 100%;
   box-sizing: border-box;
@@ -243,7 +243,7 @@ textarea.prompt {
 }
 textarea.prompt:focus { outline: 2px solid var(--link); outline-offset: 0; }
 
-/* Danmaku preview: a mock player (§51) */
+/* Danmaku preview: a mock player (F-12) */
 .dm-preview {
   position: relative;
   overflow: hidden;

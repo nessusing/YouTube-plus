@@ -165,7 +165,7 @@ function syncFeatureList() {
 }
 syncFeatureList();
 
-// ---------- TL;DR (design §15) ----------
+// ---------- TL;DR (F-03-AC13) ----------
 
 const tldrTab = sections.get('tldr')!;
 pageHead(tldrTab, t('feature.tldr'), t('opt.tldr.title'), t('opt.tldr.sub'));
@@ -181,7 +181,7 @@ function numberInput(get: () => number, set: (s: Settings, v: number) => void, m
   return input;
 }
 
-// Gemini connection: the one thing a new user has to do (design §15.1).
+// Gemini connection: the one thing a new user has to do (F-03-AC12).
 const connState = el('span', { className: 'state', textContent: t('opt.tldr.connUnknown') });
 const signinBtn = button(t('opt.tldr.signin'), () => send({ type: 'YouTube+/tldr-signin' }), 'btn filled');
 const recheckBtn = button(t('opt.tldr.recheck'), async () => {
@@ -203,7 +203,7 @@ for (const [text, href] of [
 ] as const) pre.append(el('a', { href, target: '_blank', rel: 'noopener', textContent: text }));
 group(tldrTab, t('opt.tldr.prereq'), t('opt.tldr.prereqHint'), pre);
 
-// These need Gemini; dimmed while signed out (design §27).
+// These need Gemini; dimmed while signed out (F-05).
 const tldrNeedsGemini: HTMLElement[] = [];
 tldrNeedsGemini.push(group(tldrTab, t('opt.tldr.output'), undefined,
   toggle(t('opt.tldr.titleCheck'), settings.tldr.titleCheck, (v) => update((s) => { s.tldr.titleCheck = v; }))));
@@ -223,7 +223,7 @@ const resumeBtn = button(t('opt.resume'), async () => {
 });
 group(tldrTab, t('opt.tldr.status'), undefined, tldrStatus, el('div', { className: 'inline mt' }, resumeBtn));
 
-// ---------- sign-in status, above every tab (design §3, §27) ----------
+// ---------- sign-in status, above every tab (F-01, F-05) ----------
 
 const YT_SIGNIN = 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F';
 const openYouTube = () => browser.tabs.create({ url: 'https://www.youtube.com/' });
@@ -281,7 +281,7 @@ async function renderTldr() {
 // Cheap (no network): keeps the Gemini status current, e.g. after signing in elsewhere.
 setInterval(() => void renderTldr(), 3000);
 
-// ---------- queue (design §27) ----------
+// ---------- queue (F-05) ----------
 // Queue settings belong to a YouTube identity (channel); this page edits the
 // one signed in on the YouTube tab used last, and works through that tab.
 
@@ -385,7 +385,7 @@ async function createList() {
   }
 }
 
-/** The lists this identity can edit, incl. Watch Later (§24.5). */
+/** The lists this identity can edit, incl. Watch Later (F-05). */
 async function loadLists(force = false) {
   if (who.kind !== 'ok' || !who.me.key) return;
   if (!force && lists && listsFor === who.me.key) return;
@@ -539,7 +539,7 @@ for (const k of PLAYER_KEYS) {
 }
 playerList.append(pipOption());
 
-/** Pop-out (§50): the switch, and under it the shortcut recorder. */
+/** Pop-out (F-11): the switch, and under it the shortcut recorder. */
 function pipOption(): HTMLElement {
   const supported = 'documentPictureInPicture' in window;
   const sw = toggle(t('opt.player.pip'), settings.player.pip, (v) => {
@@ -605,7 +605,7 @@ const resetPos = button(t('opt.player.resetPos'), async () => {
 });
 group(player, t('opt.player.sub'), undefined, playerList, el('div', { className: 'inline mt-lg' }, resetPos));
 
-// ---------- comment danmaku (§51) ----------
+// ---------- comment danmaku (F-12) ----------
 
 const dmTab = sections.get('danmaku')!;
 pageHead(dmTab, t('feature.danmaku'), t('opt.dm.title'), t('opt.dm.sub'));
@@ -725,7 +725,7 @@ function paramInput(fd: Field): { input: HTMLInputElement; refresh: () => void }
 
 const splitWords = (v: string) => v.split(/[,，、]/).map((w) => w.trim()).filter(Boolean);
 
-// Preview (§51): the real card on a mock player, looping sample comments
+// Preview (F-12): the real card on a mock player, looping sample comments
 // with the current display params (read every frame, so edits show at once).
 const PV_SIZES = { small: 426, medium: 640, large: 854 } as const;
 /** YouTube's control bar, about this tall. */
@@ -779,7 +779,7 @@ function pvFrame(now: number) {
   if (pv.playing) pv.clock = (pv.clock + dt) % length;
   const width = pvBox.clientWidth;
   const height = pvBox.clientHeight;
-  // Captions sit at the bottom, above the controls when they show; the card is at the top (§51.7).
+  // Captions sit at the bottom, above the controls when they show; the card is at the top (F-12-AC12).
   pvCaption.style.fontSize = `${Math.round(height * 0.034)}px`;
   pvCaption.style.bottom = `${pv.controls ? PV_CONTROLS_PX + 8 : Math.max(12, height * 0.04)}px`;
   const top = Math.max(12, height * 0.04);
@@ -828,7 +828,7 @@ for (const dg of DM_GROUPS) {
   })));
 }
 
-// ---------- notifications (design §46) ----------
+// ---------- notifications (F-02) ----------
 
 const notifyTab = sections.get('notify')!;
 pageHead(notifyTab, t('opt.tab.notify'), t('opt.notify.title'), t('opt.notify.sub'));
@@ -882,7 +882,7 @@ const previewBtn = button(t('opt.notify.preview'), async () => {
 });
 group(notifyTab, t('opt.notify.preview'), t('opt.notify.previewHint'), el('div', { className: 'inline' }, previewBtn, previewMsg));
 
-// ---------- storage (design §4.1) ----------
+// ---------- storage (F-01-AC5) ----------
 
 const storage = sections.get('storage')!;
 const totalLine = el('p', { className: 'sub' });
@@ -916,7 +916,7 @@ const STORAGE_ROWS: {
     clear: () => clearCategory('tldrCache'),
   },
   {
-    // Its limit is with the other danmaku params (§51).
+    // Its limit is with the other danmaku params (F-12).
     cat: 'danmakuCache', label: t('opt.storage.danmaku'), unit: t('opt.unit.entries'),
     clear: () => clearCategory('danmakuCache'),
   },
@@ -1048,7 +1048,7 @@ browser.storage.onChanged.addListener((changes, area) => {
 
 // ---------- start ----------
 
-// #install (first run), #log=<feature>, or #<tab>; otherwise always General (design §3).
+// #install (first run), #log=<feature>, or #<tab>; otherwise always General (F-01-AC3).
 const hash = location.hash.slice(1);
 const logFilter = new URLSearchParams(hash).get('log');
 if (logFilter) featureSel.value = logFilter;

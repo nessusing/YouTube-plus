@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Miniplayer minimize (§44): the button sits left of ✕; minimizing hides the
+// Miniplayer minimize (F-07): the button sits left of ✕; minimizing hides the
 // miniplayer and shows a bar with only the title; clicking the bar restores;
 // the state is remembered and only shows while a miniplayer is up.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

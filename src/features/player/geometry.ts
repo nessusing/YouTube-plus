@@ -1,4 +1,4 @@
-// Miniplayer placement math (design §35.2, §35.3). Pure, unit-tested.
+// Miniplayer placement math (F-07-AC2, F-07-AC3). Pure, unit-tested.
 
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface Viewport { w: number; h: number; /** space taken by the masthead at the top */ top: number }

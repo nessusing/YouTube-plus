@@ -1,4 +1,4 @@
-// The queue tab of the settings page (design §24.5, §24.6, §27): it works
+// The queue tab of the settings page (F-05-AC8, F-05): it works
 // through the YouTube tab used last, and what it saves takes effect there.
 import type { BrowserContext, Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures';
@@ -38,7 +38,7 @@ test('F-05-AC1 F-05-AC2 F-05-AC8 choose a playlist: saved for this identity, and
   } finally {
     await opts.close();
   }
-  // §24.6: the tab already open follows the new mode.
+  // F-05-AC8: the tab already open follows the new mode.
   await expect.poll(() => playButton(page).count(), { timeout: 20_000 }).toBe(2);
   expect(await playButton(page).name()).toBe(title);
 });
@@ -68,7 +68,7 @@ test('F-05-AC2 New…: creates a private playlist with the name given and choose
   }
 });
 
-test('F-01-AC3 the settings page opens on General, whichever tab was open last (design §3)', async ({ ctx }) => {
+test('F-01-AC3 the settings page opens on General, whichever tab was open last (F-01-AC3)', async ({ ctx }) => {
   const extId = new URL((await serviceWorker(ctx)).url()).host;
   const general = (p: Page) => p.getByRole('tab', { name: 'General' });
   const opts = await ctx.newPage();

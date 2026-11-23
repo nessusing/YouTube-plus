@@ -1,4 +1,4 @@
-// TL;DR service in the service worker (design §9, §12): one global job queue
+// TL;DR service in the service worker (F-03): one global job queue
 // for all tabs, the cache, the breaker, and pushing icon states to tabs.
 
 import { t } from '@/core/i18n';
@@ -12,7 +12,7 @@ import { PORT_NAME, STATE_KEY, type ToService, type ToTab, type VideoRef } from 
 import { GeminiWebProvider } from './provider';
 import type { BadgeState, GeminiState, ProviderError, SummaryResult } from './types';
 
-/** A free-form request's outcome (danmaku placement, §51). */
+/** A free-form request's outcome (danmaku placement, F-12). */
 export type AskResult = { ok: true; text: string; ms: number } | { ok: false; code: ProviderError['code']; detail?: string };
 
 /** While signed out, look again this often (sign-in is normally noticed sooner, see onGeminiPage). */
@@ -35,7 +35,7 @@ export class TldrService {
   private gemini: GeminiState = 'unknown';
   private probing: Promise<GeminiState> | undefined;
   private probeTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Free-form requests waiting; they go before TL;DR jobs (§51.5). */
+  /** Free-form requests waiting; they go before TL;DR jobs (F-12). */
   private asks: { prompt: string; resolve: (r: AskResult) => void }[] = [];
   readonly client: GeminiWebClient;
   readonly provider: GeminiWebProvider;
@@ -217,7 +217,7 @@ export class TldrService {
   /**
    * A free-form Gemini request through this queue: one at a time with the
    * summaries, the same breaker, counted against the caps; ahead of every
-   * TL;DR job and, like a click, not held back by the caps (§51.5).
+   * TL;DR job and, like a click, not held back by the caps (F-12).
    */
   ask(prompt: string): Promise<AskResult> {
     return new Promise((resolve) => {
@@ -280,7 +280,7 @@ export class TldrService {
     }
     const detail = r.detail ?? r.error.code;
     if (r.error.code === 'auth') {
-      // Not signed in: park every job until the user signs in (design §15.1).
+      // Not signed in: park every job until the user signs in (F-03-AC12).
       this.log.debug(`auth error for ${job.videoId}: ${detail}`);
       this.jobs = upsert(this.jobs, { ...job, priority: 0, manual: false }, now);
       this.setGemini('signedOut');
@@ -327,7 +327,7 @@ export class TldrService {
     };
   }
 
-  // ---------- Gemini sign-in (design §15.1) ----------
+  // ---------- Gemini sign-in (F-03-AC12) ----------
 
   /** Check sign-in with one GET of the app page. Concurrent calls share it. */
   probe(): Promise<GeminiState> {

@@ -1,6 +1,6 @@
-// SummaryCache (design §13) in chrome.storage.local, one key per video
+// SummaryCache (F-03-AC11) in chrome.storage.local, one key per video
 // (`tldr/cache/orig:<videoId>`). Summaries are in the video's own language
-// (plans P23), so the extension's language is not part of the key.
+// (F-04), so the extension's language is not part of the key.
 
 import { TLDR_CACHE_PREFIX } from '@/core/storage-usage';
 import { evict, fresh, type CacheEntry } from './cache-rules';

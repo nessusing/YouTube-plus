@@ -1,4 +1,4 @@
-// Full screen from the PiP window (§50). Chrome allows no full screen in a
+// Full screen from the PiP window (F-11). Chrome allows no full screen in a
 // Document PiP window, and a click there does not count as one in the tab, so
 // the tab cannot ask for it either (both tried, 2026-11-22). Instead: back to
 // the tab, the browser window full screen (as F11, through the background,
@@ -52,7 +52,7 @@ export function pipFull(log: Logger, back: (why: string) => void): PipFull {
 
   const windowFull = (on: boolean) => browser.runtime.sendMessage({ type: 'YouTube+/window-fullscreen', on }).catch(() => {});
   const refit = () => {
-    // YouTube lays the player out for its new box on a window resize (§49).
+    // YouTube lays the player out for its new box on a window resize (F-08).
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
     setTimeout(() => window.dispatchEvent(new Event('resize')), 400);
   };

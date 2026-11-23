@@ -1,4 +1,4 @@
-// One video's danmaku (§51): fetch the comments page by page (placing
+// One video's danmaku (F-12): fetch the comments page by page (placing
 // starts after the first batch and gets redone as more arrive), lay out the
 // timeline in the chosen mode, ask Gemini in batches in AI mode, and cache it
 // all. Leaving the video stops fetching and the batches not yet sent; a
@@ -222,7 +222,7 @@ export class Session {
   }
 
   /**
-   * One batch: retried once after a pause, then each half once (§51.5);
+   * One batch: retried once after a pause, then each half once (F-12);
    * what still fails is unknown and not shown. A failure that
    * concerns the whole video (no transcript, signed out, quota, blocked) ends
    * AI mode for it.
@@ -287,7 +287,7 @@ export class Session {
     await this.deps.cache.set(this.videoId, e).catch((err) => this.deps.log.warn(`${this.videoId}: caching failed: ${String(err)}`));
   }
 
-  /** One log line per video with the timings (§51.8). */
+  /** One log line per video with the timings (F-12-AC15). */
   private logLine(what: string): void {
     const s = (ms?: number) => (ms === undefined ? '–' : `${(ms / 1000).toFixed(1)} s`);
     const t = this.timing;

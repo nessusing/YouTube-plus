@@ -1,4 +1,4 @@
-// TL;DR job queue rules (design §12), pure. One global queue in the service
+// TL;DR job queue rules (F-03), pure. One global queue in the service
 // worker: dedupe by video, priority, one at a time, random spacing, hourly and
 // daily caps, circuit breaker, prefetch only while a YouTube tab is visible.
 
@@ -55,14 +55,14 @@ export function upsert(jobs: Job[], j: Omit<Job, 'added'>, now: number): Job[] {
   return out;
 }
 
-/** Scrolled away: only lower visible → page, never cancel (§12). */
+/** Scrolled away: only lower visible → page, never cancel (F-03). */
 export function demote(jobs: Job[], videoIds: Set<string>): Job[] {
   return jobs.map((j) => (videoIds.has(j.videoId) && j.priority === 1 && !j.manual ? { ...j, priority: 0 } : j));
 }
 
 /**
  * Which job may run now, if any. Manual jobs ignore the caps and the
- * foreground rule but not an open breaker (§12).
+ * foreground rule but not an open breaker (F-03).
  */
 export function pick(jobs: Job[], o: { counters: Counters; limits: Limits; breaker: Breaker; foreground: boolean; now: number }): Job | undefined {
   if (breakerOpen(o.breaker, o.now)) return undefined;
@@ -74,7 +74,7 @@ export function pick(jobs: Job[], o: { counters: Counters; limits: Limits; break
 }
 
 /**
- * Up to `size` jobs for one request (§12 batching): the job pick() chooses,
+ * Up to `size` jobs for one request (F-03 batching): the job pick() chooses,
  * then more in pick order. Manual jobs may always join; prefetch jobs only
  * when prefetch is allowed right now (the batch is one request against the caps).
  */

@@ -1,4 +1,4 @@
-// Every way into Add to queue (§24.2, §24.3): in playlist mode each is
+// Every way into Add to queue (F-05-AC6, F-05-AC7): in playlist mode each is
 // relabelled "Add to <list>" and adds to the list.
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures';

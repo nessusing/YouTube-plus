@@ -1,4 +1,4 @@
-// Shared log (docs/design.md §4). Any context logs through createLogger();
+// Shared log (F-01-AC4). Any context logs through createLogger();
 // entries reach the service worker, which batches them into a capped ring
 // buffer in chrome.storage.local. Never put cookies or auth headers in here.
 

@@ -1,4 +1,4 @@
-// Flying style (§52), the drawing side: single-line pills crossing the
+// Flying style (F-12), the drawing side: single-line pills crossing the
 // player from right to left in lanes from the top. Shared by the player
 // overlay and the options page preview; drawn from video time every frame.
 

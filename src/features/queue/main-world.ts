@@ -1,6 +1,6 @@
-// MAIN world side of the queue feature (design §23): QueueTakeover (intercept
+// MAIN world side of the queue feature (F-05): QueueTakeover (intercept
 // Add to queue, relabel it), PlayerWatch, page navigation, InnerTube calls,
-// the official ⋮ menus and drag out to delete (page-menus.ts, §47, §48), and
+// the official ⋮ menus and drag out to delete (page-menus.ts, F-06), and
 // the bridge to the isolated script. Never break the page: every handler
 // swallows its own errors.
 
@@ -22,17 +22,17 @@ function app(): HTMLElement {
   return a;
 }
 
-// ---------- QueueTakeover: intercept (§24.2) ----------
+// ---------- QueueTakeover: intercept (F-05-AC6) ----------
 
 function installTakeover(): void {
-  // The action bubbles up from the clicked element, not from ytd-app (§21.2),
+  // The action bubbles up from the clicked element, not from ytd-app (F-05-AC5),
   // so listen on document in the capture phase, ahead of the page.
   document.addEventListener('yt-action', (e) => {
     try {
       const p = parseQueueAction((e as CustomEvent).detail);
       if (p.kind === 'other') return;
       if (p.kind === 'malformed') {
-        // Better native than an Add to queue that does nothing (§26).
+        // Better native than an Add to queue that does nothing (F-05-AC15).
         if (state.decision === 'take') post({ event: 'warn', msg: 'Add to queue had an unexpected shape; left it to YouTube' } as ToIso);
         return;
       }
@@ -49,7 +49,7 @@ function installTakeover(): void {
   takeoverInstalled = true;
 }
 
-// ---------- QueueTakeover: relabel (§21.3, §24.3) ----------
+// ---------- QueueTakeover: relabel (F-05-AC7) ----------
 
 type AnyEl = HTMLElement & Record<string, unknown>;
 
@@ -106,7 +106,7 @@ function relabelOld(take: boolean): void {
     if (!data || !fs) continue;
     const isQueue = data.icon?.iconType === QUEUE_ICON || isQueueCommand(data.serviceEndpoint);
     if (take && isQueue) {
-      // Not textContent: Polymer would add a second text run on reopen (§21.3).
+      // Not textContent: Polymer would add a second text run on reopen (F-05-AC7).
       const now = (fs.text as { runs?: { text?: string }[] } | undefined)?.runs?.[0]?.text;
       if (now !== state.label) fs.text = { runs: [{ text: state.label }] };
       oldMenu.add(el);
@@ -141,7 +141,7 @@ function scheduleRelabel(): void {
 const hoverLabels = new WeakMap<HTMLElement, { aria: string | null; title: string | null }>();
 
 /**
- * Hover button on thumbnails: relabel it when the pointer reaches it (§24.3).
+ * Hover button on thumbnails: relabel it when the pointer reaches it (F-05-AC7).
  * Old style: the tooltip in the renderer's data. New style (2026-11,
  * toggle-button-view-model; findings F11): the inner button's aria-label,
  * which is the label it shows, plus a title so the pointer gets a tooltip.
@@ -187,7 +187,7 @@ function onHover(e: Event): void {
 
 function installRelabel(): void {
   // Popup menus are reused across menus and pages and only re-render when a
-  // title changes (§21.3): watch the popup container, and rescan after clicks.
+  // title changes (F-05-AC7): watch the popup container, and rescan after clicks.
   let watched: Element | null = null;
   const mo = new MutationObserver(scheduleRelabel);
   const attach = () => {
@@ -210,7 +210,7 @@ function installRelabel(): void {
   document.addEventListener('mouseover', onHover, true);
 }
 
-// ---------- PlayerWatch (§24.4) ----------
+// ---------- PlayerWatch (F-05) ----------
 
 type PlayerApi = HTMLElement & {
   getVideoData?: () => { video_id?: string; title?: string; author?: string };
@@ -226,7 +226,7 @@ type PlayerApi = HTMLElement & {
   pauseVideo?: () => void;
 };
 
-/** How long a looped video that was left waits to learn where to (§40.2). */
+/** How long a looped video that was left waits to learn where to (F-10). */
 const LEFT_WAIT_MS = 5000;
 
 /** A removal sent by the page itself on unload, when the tab closes in the last 10 s. */
@@ -238,7 +238,7 @@ async function armRemoval(listId: string, setVideoId: string, videoId: string): 
   armed = { videoId, listId, setVideoId, req, at: Date.now() };
 }
 
-/** Popped out to a PiP window (§50), the player is in that window's document. */
+/** Popped out to a PiP window (F-11), the player is in that window's document. */
 function player(): PlayerApi | null {
   return queryPlayerDom<PlayerApi>('#movie_player');
 }
@@ -246,7 +246,7 @@ function player(): PlayerApi | null {
 function installPlayerWatch(): void {
   let last: PlayerEvent | undefined;
   let nearSent: string | undefined;
-  /** The video playing has wrapped from its end to the start by loop (§40.2). */
+  /** The video playing has wrapped from its end to the start by loop (F-10). */
   let loopedId: string | undefined;
   /** A looped video just left, waiting to learn the new video's list. */
   let leaving: { e: PlayerEvent; since: number } | undefined;
@@ -261,18 +261,18 @@ function installPlayerWatch(): void {
       currentTime: v.currentTime, duration: v.duration || 0, loop: v.loop,
     };
   };
-  // By tag: a video in a PiP window (§50) may not be an instance of this window's HTMLVideoElement.
+  // By tag: a video in a PiP window (F-11) may not be an instance of this window's HTMLVideoElement.
   const isMain = (v: EventTarget | null): v is HTMLVideoElement =>
     (v as Element | null)?.tagName === 'VIDEO' && !!(v as Element).closest('#movie_player');
 
-  // On every PiP document too: popped out (§50), the video's events stay there.
+  // On every PiP document too: popped out (F-11), the video's events stay there.
   listenWithPip('timeupdate', (e) => {
     try {
       if (!isMain(e.target)) return;
       const s = snapshot('left', e.target);
       if (!s) return;
       if (leaving) {
-        // Only a looped video waits to learn where it was left for (§40.2).
+        // Only a looped video waits to learn where it was left for (F-10).
         const to = s.playlistId ?? listInUrl();
         if (to !== undefined || Date.now() - leaving.since > LEFT_WAIT_MS) {
           post({ event: 'player', payload: { ...leaving.e, toPlaylistId: to } } as ToIso);
@@ -295,7 +295,7 @@ function installPlayerWatch(): void {
       }
       s.looped = loopedId === s.videoId;
       last = s;
-      // On loop the video is being watched on repeat, not finished (§40.2).
+      // On loop the video is being watched on repeat, not finished (F-10).
       if (nearSent !== s.videoId && !s.loop && isWatchedHere(s.currentTime, s.duration, false)) {
         nearSent = s.videoId;
         post({ event: 'player', payload: { ...s, type: 'near' } } as ToIso);
@@ -337,7 +337,7 @@ function installPlayerWatch(): void {
 
 // ---------- navigation ----------
 
-/** SPA navigation like a click on a link; full page load if the page does not start one (§28). */
+/** SPA navigation like a click on a link; full page load if the page does not start one (F-05). */
 function navigate(url: string, endpoint: Record<string, unknown>, meta: Record<string, unknown>): void {
   let started = false;
   const onStart = () => (started = true);
@@ -360,7 +360,7 @@ function navigate(url: string, endpoint: Record<string, unknown>, meta: Record<s
 /**
  * Play `videoId` inside the list. With `keepPlace` and that video already in
  * the player: in the miniplayer, open it on the watch page at the same second
- * (§24.4); already on its watch page, leave it be.
+ * (F-05); already on its watch page, leave it be.
  */
 function playVideo(videoId: string, listId: string, keepPlace = false): void {
   const p = player();
@@ -376,7 +376,7 @@ function playVideo(videoId: string, listId: string, keepPlace = false): void {
 const MINI_NEXT_WAITS = [300, 700, 1000, 1000];
 
 /**
- * After an entry ends, play the next one in the form the player is in (§24.4).
+ * After an entry ends, play the next one in the form the player is in (F-05).
  * In the miniplayer, through the player's own list so it stays a miniplayer
  * (a navigation would open the watch page); elsewhere, or if the player does
  * not have that entry, navigate like playVideo.
@@ -406,7 +406,7 @@ function openPlaylist(listId: string): void {
   navigate(url, { browseEndpoint: { browseId: `VL${listId}` } }, { webPageType: 'WEB_PAGE_TYPE_PLAYLIST', rootVe: 5754 });
 }
 
-/** YouTube's playlist manager; the native queue calls these three (§21.4). */
+/** YouTube's playlist manager; the native queue calls these three (F-05). */
 type PlaylistManager = HTMLElement & {
   getPlaylistData?: () => unknown;
   setAutoplayRenderer?: (a: unknown) => void;
@@ -427,15 +427,15 @@ function playingList(p: PlayerApi | null): string | undefined {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/** Removals can take a few seconds to show in reads (§21.4). */
+/** Removals can take a few seconds to show in reads (F-05). */
 const SYNC_WAITS = [0, 1500, 3000, 5000];
 
 /**
- * Bring the playlist panel up to date (§24.8), the way the native queue does
- * it (§21.4): read `next` for the video playing and the list, then hand it to
+ * Bring the playlist panel up to date (F-05-AC13), the way the native queue does
+ * it (F-05): read `next` for the video playing and the list, then hand it to
  * the playlist manager. Works on the watch page and under the miniplayer, no
  * reload. Playing the list: refresh. Playing a video outside any list and
- * `attach`: show the list with that video on top, to play after it (§24.2).
+ * `attach`: show the list with that video on top, to play after it (F-05-AC6).
  */
 async function syncList(listId: string, expect: Expect | undefined, attach: boolean): Promise<SyncResult> {
   const p = player();
@@ -488,7 +488,7 @@ async function syncList(listId: string, expect: Expect | undefined, attach: bool
  * Take entries off the playlist panel now, the way the panel's own Remove
  * from playlist does (measured 2026-11-21): the page drops the rows from the
  * playlist manager's data at once and leaves playback alone; an emptied list
- * shows "End of playlist", 1 / 0. Reads catch up later (§24.8). Only when the
+ * shows "End of playlist", 1 / 0. Reads catch up later (F-05-AC13). Only when the
  * panel shows `listId`, and only entries it shows.
  */
 function dropFromPanel(listId: string, setVideoIds: string[]): void {
@@ -506,7 +506,7 @@ function dropFromPanel(listId: string, setVideoIds: string[]): void {
       detail: { actionName: 'yt-playlist-remove-videos-action', optionalAction: false, args: [{ playlistRemoveVideosAction: { setVideoIds: ids } }, a, {}], returnValue: [] },
     }));
   } catch {
-    // reads and §24.8 catch up
+    // reads and F-05-AC13 catch up
   }
 }
 
@@ -537,7 +537,7 @@ function refreshPlaylist(): void {
   }));
 }
 
-// ---------- page edits (§24.8) ----------
+// ---------- page edits (F-05-AC13) ----------
 
 /**
  * The page edits lists itself too: Remove from playlist in the side panel,
@@ -545,7 +545,7 @@ function refreshPlaylist(): void {
  * miniplayer. Watch its edit_playlist requests and report the ones that went
  * through; reorders say nothing we count, so they are not reported. YouTube
  * looks `fetch` up on every call, so wrapping it at document_start sees them.
- * Some bodies are gzipped (it.bodyOf). Only a drop out of the panel (§48) gets
+ * Some bodies are gzipped (it.bodyOf). Only a drop out of the panel (F-06) gets
  * its request changed, by swapDrop.
  */
 function installEditWatch(): void {
@@ -582,7 +582,7 @@ function installEditWatch(): void {
 
 /**
  * Whenever the page (or we) put list data in the playlist panel, report it,
- * so the top bar count shows what the panel shows (§24.8).
+ * so the top bar count shows what the panel shows (F-05-AC13).
  */
 function installPanelWatch(): void {
   const report = () => {

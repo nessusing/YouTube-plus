@@ -1,4 +1,4 @@
-// The YouTube player may live in a Document PiP window (§50): the whole
+// The YouTube player may live in a Document PiP window (F-11): the whole
 // #movie_player moves there while popped out. Code that looks the player up, or
 // listens for its media events on `document`, must also look in that window.
 // Works in both the isolated and the page (MAIN) world: documentPictureInPicture

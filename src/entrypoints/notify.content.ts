@@ -1,7 +1,7 @@
 import { initLang, t } from '@/core/i18n';
 import { notify, NOTIFY_PREVIEW } from '@/core/notify';
 
-// The options page's "Preview" button (design §46): show a sample notice here.
+// The options page's "Preview" button (F-02): show a sample notice here.
 // Separate from the features so it works whichever of them are on.
 export default defineContentScript({
   matches: ['https://www.youtube.com/*'],

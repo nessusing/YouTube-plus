@@ -1,6 +1,6 @@
-// Settings shared by all features (docs/design.md §3). Feature-specific
+// Settings shared by all features (F-01). Feature-specific
 // settings join this object as each feature lands. The queue's settings are
-// kept per YouTube identity instead (features/queue/profiles.ts, design §22).
+// kept per YouTube identity instead (features/queue/profiles.ts, F-05).
 
 import { type DanmakuParams, DEFAULT_PARAMS, paramsWithDefaults } from '@/features/danmaku/params';
 
@@ -20,21 +20,21 @@ export interface PlayerSettings {
   freeDrag: boolean;
   stickyPlayer: boolean;
   backToTop: boolean;
-  /** Loop button in the player (§40.2); off by default. */
+  /** Loop button in the player (F-10); off by default. */
   loopButton: boolean;
-  /** Minimize button in the miniplayer (§44). */
+  /** Minimize button in the miniplayer (F-07). */
   miniMinimize: boolean;
-  /** Pop the miniplayer out to a Document PiP window (§50): the button and the shortcut. */
+  /** Pop the miniplayer out to a Document PiP window (F-11): the button and the shortcut. */
   pip: boolean;
 }
 
 /** Keyboard shortcuts, as "Shift+I" (features/player/shortcut.ts); "" = none. */
 export interface ShortcutSettings {
-  /** Pop out / back in (§50). */
+  /** Pop out / back in (F-11). */
   pip: string;
 }
 
-/** Caps on what we keep in storage.local (design §4.1). */
+/** Caps on what we keep in storage.local (F-01-AC5). */
 export interface StorageLimits {
   logMB: number;
   tldrCacheMB: number;
@@ -42,7 +42,7 @@ export interface StorageLimits {
 
 export interface TldrSettings {
   titleCheck: boolean;
-  /** Google account number N in gemini.google.com/u/N (§8 Q9) */
+  /** Google account number N in gemini.google.com/u/N (F-03 Q9) */
   account: number;
   prefetch: boolean;
   perHour: number;
@@ -51,7 +51,7 @@ export interface TldrSettings {
   batchSize: number;
 }
 
-/** Page notifications (design §46). The sideways position is per machine, in storage.local. */
+/** Page notifications (F-02). The sideways position is per machine, in storage.local. */
 export interface NotifySettings {
   position: 'bottom' | 'top';
   /** Shown at once, 1–5; the oldest goes first. */
@@ -63,13 +63,13 @@ export interface NotifySettings {
 }
 
 /**
- * How comments show (§52): one caption-style card at a time at the top, single
+ * How comments show (F-12): one caption-style card at a time at the top, single
  * lines flying right to left, or a panel on the player's right listing them all.
  */
 export type DanmakuStyle = 'card' | 'fly' | 'panel';
 export const DANMAKU_STYLES: DanmakuStyle[] = ['card', 'fly', 'panel'];
 
-/** Comment danmaku (§51). The feature switch is features.danmaku, off by default. */
+/** Comment danmaku (F-12). The feature switch is features.danmaku, off by default. */
 export interface DanmakuSettings {
   /** The player button, remembered for every video like the captions button. */
   active: boolean;

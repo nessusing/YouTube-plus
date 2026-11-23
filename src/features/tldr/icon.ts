@@ -1,4 +1,4 @@
-// The thumbnail icon (design §14.1): inserted into the thumbnail's DOM,
+// The thumbnail icon (F-03-AC2): inserted into the thumbnail's DOM,
 // absolutely positioned above the duration badge, always shown.
 
 import { t, type MsgKey } from '@/core/i18n';
@@ -105,7 +105,7 @@ export class Icon {
 
   /**
    * Sit just above the duration badge, right edges lined up. The badge is
-   * placed differently in the grid and in the playlist panel (§14.1), so measure.
+   * placed differently in the grid and in the playlist panel (F-03-AC2), so measure.
    */
   private alignToBadge(thumb: HTMLElement): void {
     const badge = thumb.querySelector<HTMLElement>('badge-shape, ytd-thumbnail-overlay-time-status-renderer #time-status');

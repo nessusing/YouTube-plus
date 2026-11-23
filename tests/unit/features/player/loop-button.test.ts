@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Loop button (§40.2): placement, state follows video.loop, on / off go to the
+// Loop button (F-10): placement, state follows video.loop, on / off go to the
 // page script as events, turning the setting off stops a loop.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { t } from '@/core/i18n';

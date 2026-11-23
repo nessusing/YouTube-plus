@@ -1,4 +1,4 @@
-// Timestamped comments (§51.4).
+// Timestamped comments (F-12-AC6).
 
 import type { Comment } from './comments';
 import type { StampParams } from './params';

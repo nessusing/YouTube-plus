@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// QueueController: switching mode in a tab that is already open (§24.6).
+// QueueController: switching mode in a tab that is already open (F-05-AC8).
 // Agreed 2026-11-20: the switch takes effect in open tabs at once; switching to
 // the native queue, the extension leaves everything alone (Q1 "完全不管"),
 // even when the page then adds straight into our list playing.
@@ -33,7 +33,7 @@ async function switchTo(h: Harness, p: Partial<QueueProfile>): Promise<void> {
 
 function expectTaking(h: Harness, count: number, name = 'List PLq'): void {
   expect(h.ctl.decision).toBe('take');
-  // The chosen list goes along for the ⋮ items and drag out to delete (§47, §48).
+  // The chosen list goes along for the ⋮ items and drag out to delete (F-06).
   expect(h.yt.takeover).toEqual({ decision: 'take', label: t('queue.addTo', { name }), listId: name.replace('List ', '') });
   expect(h.button).toMatchObject({ visible: true, name, count });
 }

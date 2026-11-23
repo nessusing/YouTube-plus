@@ -1,8 +1,8 @@
-// GeminiWebClient (design §9, §10): the only module that knows the protocol.
+// GeminiWebClient (F-03-AC13): the only module that knows the protocol.
 // Runs in the service worker; cookies come from the browser (credentials:
 // 'include'); never rotates cookies.
 //
-// Two channels to the same backend (design §10.2, §10.8): processSession, which the
+// Two channels to the same backend (F-03-AC7): processSession, which the
 // web app has been moving to since 2026-10, and the older StreamGenerate.
 // processSession goes first; when a channel fails in a way the other might not
 // (protocol / auth), the other is tried, and whichever answered goes first next time.
@@ -53,7 +53,7 @@ export class GeminiWebClient {
     return `/u/${this.account()}`;
   }
 
-  /** Fresh tokens from the app page every time (bl expires; §10.1). */
+  /** Fresh tokens from the app page every time (bl expires; F-03). */
   async tokens(): Promise<Tokens> {
     const res = await fetch(`${BASE}${this.prefix()}/app`, { credentials: 'include' });
     if (!res.ok) throw new GeminiError(mapHttpStatus(res.status), `app page: HTTP ${res.status}`);
@@ -124,7 +124,7 @@ export class GeminiWebClient {
   }
 
   /**
-   * processSession (design §10.8): handshake, a long-poll GET for downstream,
+   * processSession (F-03-AC7): handshake, a long-poll GET for downstream,
    * and three upstream POSTs: the request without the prompt, the prompt once
    * the server acks, and "done" once the answer is complete.
    */

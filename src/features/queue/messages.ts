@@ -1,4 +1,4 @@
-// Settings page → queue content script in a YouTube tab (design §23: the
+// Settings page → queue content script in a YouTube tab (F-05: the
 // settings page reads lists, creates one and reads the identity through a tab).
 
 export type QueueOp =

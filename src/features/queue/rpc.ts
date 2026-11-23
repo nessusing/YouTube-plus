@@ -17,19 +17,19 @@ export interface Rpc {
   editPlaylist(id: string, actions: ListAction[]): Promise<{ ok: boolean; status: number; error?: string; added: string[] }>;
   identity(): Promise<Identity>;
   setTakeover(s: TakeoverState): Promise<void>;
-  /** What the official ⋮ menus get (§47); merged into what the page script has. */
+  /** What the official ⋮ menus get (F-06); merged into what the page script has. */
   setMenu(s: Partial<MenuState>): Promise<void>;
   armRemoval(listId: string, setVideoId: string, videoId: string): Promise<void>;
   disarm(): Promise<void>;
-  /** `keepPlace`: the video is the one playing, carry on from where it is (§24.4). */
+  /** `keepPlace`: the video is the one playing, carry on from where it is (F-05). */
   playVideo(videoId: string, listId: string, keepPlace?: boolean): Promise<void>;
-  /** After an entry ends: the next one, staying in the miniplayer if that is where it played (§24.4). */
+  /** After an entry ends: the next one, staying in the miniplayer if that is where it played (F-05). */
   playNext(videoId: string, listId: string): Promise<'mini' | 'page'>;
   openPlaylist(listId: string): Promise<void>;
   /**
    * Bring the playlist panel (side panel / under the miniplayer) up to date
-   * with the list, once reads show `expect` (§24.8). With `attach`, also hand
-   * the list to a video playing outside any list (§24.2).
+   * with the list, once reads show `expect` (F-05-AC13). With `attach`, also hand
+   * the list to a video playing outside any list (F-05-AC6).
    */
   syncList(listId: string, expect: Expect | undefined, attach: boolean): Promise<SyncResult>;
   health(): Promise<{ app: boolean; ytcfg: boolean; takeover: boolean }>;

@@ -22,7 +22,7 @@ export default defineBackground(() => {
   // Settings cached for synchronous use by the TL;DR service.
   let settings: Settings = withDefaults(undefined);
   void getSettings().then((s) => (settings = s));
-  // Toolbar icon: color while the master switch is on, gray while off (design §2).
+  // Toolbar icon: color while the master switch is on, gray while off (F-01).
   // Set on every wake, since Chrome forgets setIcon across restarts.
   const showEnabled = (on: boolean) => {
     const sizes = [16, 32, 48, 128];
@@ -41,7 +41,7 @@ export default defineBackground(() => {
     if (limitChanged) void tldr.cache.trim();
     if (accountChanged) tldr.accountChanged();
   });
-  // Coming back from signing in: check again without waiting for a click (design §15.1).
+  // Coming back from signing in: check again without waiting for a click (F-03-AC12).
   browser.tabs.onUpdated.addListener((_id, info, tab) => {
     if (info.status !== 'complete' || !featureOn(settings, 'tldr')) return;
     if (/^https:\/\/(gemini|accounts)\.google\.com\//.test(tab.url ?? '')) tldr.onGeminiPage();
@@ -79,7 +79,7 @@ export default defineBackground(() => {
         return true;
       case 'YouTube+/dm-ask':
         tldr.ask(msg.prompt).then((r) => {
-          // The whole raw answer, always (§51.8, after P17).
+          // The whole raw answer, always (F-12-AC15, after F-03 bug P17).
           if (r.ok) dmLog.info(`Gemini answer for ${msg.videoId} (${(r.ms / 1000).toFixed(1)} s):\n${r.text}`);
           else dmLog.warn(`Gemini request for ${msg.videoId} failed: ${r.code}${r.detail ? ` (${r.detail})` : ''}`);
           sendResponse(r);
@@ -107,7 +107,7 @@ export default defineBackground(() => {
 
   browser.runtime.onInstalled.addListener(({ reason }) => {
     log.info(`installed (${reason}), version ${browser.runtime.getManifest().version}`);
-    // The old queue sync's leftovers (design §29 step 1); harmless when absent.
+    // The old queue sync's leftovers (F-05 step 1); harmless when absent.
     if (reason === 'update') removeLegacyKeys().catch((e) => createLogger('queue').warn('removing old queue keys failed', e));
     if (reason === 'install') {
       // The options page runs the full self-check when opened with #install.
@@ -117,7 +117,7 @@ export default defineBackground(() => {
 });
 
 /**
- * §50: full screen from the PiP window (features/player/pip-full.ts). The
+ * F-11: full screen from the PiP window (features/player/pip-full.ts). The
  * window's state before is kept in storage.session (the worker may sleep
  * meanwhile) and put back on the way out.
  */

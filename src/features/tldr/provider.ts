@@ -1,4 +1,4 @@
-// GeminiWebProvider (design §9.1): prompt → answer → parse → delete the chat.
+// GeminiWebProvider (F-03): prompt → answer → parse → delete the chat.
 
 import type { Logger } from '@/core/log';
 import { GeminiError, type GeminiWebClient } from './client';
@@ -53,7 +53,7 @@ export class GeminiWebProvider implements SummaryProvider {
   }
 
   /**
-   * A free-form request (danmaku placement, §51): the answer's text. The
+   * A free-form request (danmaku placement, F-12): the answer's text. The
    * chat is deleted like a summary's. Throws GeminiError.
    */
   async ask(prompt: string): Promise<string> {
@@ -72,7 +72,7 @@ export class GeminiWebProvider implements SummaryProvider {
     }
   }
 
-  /** Retry failed deletes (§10.4); called when the queue is idle. */
+  /** Retry failed deletes (F-03-AC8); called when the queue is idle. */
   async retryDeletes(): Promise<void> {
     const got = ((await browser.storage.local.get(PENDING_DELETES_KEY))[PENDING_DELETES_KEY] as string[] | undefined) ?? [];
     if (!got.length) return;

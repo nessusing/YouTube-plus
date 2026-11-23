@@ -1,5 +1,5 @@
 // Finds video thumbnails, filters out Shorts and live/upcoming, and reports
-// which are on screen (design §14.3, §9 VisibilityTracker).
+// which are on screen (F-03-AC1, F-03 VisibilityTracker).
 
 import { BADGES, ITEM, LINK, LIVEISH, SHORTS, THUMB, TITLE } from './selectors';
 

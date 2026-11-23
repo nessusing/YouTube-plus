@@ -1,4 +1,4 @@
-// Port messages between YouTube tabs and the TL;DR service (design §9).
+// Port messages between YouTube tabs and the TL;DR service (F-03).
 
 import type { BadgeState } from './types';
 

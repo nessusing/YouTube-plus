@@ -1,4 +1,4 @@
-// Comment danmaku on the watch page (§51): the player button, the layer
+// Comment danmaku on the watch page (F-12): the player button, the layer
 // over the player and one Session per video. Nothing runs while the feature
 // is off; while the button is off nothing is fetched and Gemini is not asked.
 

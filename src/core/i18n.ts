@@ -300,7 +300,7 @@ const zh = {
   'opt.notify.defaults': '恢复默认',
   'opt.notify.preview': '预览',
   'opt.notify.previewHint': '切到最近用过的 YouTube 标签页，弹一条示例提示。',
-  // comment danmaku (§51)
+  // comment danmaku (F-12)
   'feature.danmaku': '评论弹幕',
   'opt.featureDesc.danmaku': '评论以字幕卡的形式出现在播放器顶部，一次一条（开发中）',
   'opt.dm.title': '播放时显示评论',

@@ -1,4 +1,4 @@
-// Top bar button, left of the avatar: "[YouTube+ icon] <list name> · N" (design §24.4).
+// Top bar button, left of the avatar: "[YouTube+ icon] <list name> · N" (F-05).
 
 import { t } from '@/core/i18n';
 

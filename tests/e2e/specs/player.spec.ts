@@ -1,6 +1,6 @@
 // The player feature on real YouTube: miniplayer drag, snap and remembered
-// position (§35.2, §35.3), the watch page's small window (§49, with §36.3 and
-// §36.4), back to top (§37). Miniplayer controls are in mini-controls.spec.ts.
+// position (F-07-AC2, F-07-AC3), the watch page's small window (F-08, with F-08-AC4 and
+// F-08-AC5), back to top (F-09). Miniplayer controls are in mini-controls.spec.ts.
 import type { BrowserContext, Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures';
 import { VIDEOS } from '../support/env';
@@ -99,7 +99,7 @@ test.describe('miniplayer drag', () => {
   });
 });
 
-// ---------- watch page: the small window (§49) ----------
+// ---------- watch page: the small window (F-08) ----------
 
 async function cookie(ctx: BrowserContext, name: string): Promise<string | undefined> {
   return (await ctx.cookies('https://www.youtube.com')).find((c) => c.name === name)?.value;

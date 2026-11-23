@@ -15,7 +15,7 @@ import header from './fixtures/browse-header.json';
 
 const L = (v: string, s: string, percent?: number): ListItem => ({ videoId: v, setVideoId: s, percent });
 
-// Shapes recorded in the browser on 2026-11-20 (design §21.2).
+// Shapes recorded in the browser on 2026-11-20 (F-05-AC5).
 const queueCommand = {
   addToPlaylistCommand: {
     openMiniplayer: true,
@@ -71,7 +71,7 @@ describe('parseQueueAction', () => {
 });
 
 describe('isQueueCommand', () => {
-  it('F-05-AC5 finds the command in both menu shapes (§21.3)', () => {
+  it('F-05-AC5 finds the command in both menu shapes (F-05-AC7)', () => {
     expect(isQueueCommand(newMenuItem.rendererContext.commandContext.onTap.innertubeCommand)).toBe(true);
     expect(isQueueCommand(oldMenuItem.serviceEndpoint)).toBe(true);
   });
@@ -92,7 +92,7 @@ describe('profileWithDefaults', () => {
   });
 });
 
-describe('decideTakeover (§24.1)', () => {
+describe('decideTakeover (F-05-AC4)', () => {
   const base: TakeoverInput = {
     featureOn: true, profile: { mode: 'playlist', listId: 'PL1', removeWatched: true }, loggedIn: true, editable: true, protocolError: false,
   };
@@ -112,7 +112,7 @@ describe('decideTakeover (§24.1)', () => {
   });
 });
 
-describe('notInList (§24.2)', () => {
+describe('notInList (F-05-AC6)', () => {
   const items = [{ videoId: 'a', setVideoId: '1' }, { videoId: 'b', setVideoId: '2' }];
   it('F-05-AC6 drops videos already in the list, keeps order', () => {
     expect(notInList(items, ['c', 'a', 'd'])).toEqual(['c', 'd']);
@@ -121,7 +121,7 @@ describe('notInList (§24.2)', () => {
   });
 });
 
-describe('queueView (§24.2)', () => {
+describe('queueView (F-05-AC6)', () => {
   const nav = (v: string, i: number) => ({ watchEndpoint: { videoId: v, playlistId: 'PL1', index: i } });
   const next = {
     contents: { twoColumnWatchNextResults: {
@@ -157,7 +157,7 @@ describe('queueView (§24.2)', () => {
   });
 });
 
-describe('keeping the UI in step (§24.8)', () => {
+describe('keeping the UI in step (F-05-AC13)', () => {
   const row = (v: string, s: string) => ({ playlistPanelVideoRenderer: { videoId: v, playlistSetVideoId: s, navigationEndpoint: { watchEndpoint: { videoId: v } } } });
   const next = (rows: unknown[]) => ({
     contents: { twoColumnWatchNextResults: {
@@ -236,14 +236,14 @@ describe('keeping the UI in step (§24.8)', () => {
     expect((v.list.contents as { playlistPanelVideoRenderer: { videoId: string } }[]).map((c) => c.playlistPanelVideoRenderer.videoId)).toEqual(['x', 'a']);
   });
 
-  it('F-05-AC12 does not bring back the entry just watched and removed (§24.4)', () => {
+  it('F-05-AC12 does not bring back the entry just watched and removed (F-05)', () => {
     const v = panelView(next([row('a', 'S1'), row('b', 'S2')]), { videoId: 'c', title: 'C', author: '', duration: 0 }, false)!;
     expect((v.list.contents as { playlistPanelVideoRenderer: { videoId: string } }[]).map((c) => c.playlistPanelVideoRenderer.videoId)).toEqual(['a', 'b']);
     expect(v.autoplay).toBeUndefined();
   });
 });
 
-describe('nextAfter (§24.4)', () => {
+describe('nextAfter (F-05)', () => {
   const items = [L('a', 's1'), L('b', 's2'), L('c', 's3')];
   it('F-05-AC11 returns the watched entry and the one after it', () => {
     expect(nextAfter(items, 'b', 1)).toEqual({ watched: items[1], next: items[2] });
@@ -275,7 +275,7 @@ describe('watched', () => {
   });
 });
 
-describe('clear all / remove watched (§47)', () => {
+describe('clear all / remove watched (F-06)', () => {
   const items = [L('a', 'l1', 95), L('b', 'l2', 10), L('c', 'l3', 100), L('d', 'l4')];
   it('F-06-AC2 picks all or only watched (≥ 90 %)', () => {
     expect(planClear(items, 'all').map((i) => i.setVideoId)).toEqual(['l1', 'l2', 'l3', 'l4']);
@@ -300,7 +300,7 @@ describe('clear all / remove watched (§47)', () => {
   });
 });
 
-describe('drag out to delete (§48)', () => {
+describe('drag out to delete (F-06)', () => {
   const move = { playlistId: 'PL1', context: { x: 1 }, actions: [{ action: 'ACTION_MOVE_VIDEO_AFTER', setVideoId: 'S2', movedSetVideoIdPredecessor: 'S1' }] };
   it('F-06-AC4 turns the reorder of the dropped entry into its removal, keeping the rest of the request', () => {
     expect(moveToRemove(move, 'PL1', 'S2')).toEqual({ playlistId: 'PL1', context: { x: 1 }, actions: [{ action: 'ACTION_REMOVE_VIDEO', setVideoId: 'S2' }] });
@@ -321,7 +321,7 @@ describe('nextHasList', () => {
   });
 });
 
-describe('the entry playing removed (§47, §48)', () => {
+describe('the entry playing removed (F-06)', () => {
   const before = [L('a', 'l1'), L('b', 'l2'), L('c', 'l3'), L('d', 'l4')];
   it('F-06-AC3 remembers the entries up to the one playing, if it was removed', () => {
     expect(removedPlaying(before, ['l1', 'l3'], { videoId: 'c' })).toEqual(['l1', 'l2', 'l3']);
@@ -385,7 +385,7 @@ describe('playlistTitle', () => {
   });
 });
 
-describe('loop (§40.2)', () => {
+describe('loop (F-10)', () => {
   it('F-10-AC4 a wrap is a jump from the last moments back to the first', () => {
     expect(isLoopWrap(99.8, 0.1, 100)).toBe(true);
     expect(isLoopWrap(98.6, 1.4, 100)).toBe(true);

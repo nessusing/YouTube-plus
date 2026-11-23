@@ -1,10 +1,10 @@
-// Page notifications (design §46): YouTube-style toasts that every feature
+// Page notifications (F-02): YouTube-style toasts that every feature
 // shares. A stack centered at the bottom (or under the masthead), newest
 // nearest the edge pushing the older ones out and shrinking them a little
 // (the feel of Sonner). The whole stack can be dragged sideways; where it was
 // left is remembered per machine (storage.local, a fraction of the window
 // width). Hovering or dragging pauses every timer. It steps past the
-// miniplayer or its minimized bar (§44) when they are in the way: above them at
+// miniplayer or its minimized bar (F-07) when they are in the way: above them at
 // the bottom, below them at the top. In fullscreen it moves into the
 // fullscreen element.
 //
@@ -170,7 +170,7 @@ function createNotifier(): Notifier {
   };
 
   /**
-   * What the stack must not cover: the miniplayer and its minimized bar (§44);
+   * What the stack must not cover: the miniplayer and its minimized bar (F-07);
    * in fullscreen, the player's control bar while it shows (F-02-AC6).
    */
   const obstacles = (): DOMRect[] => {
@@ -189,7 +189,7 @@ function createNotifier(): Notifier {
       const r = document.querySelector(SEL.miniplayer)?.getBoundingClientRect();
       if (r && r.width && r.height) out.push(r);
     }
-    // §44 and §50 each have one; at most one shows.
+    // F-07 and F-11 each have one; at most one shows.
     for (const bar of document.querySelectorAll<HTMLElement>(MINI_BAR_TAG)) {
       if (bar.style.display === 'none') continue;
       const r = bar.getBoundingClientRect();

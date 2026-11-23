@@ -3,9 +3,9 @@
 // keeps the size YouTube last gave it; only the page's player API can fix
 // that. Acts only while the isolated side sets html[data-ytpp-mini-sized] and
 // the player is minimized, so YouTube's own sizing is untouched otherwise.
-// Also turns loop on / off for the loop button (loop-button.ts, §40.2): the
+// Also turns loop on / off for the loop button (loop-button.ts, F-10): the
 // player API keeps the right-click "Loop" in step, setting video.loop does not.
-// And runs the popped-out player's commands (§50; pipCommand below).
+// And runs the popped-out player's commands (F-11; pipCommand below).
 
 import { pipDocument, queryPlayerDom } from '@/core/pip-doc';
 import { LOOP_OFF_EVENT, LOOP_ON_EVENT, PIP_CMD_ATTR, PIP_CMD_EVENT, PIP_VID_ATTR } from './consts';
@@ -29,7 +29,7 @@ interface PlayerApi extends HTMLElement {
 }
 
 /**
- * The popped-out player (§50), on a command from the isolated side:
+ * The popped-out player (F-11), on a command from the isolated side:
  * fit: lay the video and the control bar out for the PiP window's size (a
  * window resize does not reach the player there); vid: write the playing
  * video's id to html[data-ytpp-pip-vid]; the PiP window's keys: toggle,
@@ -74,7 +74,7 @@ function pipCommand(cmd: string): void {
 }
 
 function setLoop(on: boolean): void {
-  // Popped out (§50), the player is in the PiP window.
+  // Popped out (F-11), the player is in the PiP window.
   const p = queryPlayerDom<PlayerApi>('#movie_player');
   if (p?.setLoopVideo) {
     p.setLoopVideo(on);

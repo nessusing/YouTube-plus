@@ -1,8 +1,8 @@
-// "Clear all" and "Remove watched" (design §47). The items sit in the
+// "Clear all" and "Remove watched" (F-06). The items sit in the
 // official ⋮ menus (page-menus.ts, MAIN world): on the page of a list this
 // identity can edit, and while taking over, in the panels showing the chosen
 // list. Chosen: removed at once, no confirm, no undo; a page notice says how
-// it went (design §46, failures §26).
+// it went (F-02, failures F-05-AC15).
 
 import { t as tr } from '@/core/i18n';
 import { notify } from '@/core/notify';

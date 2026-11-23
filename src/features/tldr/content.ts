@@ -1,4 +1,4 @@
-// TL;DR in YouTube tabs (design §9 content script): scan thumbnails, add
+// TL;DR in YouTube tabs (F-03 content script): scan thumbnails, add
 // icons, track visibility and foreground, talk to the service worker.
 
 import { initLang } from '@/core/i18n';
@@ -39,7 +39,7 @@ export async function startTldr(): Promise<void> {
   });
 
   // YouTube's hover preview player is a separate layer above the thumbnail
-  // (§14.1 wants the icon above it): float a copy over the hovered item.
+  // (F-03-AC2 wants the icon above it): float a copy over the hovered item.
   let floater: { icon: Icon; for: Icon } | undefined;
   const hideFloater = () => {
     floater?.icon.host.remove();

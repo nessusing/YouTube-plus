@@ -1,4 +1,4 @@
-// Comments panel (§52), the data side: the video's comments as YouTube lists
+// Comments panel (F-12), the data side: the video's comments as YouTube lists
 // them (Top order), nothing filtered, a page at a time as the panel scrolls
 // down; each comment's replies on demand. Its own fetching, separate from
 // the danmaku Session: nothing is cached and Gemini is never asked.
@@ -97,7 +97,7 @@ export class CommentFeed {
 
 const UNITS = ['second', 'minute', 'hour', 'day', 'week', 'month', 'year'] as const;
 
-/** "3 months ago (edited)" (always English, §51.2) in the UI's language; edited is said separately. */
+/** "3 months ago (edited)" (always English, F-12-AC4) in the UI's language; edited is said separately. */
 export function ageText(published: string, locale: string): { age: string; edited: boolean } {
   const edited = /\(edited\)/i.test(published);
   const m = published.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i);

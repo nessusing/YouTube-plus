@@ -1,10 +1,10 @@
 // Watch page: once the player is half scrolled away, it floats as a small
 // window at the bottom right, left of "back to top", so the comments get the
-// page (§49). It comes back when its place in the page is half on screen
-// again. The window can be dragged (edge snapping as in §35.2) and remembers
+// page (F-08). It comes back when its place in the page is half on screen
+// again. The window can be dragged (edge snapping as in F-07-AC2) and remembers
 // where it was, apart from the official miniplayer. An Expand button at its
-// top left scrolls back up. While it floats, a timestamp only seeks (§36.4);
-// switching theater mode goes back to the top (§36.3; YouTube does that itself).
+// top left scrolls back up. While it floats, a timestamp only seeks (F-08-AC5);
+// switching theater mode goes back to the top (F-08-AC4; YouTube does that itself).
 //
 // Findings (2026-11-21): no ancestor of #player-container has a transform,
 // contain or filter, so position: fixed works on it. Its parent keeps its
@@ -278,7 +278,7 @@ export function floatPlayer(log: Logger): FloatPlayer {
     setTimeout(() => window.removeEventListener('click', eat, true), 50);
   };
 
-  // ---- §36.4: while floating, a timestamp only seeks ----
+  // ---- F-08-AC5: while floating, a timestamp only seeks ----
   const onClick = (e: MouseEvent) => {
     if (!floating || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
@@ -308,7 +308,7 @@ export function floatPlayer(log: Logger): FloatPlayer {
     setTimeout(onScroll, 1000);
   };
 
-  // ---- §36.3: switching theater mode while floating goes back to the top ----
+  // ---- F-08-AC4: switching theater mode while floating goes back to the top ----
   // Measured 2026-11-21: right after the switch the box still sits in the old
   // layout, so a check then can keep it floating; put it back ourselves.
   const watchFlexy = () => {

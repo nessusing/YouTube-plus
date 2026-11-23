@@ -1,4 +1,4 @@
-// Flying style (§52): each comment of the timeline flies once, as a single
+// Flying style (F-12): each comment of the timeline flies once, as a single
 // line, from the player's right edge to its left. Same comments at the same
 // times as the cards; several may be on screen at once (and may overlap when
 // every lane is taken). Each comment has its own speed, random but fixed per

@@ -1,9 +1,9 @@
-// Pop the miniplayer out to the desktop (§50). The whole #movie_player moves
+// Pop the miniplayer out to the desktop (F-11). The whole #movie_player moves
 // into a Document PiP window (approach A): the official control bar and our
 // changes to it go along, and the window floats above other tabs and programs.
 // It is a kind of miniplayer: the page stays in its miniplayer state, with the
 // miniplayer hidden and a bar at the bottom left standing in for it (as in
-// §44); a card clicked on a browse page plays in the PiP window.
+// F-07); a card clicked on a browse page plays in the PiP window.
 //
 // Opens from a button right of the miniplayer's Expand, or the shortcut
 // (Shift+I by default; on a watch page it first does what `i` does). Comes back
@@ -184,7 +184,7 @@ export function pip(log: Logger): Pip {
    * The size asked for, the same every time: Chrome then puts the window back
    * where and as big as the user last left it; a new size each time and it
    * opened at its default place (2026-11-22). Fixed on the first pop-out from
-   * the miniplayer's size (§35.3).
+   * the miniplayer's size (F-07-AC3).
    */
   let savedSize: { width: number; height: number } | undefined;
   let miniWidth: number | undefined;

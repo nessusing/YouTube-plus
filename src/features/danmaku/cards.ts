@@ -1,4 +1,4 @@
-// Cards for timestamped comments (§51.4).
+// Cards for timestamped comments (F-12-AC6).
 
 import type { Comment } from './comments';
 import type { DanmakuParams } from './params';

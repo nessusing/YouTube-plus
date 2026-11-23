@@ -1,4 +1,4 @@
-// The summary tooltip (design §14.2): one at a time, next to the thumbnail,
+// The summary tooltip (F-03-AC3): one at a time, next to the thumbnail,
 // flips side when there is no room, closes on outside click or Esc.
 
 import { t } from '@/core/i18n';
@@ -99,7 +99,7 @@ export class Tooltip {
     }
   }
 
-  /** Not signed in to Gemini: say why and offer the way out (design §15.1). */
+  /** Not signed in to Gemini: say why and offer the way out (F-03-AC12). */
   private renderSignin(h: (t: string, c?: string, x?: string) => HTMLElement): Node[] {
     const box = h('div', 'signin');
     box.append(h('h4', '', t('tip.signinTitle')), h('p', '', t('tip.signin')), h('p', 'muted', t('tip.signinHint')));

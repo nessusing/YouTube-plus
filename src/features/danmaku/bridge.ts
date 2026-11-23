@@ -1,5 +1,5 @@
 // window.postMessage bridge between the danmaku content script and its MAIN
-// world script (§51.2). The page side makes the InnerTube calls
+// world script (F-12-AC4). The page side makes the InnerTube calls
 // and parses them there, so only the small parsed result crosses over.
 
 import type { CommentPage, WatchInfo } from './comments';
@@ -12,7 +12,7 @@ export interface VideoInfo {
   title: string;
   /** Seconds. */
   duration: number;
-  /** Live or a live replay: not handled (§51.1). */
+  /** Live or a live replay: not handled (F-12). */
   live: boolean;
 }
 

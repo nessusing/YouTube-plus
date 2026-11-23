@@ -1,4 +1,4 @@
-// Local filtering (§51.3): dropped comments are neither sent
+// Local filtering (F-12-AC5): dropped comments are neither sent
 // to Gemini nor shown.
 
 import type { Comment } from './comments';

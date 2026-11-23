@@ -1,6 +1,6 @@
-// TL;DR types (design §9.1).
+// TL;DR types (F-03).
 
-/** The output language is the video's own (plans P23), so there is no language here. */
+/** The output language is the video's own (F-04), so there is no language here. */
 export interface SummaryInput { videoId: string; title: string; titleCheck: boolean }
 
 export interface Summary {
@@ -28,7 +28,7 @@ export interface SummaryProvider {
   summarize(input: SummaryInput): Promise<SummaryResult>;
 }
 
-/** What a thumbnail icon shows (design §14.1). */
+/** What a thumbnail icon shows (F-03-AC2). */
 export type BadgeState =
   | { state: 'idle' }
   | { state: 'queued' }

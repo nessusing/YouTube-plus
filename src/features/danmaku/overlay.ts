@@ -1,9 +1,9 @@
-// The layer over the player (§51.7): one caption-style card at a
+// The layer over the player (F-12-AC12): one caption-style card at a
 // time, drawn from the video's time every frame, so pausing, seeking back and
 // playback speed need nothing special. Hidden in the miniplayer, popped out
-// (§50), during ads and off the watch page. At the top of the player (§51.7):
+// (F-11), during ads and off the watch page. At the top of the player (F-12-AC12):
 // below the title bar while it shows, below the captions when they sit in the
-// upper half. Styles (§52): the card, comments flying across (same comments,
+// upper half. Styles (F-12): the card, comments flying across (same comments,
 // same times), or a comments panel on the right (its own feed).
 
 import type { DanmakuStyle } from '@/core/settings';
@@ -89,7 +89,7 @@ export function overlay(): Overlay {
   };
   let raf = 0;
   let lastT = -1;
-  /** After a seek into a card with too little of it left: not shown (§51.7). */
+  /** After a seek into a card with too little of it left: not shown (F-12-AC12). */
   let skipped: Slot | undefined;
 
   const hideCard = () => view.draw(undefined, 0, { p: display!, width: 0, height: 0, top: 0 });

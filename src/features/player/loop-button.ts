@@ -1,4 +1,4 @@
-// Loop button (design §40.2): one toggle right of ▶ in the bottom control bar
+// Loop button (F-10): one toggle right of ▶ in the bottom control bar
 // (watch page, theater, fullscreen, and the miniplayer with our controls), and
 // one right of the big ▶ in the middle of the miniplayer (shown only without
 // our controls). Its state is the <video>'s `loop` attribute, which is what the
@@ -146,7 +146,7 @@ export function loopButton(): LoopButton {
     // A frame queued before disable() must not put the buttons back.
     if (!active) return;
     let changed = false;
-    // Popped out (§50), the player and its control bar are in the PiP window.
+    // Popped out (F-11), the player and its control bar are in the PiP window.
     const v = queryPlayerDom<HTMLVideoElement>(SEL.video);
     if (v !== video) {
       videoMo.disconnect();

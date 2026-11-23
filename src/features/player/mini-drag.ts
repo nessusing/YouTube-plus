@@ -1,5 +1,5 @@
 // Miniplayer free drag, edge snapping and remembered position/size
-// (design §35.2, §35.3).
+// (F-07-AC2, F-07-AC3).
 //
 // The official drag (yt-draggable) starts on pointerdown/mousedown, moves the
 // window with a transform and snaps to a corner on release. We stop those

@@ -66,7 +66,7 @@ export async function startQueue(): Promise<void> {
     },
   });
 
-  // The settings page works through this tab (design §27).
+  // The settings page works through this tab (F-05).
   const handle = async (m: QueueRequest): Promise<unknown> => {
     await bridge.ready;
     switch (m.op) {

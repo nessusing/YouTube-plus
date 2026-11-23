@@ -1,4 +1,4 @@
-// Self-check framework (docs/design.md §5). Each feature registers its own
+// Self-check framework (F-01-AC6). Each feature registers its own
 // checks; the runner runs those of enabled features in order and logs results.
 
 import { t, type MsgKey } from './i18n';

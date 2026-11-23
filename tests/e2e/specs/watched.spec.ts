@@ -1,4 +1,4 @@
-// After a video from the list is watched (§24.4). VIDEOS.zoo is 19 s long.
+// After a video from the list is watched (F-05). VIDEOS.zoo is 19 s long.
 import { expect, test } from '../support/fixtures';
 import { VIDEOS } from '../support/env';
 import { addFromMenu, pickItem, related } from '../support/ui';

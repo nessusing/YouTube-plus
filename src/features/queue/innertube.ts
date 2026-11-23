@@ -1,5 +1,5 @@
 // InnerTube calls made from the page (MAIN world), authenticated like the page
-// itself (design §21.5). Missing X-Goog-PageId does not fail: it silently acts
+// itself (F-05). Missing X-Goog-PageId does not fail: it silently acts
 // as the primary account, so always send it for brand accounts.
 
 import { playlistPage, playlistTitle, type ListAction } from './core';
@@ -163,7 +163,7 @@ export async function editPlaylist(id: string, actions: ListAction[]): Promise<E
 }
 
 /**
- * Who this page acts as (design §24.7). The key is a hash of DATASYNC_ID, so a
+ * Who this page acts as (F-05-AC1). The key is a hash of DATASYNC_ID, so a
  * different Google account and a different channel of the same account are
  * different identities. The avatar is read from the top bar (best effort).
  */

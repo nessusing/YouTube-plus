@@ -1,8 +1,8 @@
-// Miniplayer minimize (§44): a button left of the ✕ at the top right of the
+// Miniplayer minimize (F-07): a button left of the ✕ at the top right of the
 // miniplayer shrinks it to a bar at the bottom left of the page that shows only
 // the video's title; clicking the bar anywhere brings the miniplayer back where
 // it was, at its size. The video keeps playing. The miniplayer is not closed,
-// only hidden (with its list panel), so YouTube, the drag (§35.2, §35.3) and
+// only hidden (with its list panel), so YouTube, the drag (F-07-AC2, F-07-AC3) and
 // the queue see nothing change. Minimized is remembered in storage.local: it
 // holds across reloads and the next time a miniplayer opens, in every tab.
 
@@ -100,7 +100,7 @@ export function miniMinimize(log: Logger): MiniMinimize {
 
   /**
    * Show the bar (and hide the miniplayer) exactly when minimized with a
-   * miniplayer up. Popped out to PiP (§50), that part's bar stands in instead.
+   * miniplayer up. Popped out to PiP (F-11), that part's bar stands in instead.
    */
   const render = () => {
     const show = enabled && minimized && miniActive() && !html.hasAttribute(PIP_ATTR);

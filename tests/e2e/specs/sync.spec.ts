@@ -1,4 +1,4 @@
-// The top bar count and the panel follow the list whoever edits it (§24.8).
+// The top bar count and the panel follow the list whoever edits it (F-05-AC13).
 import { expect, test } from '../support/fixtures';
 import { VIDEOS } from '../support/env';
 import { addFromMenu, pickItem, related } from '../support/ui';

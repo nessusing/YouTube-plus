@@ -1,4 +1,4 @@
-// Loop button (design §40.2) on real YouTube: the setting, where the button
+// Loop button (F-10) on real YouTube: the setting, where the button
 // sits in every player form, that it is the right-click "Loop", and how a
 // loop counts for the queue's remove after playing. VIDEOS.zoo is 19 s long.
 import type { BrowserContext, Page } from '@playwright/test';
@@ -214,7 +214,7 @@ test.describe('loop button', () => {
   });
 });
 
-test.describe('loop and remove after playing (§40.2)', () => {
+test.describe('loop and remove after playing (F-10)', () => {
   test.beforeEach(async ({ ctx }) => setPlayer(ctx, { loopButton: true }));
   test.afterEach(async ({ ctx }) => setPlayer(ctx, { loopButton: false }));
 

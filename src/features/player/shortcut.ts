@@ -1,4 +1,4 @@
-// Keyboard shortcuts as stored strings, e.g. "Shift+I" or "Ctrl+Alt+P" (§50).
+// Keyboard shortcuts as stored strings, e.g. "Shift+I" or "Ctrl+Alt+P" (F-11).
 // Keys are matched by KeyboardEvent.code, so the keyboard layout and Shift do
 // not change what a letter is. Pure: unit tested.
 

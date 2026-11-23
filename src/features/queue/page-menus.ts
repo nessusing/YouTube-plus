@@ -1,5 +1,5 @@
-// MAIN world: "Clear all" / "Remove watched" in the official ⋮ menus (§47), and
-// dragging an entry out of the playlist panel to delete it (§48). Never break
+// MAIN world: "Clear all" / "Remove watched" in the official ⋮ menus (F-06), and
+// dragging an entry out of the playlist panel to delete it (F-06). Never break
 // the page: every handler swallows its own errors.
 //
 // Measured 2026-11-21:
@@ -38,7 +38,7 @@ const label = (op: ToolOp) => (op === 'all' ? menu.labels.clearAll : menu.labels
 const command = (op: ToolOp, listId: string) => ({ [TOOL_KEY]: { op, listId } satisfies ToolCommand });
 const panelList = (panel: Element | null) => ((panel as AnyEl | null)?.data as { playlistId?: unknown } | undefined)?.playlistId;
 
-/** The list a ⋮ is for, when our items belong in it (§47). */
+/** The list a ⋮ is for, when our items belong in it (F-06). */
 function listFor(opener: Element): string | undefined {
   const panel = opener.closest('ytd-playlist-panel-renderer');
   if (panel) {
@@ -130,7 +130,7 @@ function sheetOf(data: unknown): unknown[] | undefined {
   return Array.isArray(items) ? items : undefined;
 }
 
-/** About to open a new-style ⋮: put our items in its sheet, or take them out (§47). */
+/** About to open a new-style ⋮: put our items in its sheet, or take them out (F-06). */
 function primeSheet(e: Event): void {
   try {
     for (const n of e.composedPath()) {
@@ -148,7 +148,7 @@ function primeSheet(e: Event): void {
   }
 }
 
-/** The sheet's list items, from the component data on an ancestor (§21.3). */
+/** The sheet's list items, from the component data on an ancestor (F-05-AC7). */
 export function sheetItems(el: Element): Record<string, unknown>[] | undefined {
   let a: Element | null = el.parentElement;
   for (let depth = 0; a && depth < 20; a = a.parentElement, depth++) {
@@ -186,7 +186,7 @@ function onClick(e: Event): void {
   }
 }
 
-// ---------- §48: drag out of the panel to delete ----------
+// ---------- F-06: drag out of the panel to delete ----------
 
 const DRAGGER = 'ytd-app > ytd-playlist-panel-video-renderer.dragging';
 const MARK = 'ytpp-drop-delete';
@@ -210,7 +210,7 @@ function panelItems(panel: Element): ListItem[] {
   const contents = ((panel as AnyEl).data as { contents?: unknown[] } | undefined)?.contents ?? [];
   return contents
     .map((c) => (c as { playlistPanelVideoRenderer?: { videoId?: unknown; playlistSetVideoId?: unknown } }).playlistPanelVideoRenderer)
-    // Our own top row (a video attached to the list, §24.2) has no setVideoId.
+    // Our own top row (a video attached to the list, F-05-AC6) has no setVideoId.
     .filter((r): r is { videoId: string; playlistSetVideoId: string } => typeof r?.videoId === 'string' && typeof r.playlistSetVideoId === 'string' && !!r.playlistSetVideoId)
     .map((r) => ({ videoId: r.videoId, setVideoId: r.playlistSetVideoId }));
 }
@@ -276,7 +276,7 @@ function disarm(showRow: boolean): void {
  * Entries dropped out of a panel, hidden wherever a panel shows them for a
  * while: the page reuses row elements for other entries, and its own refresh
  * after the request may bring a dropped entry back for a few seconds while
- * reads lag (§21.4). Until §24.8 has the panel right.
+ * reads lag (F-05). Until F-05-AC13 has the panel right.
  */
 const HIDE_MS = 30_000;
 const hidden = new Map<string, number>();
@@ -317,7 +317,7 @@ function unhide(setVideoId?: string): void {
 /**
  * Called by the fetch watcher for each edit_playlist the page sends. While a
  * drop is armed: if this is its reorder, send a removal instead and answer the
- * page with that (without the "Removed · Undo" notice it brings, §48).
+ * page with that (without the "Removed · Undo" notice it brings, F-06).
  * Undefined when nothing is armed; another request while armed goes out
  * through `send`, as it would have.
  */

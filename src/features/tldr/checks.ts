@@ -1,4 +1,4 @@
-// TL;DR self-checks (design §15), run in the service worker.
+// TL;DR self-checks (F-03-AC13), run in the service worker.
 
 import { t } from '@/core/i18n';
 import type { SelfCheck } from '@/core/selfcheck';

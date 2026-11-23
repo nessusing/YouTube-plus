@@ -1,6 +1,6 @@
-// Comment danmaku (§51): every tunable number in one place. During
+// Comment danmaku (F-12): every tunable number in one place. During
 // development the options page exposes most of these; which ones stay for
-// normal users is decided after real use (§51.9).
+// normal users is decided after real use (F-12-AC16).
 
 export interface DisplayParams {
   /** Seconds per screen (two lines) of a long comment. */
@@ -21,7 +21,7 @@ export interface DisplayParams {
   cjkWidth: number;
   /** After a seek into a card, show it only if at least this much of it is left. */
   resumeMinSec: number;
-  /** Flying style (§52): seconds for a comment's head to cross the player, random per comment in [min, max]. */
+  /** Flying style (F-12): seconds for a comment's head to cross the player, random per comment in [min, max]. */
   flyMinSec: number;
   flyMaxSec: number;
   /** Comments longer than this many lines (estimated like a card's) do not fly. */
@@ -116,9 +116,9 @@ export interface DanmakuParams {
 export const PROMPT_PLACEHOLDERS = ['{{url}}', '{{title}}', '{{duration}}', '{{comments}}'] as const;
 
 /**
- * Version 2 of the placement prompt plus the video length (§51.2, §51.5):
+ * Version 2 of the placement prompt plus the video length (F-12-AC4, F-12):
  * each confidence band is defined, "when unsure, use a", x only for junk.
- * The preamble is the TL;DR one (design §45): personalization reaches these
+ * The preamble is the TL;DR one (F-03-AC6): personalization reaches these
  * requests too.
  */
 export const DEFAULT_PROMPT = [

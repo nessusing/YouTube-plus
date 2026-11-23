@@ -1,4 +1,4 @@
-// Gemini web protocol, pure parts (design §10, §11). Verified 2026-11-18:
+// Gemini web protocol, pure parts (F-03-AC13, F-03). Verified 2026-11-18:
 // StreamGenerate still answers; frames are length-prefixed in UTF-16 units
 // (= JS string length); the last frame has the full text; GzXR5e deletes.
 
@@ -13,7 +13,7 @@ function schemaOf(titleCheck: boolean, id: string): string {
 
 /**
  * Output language = the video's own language, whatever it is, judged by
- * Gemini, which has read the transcript (plans P23). Not the extension's
+ * Gemini, which has read the transcript (F-04). Not the extension's
  * language: a Vietnamese video gets Vietnamese points.
  */
 function rules(i: Pick<SummaryInput, 'titleCheck'>, batch: boolean): string[] {
@@ -30,7 +30,7 @@ function rules(i: Pick<SummaryInput, 'titleCheck'>, batch: boolean): string[] {
 /**
  * The account's personalization (custom instructions, saved info, past chats)
  * also reaches these requests; one persona made Gemini answer in character
- * with no JSON at all (design §45). Say up front that a program reads the reply
+ * with no JSON at all (F-03-AC6). Say up front that a program reads the reply
  * and none of that applies; repeat the format at the end, where it weighs most.
  */
 const PREAMBLE = [
@@ -69,7 +69,7 @@ export function buildBatchPrompt(items: SummaryInput[]): string {
   ].filter(Boolean).join('\n');
 }
 
-/** The ~80-slot request array; slots follow the web client (design §10.2). */
+/** The ~80-slot request array; slots follow the web client (F-03-AC7). */
 export function buildInner(prompt: string, uuid: string): unknown[] {
   const inner: unknown[] = new Array(80).fill(null);
   inner[0] = [prompt, 0, null, null, null, null, 0];
@@ -147,7 +147,7 @@ export function parseStream(raw: string): Parsed {
   return out;
 }
 
-// ---------- processSession (Google WebChannel), design §10.8 ----------
+// ---------- processSession (Google WebChannel), F-03-AC7 ----------
 // Verified 2026-11-21 in a signed-in page: the YouTube app works; 5 videos in ~12 s.
 
 export const CHANNEL_URL = 'https://geminiweb-pa.clients6.google.com/v1/processSession';
@@ -321,7 +321,7 @@ const isObjectArray = (j: unknown): j is unknown[] => Array.isArray(j) && j.some
 /**
  * The first balanced span starting with `open` that parses and passes `ok`.
  * Greedy `\[[\s\S]*\]` fails when the model writes the answer twice
- * (`[…][…]`, seen 2026-11-21, plans P17).
+ * (`[…][…]`, seen 2026-11-21, F-03 bug P17).
  */
 function firstJson(s: string, open: '[' | '{', ok: (j: unknown) => boolean): unknown {
   for (let i = s.indexOf(open); i !== -1; i = s.indexOf(open, i + 1)) {
@@ -371,7 +371,7 @@ function fromObject(j: unknown, fallbackLang: string): SummaryResult | undefined
   return { kind: 'ok', data };
 }
 
-/** Model text → result (design §11 parse order). */
+/** Model text → result (F-03 parse order). */
 export function parseSummary(text: string, fallbackLang: string): SummaryResult {
   const cleaned = stripFences(text);
   const whole = tryParse(cleaned);

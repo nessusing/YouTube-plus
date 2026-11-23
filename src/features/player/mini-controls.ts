@@ -1,4 +1,4 @@
-// Miniplayer controls (design §35.1): on hover, show the official bottom
+// Miniplayer controls (F-07-AC1): on hover, show the official bottom
 // control bar (volume, seek bar, time, gear) and hide the miniplayer's own
 // duplicates, keeping expand and close. The miniplayer has no previous / next
 // since YouTube's 2026-11 redesign (also with this feature off); not added back.

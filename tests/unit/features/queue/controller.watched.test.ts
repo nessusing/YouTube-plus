@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // QueueController: after a video from the list is watched, play the next one
-// and remove it (§24.4).
+// and remove it (F-05).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '@/core/i18n';
 import { setup } from '../../../support/queue-harness';
@@ -24,7 +24,7 @@ describe('remove after playing on', () => {
     expect(h.yt.panel?.rows.map((r) => r.videoId)).toEqual(['a', 'c']);
   });
 
-  it('F-05-AC12 ended in the miniplayer: the next entry plays there, no watch page (§24.4)', async () => {
+  it('F-05-AC12 ended in the miniplayer: the next entry plays there, no watch page (F-05)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('b', 'PLq', { mini: true }) });
     h.ctl.onPlayer(h.yt.playerEvent('ended'));
     await h.settle();
@@ -93,7 +93,7 @@ describe('remove after playing on', () => {
     expect(h.yt.truth('PLq')).toEqual(['a', 'b', 'c']);
   });
 
-  describe('on loop (§40.2)', () => {
+  describe('on loop (F-10)', () => {
     const left = (o: object) => ({ currentTime: 295, duration: 300, loop: true, ...o });
 
     it('F-10-AC4 looped, then another entry of the list: removed, no jump', async () => {
@@ -231,7 +231,7 @@ describe('when nothing should happen', () => {
   });
 });
 
-describe('the video the list was attached to (§24.2)', () => {
+describe('the video the list was attached to (F-05-AC6)', () => {
   it('F-05-AC6 F-05-AC10 panel attach: when it ends, the list plays from its first entry and nothing is removed', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('v1') });
     await h.ctl.onAdd(['x']);

@@ -1,7 +1,7 @@
 // An in-memory YouTube for controller tests (L2): the playlists on the
 // server, the player, and the playlist panel, behind the same Rpc the MAIN
 // world script answers. It copies the behaviour measured in the browser
-// (design §21.4, §24.8):
+// (F-05-AC13):
 //   - an added video shows in reads at once; a removed one keeps showing for
 //     `removalLagMs` (reads lag behind removals);
 //   - removing an entry that is already gone fails with 400;
@@ -54,7 +54,7 @@ export class FakeYouTube {
   player: Player = { mini: false, onWatch: false, ad: false };
   panel: Panel | undefined;
   takeover: TakeoverState = { decision: 'native', label: '' };
-  /** What the page script was told for the official ⋮ menus (§47). */
+  /** What the page script was told for the official ⋮ menus (F-06). */
   menu: Partial<MenuState> = {};
   /** The playlist manager's three methods are there (else syncList falls back). */
   playlistManager = true;
@@ -125,7 +125,7 @@ export class FakeYouTube {
     return r;
   }
 
-  /** How much of a video was watched, as reads show it (§47: ≥ 90 % counts as watched). */
+  /** How much of a video was watched, as reads show it (F-06: ≥ 90 % counts as watched). */
   watched(listId: string, videoId: string, percent: number): void {
     for (const e of this.lists.get(listId)?.entries ?? []) if (e.videoId === videoId) e.percent = percent;
   }
@@ -276,7 +276,7 @@ export class FakeYouTube {
     return id?.startsWith('TLPQ') ? id : undefined;
   }
 
-  /** Mirrors main-world.ts syncList (design §24.8, §24.2). */
+  /** Mirrors main-world.ts syncList (F-05-AC13, F-05-AC6). */
   private async syncList(listId: string, expect: Expect | undefined, attach: boolean): Promise<SyncResult> {
     const { videoId, ad, mini, onWatch } = this.player;
     if (!videoId || ad) return { how: 'none' };

@@ -36,7 +36,7 @@ export async function startPlayer(): Promise<void> {
   const parts: Record<keyof PlayerSettings, Toggleable> = {
     miniControls: miniControls(),
     freeDrag: miniDrag(log),
-    // Setting key kept from the sticky player it replaced (§49).
+    // Setting key kept from the sticky player it replaced (F-08).
     stickyPlayer: float,
     backToTop: backToTop(),
     loopButton: loop,
@@ -75,7 +75,7 @@ export async function startPlayer(): Promise<void> {
         : { status: 'fail', detail: t('check.notFound', { x: SEL.miniplayer }) },
     [PLAYER_PAGE_CHECKS[2]]: () => {
       if (location.pathname !== '/watch') return { status: 'skip', detail: t('check.player.onWatch') };
-      // The small window (§49) floats this box; its parent holds the place in the page.
+      // The small window (F-08) floats this box; its parent holds the place in the page.
       const box = document.querySelector(SEL.floatBox);
       if (!box?.querySelector(SEL.moviePlayer)) return { status: 'fail', detail: t('check.notFound', { x: `${SEL.floatBox} ${SEL.moviePlayer}` }) };
       return { status: 'pass' };

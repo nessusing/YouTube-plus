@@ -1,4 +1,4 @@
-// Self-checks that need a YouTube page (design §5). The background side sends
+// Self-checks that need a YouTube page (F-01-AC6). The background side sends
 // the check to an open YouTube tab; the feature's content script answers.
 
 import { t, type MsgKey } from './i18n';
@@ -7,7 +7,7 @@ import type { CheckOutcome, SelfCheck } from './selfcheck';
 
 type PageCheckMsg = { type: 'YouTube+/page-check'; feature: FeatureId; name: MsgKey };
 
-/** The YouTube tab used last (design §22 Q24): settings and checks act through it. */
+/** The YouTube tab used last (F-05 Q24): settings and checks act through it. */
 export async function recentYouTubeTab(): Promise<Browser.tabs.Tab | undefined> {
   const tabs = await browser.tabs.query({ url: 'https://www.youtube.com/*' });
   return tabs.sort((a, b) => Number(b.active) - Number(a.active) || (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];

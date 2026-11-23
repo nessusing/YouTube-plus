@@ -1,4 +1,4 @@
-// The danmaku button (§51.1): in the player's control bar, left
+// The danmaku button (F-12): in the player's control bar, left
 // of the captions button, remembered for every video like that button. Our own
 // icon, drawn in the style of the player's 2026 icons: a speech bubble, hollow
 // when off, filled when on; a small dot blinks while working; dimmed when the
@@ -58,7 +58,7 @@ export function icon(): SVGSVGElement {
   return svg;
 }
 
-/** Gap between a tooltip and its button, as the player's own (measured for §40.2). */
+/** Gap between a tooltip and its button, as the player's own (measured for F-10). */
 const TIP_GAP = 22;
 const TIP_EDGE = 12;
 

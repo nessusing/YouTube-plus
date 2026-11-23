@@ -1,4 +1,4 @@
-// Per-identity queue settings (design §22 Q17/Q22, §24.7).
+// Per-identity queue settings (F-05 Q17/Q22, F-05-AC1).
 // An identity is a hash of ytcfg DATASYNC_ID (channel + Google account); the
 // raw ID is never stored. Used by the content script and the settings page.
 
@@ -45,8 +45,8 @@ export function onProfileChanged(id: string, cb: (p: QueueProfile) => void): () 
 
 /**
  * Drop what the old sync left behind. Its list was found by name, so it is not
- * carried over: every identity starts with no list chosen (design §29 step 2).
- * Also the Clear all snapshots, gone with their undo (§47).
+ * carried over: every identity starts with no list chosen (F-05 step 2).
+ * Also the Clear all snapshots, gone with their undo (F-06).
  */
 export async function removeLegacyKeys(): Promise<void> {
   await browser.storage.sync.remove(LEGACY_KEYS.sync);

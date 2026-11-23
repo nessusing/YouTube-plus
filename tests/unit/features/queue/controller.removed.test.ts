@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// Clear all / Remove watched from the official ⋮ menus (§47) and dragging an
-// entry out of the panel (§48): what gets removed, what the notice says, and
+// Clear all / Remove watched from the official ⋮ menus (F-06) and dragging an
+// entry out of the panel (F-06): what gets removed, what the notice says, and
 // the entry playing removed while it plays.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '@/core/i18n';
@@ -47,7 +47,7 @@ describe('the menus', () => {
   });
 });
 
-describe('clear all / remove watched (§47)', () => {
+describe('clear all / remove watched (F-06)', () => {
   it('F-06-AC2 clear all: everything goes at once, no confirm, a notice says how many', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     const tools = toolsFor(h);
@@ -75,7 +75,7 @@ describe('clear all / remove watched (§47)', () => {
     expect(h.yt.callsOf('editPlaylist')).toEqual([]);
   });
 
-  it('F-06-AC2 F-05-AC15 a failed batch: the notice and the log say so, no retry (§26)', async () => {
+  it('F-06-AC2 F-05-AC15 a failed batch: the notice and the log say so, no retry (F-05-AC15)', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST });
     const tools = toolsFor(h);
     h.yt.editStatus = 500;
@@ -87,7 +87,7 @@ describe('clear all / remove watched (§47)', () => {
   });
 });
 
-describe('the entry playing removed (§47, §48)', () => {
+describe('the entry playing removed (F-06)', () => {
   it('F-06-AC3 remove watched takes the one playing: it plays on, then the entry after it', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => { yt.load('b', 'PLq'); yt.watched('PLq', 'a', 100); yt.watched('PLq', 'b', 95); } });
     const tools = toolsFor(h);
@@ -154,7 +154,7 @@ describe('the entry playing removed (§47, §48)', () => {
   });
 });
 
-describe('drag out to delete (§48)', () => {
+describe('drag out to delete (F-06)', () => {
   it('F-06-AC5 failed: a notice and the log say so; nothing else changes', async () => {
     const h = await setup({ lists: LISTS, profile: PLAYLIST, before: (yt) => yt.load('b', 'PLq') });
     await dropOut(h, 'c', false);

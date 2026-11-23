@@ -1,4 +1,4 @@
-// TL;DR cache rules (design §13), pure.
+// TL;DR cache rules (F-03-AC11), pure.
 
 import type { Summary } from './types';
 

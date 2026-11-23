@@ -1,4 +1,4 @@
-// Pop the miniplayer out to a Document PiP window (§50): open from the watch
+// Pop the miniplayer out to a Document PiP window (F-11): open from the watch
 // page with the shortcut and from the miniplayer's button; the keys and the
 // buttons in the PiP window; back in on the shortcut, ✕ and Esc; the shortcut
 // setting; full screen from PiP goes to the tab. The browser is muted (--mute-audio).
@@ -77,7 +77,7 @@ async function escClosesMini(page: Page): Promise<boolean> {
   return true;
 }
 
-test.describe('pop-out (§50)', () => {
+test.describe('pop-out (F-11)', () => {
   test.afterEach(async ({ ctx }) => setPipShortcut(ctx, 'Shift+I'));
 
   test('F-11-AC2 F-11-AC3 F-11-AC4 watch page → Shift+I → PiP: keys, buttons, back in', async ({ ctx, open }) => {

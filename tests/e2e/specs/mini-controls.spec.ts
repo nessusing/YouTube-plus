@@ -1,4 +1,4 @@
-// Controls in the miniplayer (design §35.1, agreed list Q6), in three states:
+// Controls in the miniplayer (F-07-AC1, agreed list Q6), in three states:
 // a single video, the native queue, our list. Item 6 (previous / next) is gone:
 // YouTube's miniplayer has neither since 2026-11, and none are added (F10).
 import type { Page } from '@playwright/test';

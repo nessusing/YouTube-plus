@@ -1,4 +1,4 @@
-// Storage categories and their usage (design §4.1). Each category owns a set
+// Storage categories and their usage (F-01-AC5). Each category owns a set
 // of storage.local keys; anything unclaimed counts as "other".
 
 import { LOG_KEY } from './log';
@@ -6,7 +6,7 @@ import { LOG_KEY } from './log';
 export type StorageCategory = 'log' | 'tldrCache' | 'danmakuCache' | 'other';
 
 export const TLDR_CACHE_PREFIX = 'tldr/cache/';
-/** Comment danmaku: one key per video (§51.8). */
+/** Comment danmaku: one key per video (F-12-AC15). */
 export const DANMAKU_CACHE_PREFIX = 'danmaku/cache/';
 
 export function categoryOf(key: string): StorageCategory {

@@ -124,7 +124,7 @@ describe('parsePage', () => {
   });
 });
 
-describe('fields for the comments panel (§52)', () => {
+describe('fields for the comments panel (F-12)', () => {
   const withAvatar = (key: string, level = 0) => {
     const e = entity({ key, text: `text ${key}`, age: '7 years ago (edited)', level });
     (e.payload.commentEntityPayload.author as Record<string, unknown>).avatarThumbnailUrl = `https://yt3.test/${key}=s88`;

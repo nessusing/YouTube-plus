@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Shortcuts as strings (§50): parse / format round trip, matching by code,
+// Shortcuts as strings (F-11): parse / format round trip, matching by code,
 // the recorder's rules (needs a modifier, not one of YouTube's), typing guard.
 import { describe, expect, it } from 'vitest';
 import {

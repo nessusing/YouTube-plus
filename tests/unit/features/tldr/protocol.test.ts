@@ -60,7 +60,7 @@ describe('request building', () => {
   it('F-03-AC4 builds the prompt from settings', () => {
     const p = buildPrompt({ videoId: 'abc', title: 'T "q"', titleCheck: false });
     expect(p).toContain('watch?v=abc');
-    // The video's own language, never a fixed one (plans P23).
+    // The video's own language, never a fixed one (F-04).
     expect(p).toContain('language the video is mainly spoken in');
     expect(p).not.toMatch(/written in (English|Simplified Chinese)/);
     expect(p).not.toContain('titleMatch');

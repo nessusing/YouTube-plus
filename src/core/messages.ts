@@ -8,13 +8,13 @@ export type Message =
   | { type: 'YouTube+/log-clear' }
   | { type: 'YouTube+/selfcheck' }
   | { type: 'YouTube+/open-options'; hash?: string }
-  /** §50 full screen: the sender's tab to the front and its window full screen (as F11), or back as it was. */
+  /** F-11 full screen: the sender's tab to the front and its window full screen (as F11), or back as it was. */
   | { type: 'YouTube+/window-fullscreen'; on: boolean }
   | { type: 'YouTube+/tldr-status' }
   | { type: 'YouTube+/tldr-resume' }
   | { type: 'YouTube+/tldr-signin' }
   | { type: 'YouTube+/tldr-recheck' }
-  /** Danmaku AI placement (§51): one prompt through the TL;DR queue; answers an AskResult. */
+  /** Danmaku AI placement (F-12): one prompt through the TL;DR queue; answers an AskResult. */
   | { type: 'YouTube+/dm-ask'; videoId: string; prompt: string };
 
 export type SelfCheckResponse = { results: CheckResult[] };

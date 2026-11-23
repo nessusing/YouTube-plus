@@ -1,4 +1,4 @@
-// Comments panel (§52), the drawing side: a scrollable list on the right of
+// Comments panel (F-12), the drawing side: a scrollable list on the right of
 // the player with the comments as the comments section shows them: avatar,
 // @handle, age, text (timestamps seek), likes, replies to expand. Read only:
 // no liking or replying from here. Scrolling near the end loads the next page.

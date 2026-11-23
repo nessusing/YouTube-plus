@@ -1,4 +1,4 @@
-// The whole timeline for one video in one mode (§51). Pure: the
+// The whole timeline for one video in one mode (F-12). Pure: the
 // comments, Gemini's placements and the parameters in, the cards out.
 
 import type { Placement } from './ai';
@@ -42,7 +42,7 @@ export function prepareComments(raw: Comment[], p: DanmakuParams): { comments: C
 const ONCE: ReadonlySet<SlotKind> = new Set(['local', 'ai', 'ambient']);
 
 /**
- * A new timeline replaces only what has not started by `now` (§51.5):
+ * A new timeline replaces only what has not started by `now` (F-12):
  * cards that started stay, so seeking back replays them. The new timeline
  * fills everything else, before `now` too (a first layout mid-video, or a
  * part skipped by seeking), keeping clear of the kept cards (with the gap)

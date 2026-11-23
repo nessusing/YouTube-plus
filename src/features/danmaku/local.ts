@@ -1,4 +1,4 @@
-// Local mode (§51.5): spread comments without timestamps over
+// Local mode (F-12): spread comments without timestamps over
 // the video by heat, without Gemini. Same video, same result: the randomness
 // is seeded by the videoId.
 

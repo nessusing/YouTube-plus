@@ -1,5 +1,5 @@
 // The player's own tooltip markup, so its styles apply; the player never shows
-// tooltips for our buttons (§40.2, §44).
+// tooltips for our buttons (F-10, F-07).
 
 export interface PlayerTooltip {
   el: HTMLElement;

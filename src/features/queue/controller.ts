@@ -1,9 +1,9 @@
-// Playlist mode, isolated side (design §24): decide whether to take over Add
+// Playlist mode, isolated side (F-05): decide whether to take over Add
 // to queue, add to the chosen list, keep the top bar button and the playlist
-// panel in step with the list whoever edits it (§24.8), and after a video from
+// panel in step with the list whoever edits it (F-05-AC13), and after a video from
 // the list is watched, move on to the next one and remove it. The entry
 // playing may also be removed while it plays (Clear all, Remove watched, a
-// drag out of the panel: §47, §48); it plays on, then what came after it.
+// drag out of the panel: F-06); it plays on, then what came after it.
 
 import { t } from '@/core/i18n';
 import { notify } from '@/core/notify';
@@ -23,7 +23,7 @@ import type { Playing, Rpc } from './rpc';
 const RECHECK_MS = 5_000;
 /** Edits closer together than this are handled as one (clear all sends one per 100). */
 const EDIT_BATCH_MS = 300;
-/** Removals can take a few seconds to show in reads (§21.4). */
+/** Removals can take a few seconds to show in reads (F-05). */
 const READ_WAITS = [0, 1500, 3000, 5000];
 /** A list reads as missing for its first second or two (findings F16): read again before believing it is gone. */
 const GONE_WAITS = [1500, 3000];
@@ -45,15 +45,15 @@ export class QueueController {
   private unsubProfile: (() => void) | undefined;
   private modeToast: QueueMode | undefined;
   private pending: Plan | undefined;
-  /** The list a removal is armed for (unload, §28.1), if any. */
+  /** The list a removal is armed for (unload, F-05-AC10), if any. */
   private armedFor: string | undefined;
   private toolsOn = false;
-  /** The video reloaded inside the list by the fallback attach (§24.2), until it ends. */
+  /** The video reloaded inside the list by the fallback attach (F-05-AC6), until it ends. */
   private attached: string | undefined;
-  /** The entry playing was removed (§47, §48): its videoId, and the entries up to it as the list was. */
+  /** The entry playing was removed (F-06): its videoId, and the entries up to it as the list was. */
   private removedHere: { videoId: string; upTo: string[] } | undefined;
   private edits: { expect: Expect; timer: ReturnType<typeof setTimeout> } | undefined;
-  /** The latest look at the list, ours or the panel's; the count is taken from it (§24.8). */
+  /** The latest look at the list, ours or the panel's; the count is taken from it (F-05-AC13). */
   private snap: ListSnapshot | undefined;
   /** Edits seen lately, applied on top of any snapshot until reads surely show them. */
   private overlay: { expect: Expect; until: number } | undefined;
@@ -121,7 +121,7 @@ export class QueueController {
     await this.apply();
   }
 
-  /** Is the chosen list there, and can this identity edit it (§24.1, §24.5)? */
+  /** Is the chosen list there, and can this identity edit it (F-05-AC4, F-05)? */
   private async checkList(): Promise<void> {
     const id = this.profile.listId!;
     try {
@@ -176,7 +176,7 @@ export class QueueController {
   }
 
   /**
-   * List `id` was deleted elsewhere: forget it for this identity (§24.5).
+   * List `id` was deleted elsewhere: forget it for this identity (F-05).
    * False, and nothing cleared, if another list was chosen while `id` was being
    * checked: the check takes seconds, and the choice is read again at the end.
    */
@@ -209,7 +209,7 @@ export class QueueController {
     return this.items;
   }
 
-  /** A read says the list is not there (deleted elsewhere): check, then forget it and say so (§24.5, findings F5). */
+  /** A read says the list is not there (deleted elsewhere): check, then forget it and say so (F-05, findings F5). */
   private async noticeGone(listId: string): Promise<void> {
     if (await this.goneForSure(listId) !== 'gone') return;
     const name = this.listName();
@@ -257,7 +257,7 @@ export class QueueController {
     }
   }
 
-  // ---------- §24.8 keep the UI in step ----------
+  // ---------- F-05-AC13 keep the UI in step ----------
 
   /** Any successful edit of a list, by the page or by us. */
   onEdited(e: ListEdit): void {
@@ -361,7 +361,7 @@ export class QueueController {
     else void this.refresh();
   }
 
-  /** A tab open while the mode changed keeps its own queue until reloaded (§24.6). */
+  /** A tab open while the mode changed keeps its own queue until reloaded (F-05-AC8). */
   private showModeToast(mode: QueueMode): void {
     if (document.visibilityState !== 'visible') {
       this.modeToast = mode;
@@ -371,7 +371,7 @@ export class QueueController {
     notify(t(mode === 'playlist' ? 'queue.switchedPlaylist' : 'queue.switchedNative'), { action: { label: t('queue.reload'), run: () => location.reload() } });
   }
 
-  // ---------- §24.2 add ----------
+  // ---------- F-05-AC6 add ----------
 
   async onAdd(videoIds: string[]): Promise<void> {
     const listId = this.listId;
@@ -420,7 +420,7 @@ export class QueueController {
 
   /**
    * Watching a video outside any list (watch page or miniplayer): show the
-   * list next to it like the native queue, to play after it (§24.2). Another
+   * list next to it like the native queue, to play after it (F-05-AC6). Another
    * list playing: leave it, the toast is all.
    */
   private async attachIfIdle(listId: string, expect: Expect | undefined): Promise<void> {
@@ -437,7 +437,7 @@ export class QueueController {
     }
   }
 
-  /** Add to queue went to YouTube's own queue: say why, once per page (§24.1). */
+  /** Add to queue went to YouTube's own queue: say why, once per page (F-05-AC4). */
   onNativeAdd(): void {
     if (this.hinted) return;
     if (this.decision === 'noList') notify(t('queue.noList'), { action: { label: t('queue.toSettings'), run: openSettings } });
@@ -446,7 +446,7 @@ export class QueueController {
     this.hinted = true;
   }
 
-  // ---------- §24.4 play and remove watched ----------
+  // ---------- F-05 play and remove watched ----------
 
   async play(): Promise<void> {
     const listId = this.listId;
@@ -454,7 +454,7 @@ export class QueueController {
     try {
       const items = await this.readItems();
       this.showButton();
-      // The list already playing (say in the miniplayer): carry on with that entry (§24.4).
+      // The list already playing (say in the miniplayer): carry on with that entry (F-05).
       const now = await this.rpc.playing();
       const current = now.playlistId === listId ? items.find((i) => i.videoId === now.videoId) : undefined;
       const target = current ?? items[0];
@@ -494,7 +494,7 @@ export class QueueController {
     const items = await this.readItems();
     const r = this.removedHere;
     // Removed while playing: nothing left to remove; next is the first entry
-    // after it, or added since. None: YouTube's autoplay decides (§47, §48).
+    // after it, or added since. None: YouTube's autoplay decides (F-06).
     if (r?.videoId === e.videoId) return { videoId: e.videoId, next: nextAfterRemoved(items, r.upTo) };
     return { videoId: e.videoId, ...nextAfter(items, e.videoId, e.index) };
   }
@@ -518,7 +518,7 @@ export class QueueController {
     return p && p.next ? p : this.plan(e);
   }
 
-  /** Ended: go to the next entry ourselves, then remove the one just watched (§21.4). */
+  /** Ended: go to the next entry ourselves, then remove the one just watched (F-05). */
   private async afterEnded(e: PlayerEvent, listId: string): Promise<void> {
     const p = await this.takePlan(e);
     if (p.next) {
@@ -540,23 +540,23 @@ export class QueueController {
     if (p.watched) await this.remove(listId, p.watched);
   }
 
-  // ---------- §47, §48 the entry playing removed ----------
+  // ---------- F-06 the entry playing removed ----------
 
   /**
    * Entries of `listId` were removed by Clear all / Remove watched or a drag
    * out of the panel. If the entry playing was one of them, it plays on; when
-   * it ends, the first entry after it plays (§24.4 otherwise unchanged).
+   * it ends, the first entry after it plays (F-05 otherwise unchanged).
    */
   noteRemoved(listId: string, before: ListItem[], removed: string[], playing: Playing): void {
     if (this.decision !== 'take' || listId !== this.listId || playing.playlistId !== listId) return;
     const upTo = removedPlaying(before, removed, playing);
     if (!upTo || !playing.videoId) return;
     this.removedHere = { videoId: playing.videoId, upTo };
-    // A removal armed for closing the tab (§28.1) would now fail.
+    // A removal armed for closing the tab (F-05-AC10) would now fail.
     if (this.pending?.videoId === playing.videoId) void this.dropPlan();
   }
 
-  /** An entry dragged out of the panel (§48): removed, or back in its place. */
+  /** An entry dragged out of the panel (F-06): removed, or back in its place. */
   async onDropped(d: Dropped): Promise<void> {
     if (!d.ok) {
       this.log.warn(`drag out: removing ${d.videoId} from ${d.listId} failed: ${d.error ?? ''}`);
@@ -584,7 +584,7 @@ export class QueueController {
     if (r.ok) {
       this.log.info(`watched ${item.videoId}: removed from ${listId}`);
     } else if (r.status === 400) {
-      // Precondition failed: already removed somewhere else (§21.4).
+      // Precondition failed: already removed somewhere else (F-05).
       this.log.debug(`watched ${item.videoId}: already gone from ${listId}`);
     } else {
       this.log.warn(`watched ${item.videoId}: removing from ${listId} failed: ${r.error ?? r.status}`);

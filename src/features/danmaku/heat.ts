@@ -1,4 +1,4 @@
-// How "hot" a comment is (§51.5, used by both modes):
+// How "hot" a comment is (F-12, used by both modes):
 // heat = likeWeight × likes' + replyWeight × replies' + recencyWeight × newness',
 // each term normalized to 0–1 over this video's comments.
 

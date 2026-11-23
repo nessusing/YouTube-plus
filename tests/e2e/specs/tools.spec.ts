@@ -1,7 +1,7 @@
-// "Clear all" and "Remove watched" in the official ⋮ menus (design §47):
+// "Clear all" and "Remove watched" in the official ⋮ menus (F-06):
 // on the page of a list we can edit, and while taking over, in the panel
 // showing the chosen list. No confirm, no undo. Dragging an entry out of the
-// panel removes it (§48).
+// panel removes it (F-06).
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures';
 import { VIDEOS } from '../support/env';
@@ -131,7 +131,7 @@ test.describe('panel beside the watch page', () => {
   });
 });
 
-test.describe('drag out of the panel (§48)', () => {
+test.describe('drag out of the panel (F-06)', () => {
   const rows = (page: Page) => page.locator('ytd-watch-flexy ytd-playlist-panel-renderer ytd-playlist-panel-video-renderer:visible');
 
   /** Drag `row` by its handle to (x, y), slowly enough for the page's drag to follow. */

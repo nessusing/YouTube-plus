@@ -1,4 +1,4 @@
-// AI placement through Gemini's YouTube app (§51.5): the
+// AI placement through Gemini's YouTube app (F-12): the
 // prompt from the user-editable template, and the compact one-line-per-comment
 // reply. Measured 2026-11-22: only confidence ≥ 0.9 is reliable (all within
 // 5 s); 0.5–0.8 can be minutes off, so it becomes ambient. Comments on Chinese

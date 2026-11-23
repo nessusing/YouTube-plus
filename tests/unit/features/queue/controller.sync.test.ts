@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // QueueController: the top bar count and the playlist panel follow the list,
-// whoever edits it (§24.8).
+// whoever edits it (F-05-AC13).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ListAction } from '@/features/queue/core';
 import { setup, type Harness } from '../../../support/queue-harness';

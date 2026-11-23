@@ -1,6 +1,6 @@
-// The bar at the bottom left that stands in for a hidden miniplayer: §44
-// (minimized, shows the title) and §50 (popped out to a PiP window). One look,
-// one element per part; notifications rise above whichever is showing (§46).
+// The bar at the bottom left that stands in for a hidden miniplayer: F-07
+// (minimized, shows the title) and F-11 (popped out to a PiP window). One look,
+// one element per part; notifications rise above whichever is showing (F-02).
 
 import { MINI_BAR_TAG } from './consts';
 

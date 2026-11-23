@@ -1,4 +1,4 @@
-// Switching mode in a tab that is already open (§24.6; agreed: takes effect
+// Switching mode in a tab that is already open (F-05-AC8; agreed: takes effect
 // at once; switching to the native queue, the extension keeps out).
 // States: ② a single video in the miniplayer, ③ the native queue in the
 // miniplayer, ④ our list playing.

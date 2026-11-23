@@ -1,4 +1,4 @@
-// Queue core (design §24, §47, §48). Pure: no DOM, no fetch, no storage.
+// Queue core (F-05, F-06). Pure: no DOM, no fetch, no storage.
 
 export interface ListItem { videoId: string; setVideoId: string; /** 0-100, from the resume overlay */ percent?: number }
 
@@ -30,7 +30,7 @@ export const LOOP_WRAP_S = 1.5;
 
 /**
  * Between two time updates the video jumped from its last moments back to its
- * first: the loop (§40.2) wrapped it. Dragging the progress bar back to the
+ * first: the loop (F-10) wrapped it. Dragging the progress bar back to the
  * start from anywhere earlier does not count.
  */
 export function isLoopWrap(prevTime: number, time: number, duration: number): boolean {
@@ -38,7 +38,7 @@ export function isLoopWrap(prevTime: number, time: number, duration: number): bo
 }
 
 /**
- * Another video started: does the one left count as watched (§24.4, §40.2)?
+ * Another video started: does the one left count as watched (F-05, F-10)?
  * Looped at least once and moved on inside the same list: yes. Loop still on
  * otherwise: no, it is being watched on repeat. Else: under 10 s were left.
  */
@@ -51,17 +51,17 @@ export function leftCountsAsWatched(e: {
   return isWatchedHere(e.currentTime, e.duration, false);
 }
 
-// ---- per-identity queue settings (§22 Q17/Q22, §24.7) ----
+// ---- per-identity queue settings (F-05 Q17/Q22, F-05-AC1) ----
 
 export type QueueMode = 'native' | 'playlist';
 
 export interface QueueProfile {
   mode: QueueMode;
-  /** The chosen playlist (§24.5); absent = none chosen. */
+  /** The chosen playlist (F-05); absent = none chosen. */
   listId?: string;
   /** Its title, for display only; refreshed when the list is read. */
   listName?: string;
-  /** "Remove from the playlist after playing" (§24.4). */
+  /** "Remove from the playlist after playing" (F-05). */
   removeWatched: boolean;
 }
 
@@ -80,7 +80,7 @@ export function profileWithDefaults(stored: Partial<QueueProfile> | undefined): 
   return p;
 }
 
-// ---- when to take over "Add to queue" (§24.1) ----
+// ---- when to take over "Add to queue" (F-05-AC4) ----
 
 export interface TakeoverInput {
   featureOn: boolean;
@@ -88,7 +88,7 @@ export interface TakeoverInput {
   loggedIn: boolean;
   /** undefined while the check is still running */
   editable: boolean | undefined;
-  /** Responses stopped matching what we expect (§26); paused until reload. */
+  /** Responses stopped matching what we expect (F-05-AC15); paused until reload. */
   protocolError: boolean;
 }
 
@@ -105,7 +105,7 @@ export function decideTakeover(i: TakeoverInput): Takeover {
   return i.editable ? 'take' : 'native';
 }
 
-// ---- recognising "Add to queue" (§21.2, §21.3) ----
+// ---- recognising "Add to queue" (F-05-AC5, F-05-AC7) ----
 
 export const QUEUE_LIST_TYPE = 'PLAYLIST_EDIT_LIST_TYPE_QUEUE';
 export const QUEUE_ICON = 'ADD_TO_QUEUE_TAIL';
@@ -113,7 +113,7 @@ export const QUEUE_ICON = 'ADD_TO_QUEUE_TAIL';
 /**
  * Read a `yt-action` event's detail. `queue`: an Add to queue we can take over.
  * `malformed`: it is an Add to queue but not shaped as recorded (YouTube
- * changed?): leave it to the page (§26). `other`: anything else.
+ * changed?): leave it to the page (F-05-AC15). `other`: anything else.
  */
 export function parseQueueAction(detail: unknown):
   | { kind: 'queue'; videoIds: string[] }
@@ -153,7 +153,7 @@ export function addActions(videoIds: string[]): ListAction[] {
   return videoIds.map((v) => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: v, dedupeOption: 'DEDUPE_OPTION_SKIP' }));
 }
 
-// ---- after a video is watched (§24.4) ----
+// ---- after a video is watched (F-05) ----
 
 /**
  * Given the list as it is now on the server, find the entry just watched and
@@ -172,7 +172,7 @@ export function nextAfter(items: ListItem[], videoId: string, hintIndex?: number
   return { watched: items[idx], next: items[idx + 1] };
 }
 
-// ---- attach the list to the video playing (§24.2) ----
+// ---- attach the list to the video playing (F-05-AC6) ----
 
 type Obj = Record<string, unknown>;
 const obj = (x: unknown): Obj | undefined => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Obj) : undefined);
@@ -241,8 +241,8 @@ export function nextRows(next: unknown): ListItem[] {
 /**
  * What to hand the playlist manager for the video playing now: the list as
  * the server has it when that video is in it. A video from outside the list
- * (`attach`, §24.2) gets the queue view above. Playing the list but no longer
- * in it (just watched and removed, §24.4): the list as the server has it, and
+ * (`attach`, F-05-AC6) gets the queue view above. Playing the list but no longer
+ * in it (just watched and removed, F-05): the list as the server has it, and
  * no autoplay, so what plays next stays YouTube's call.
  */
 export function panelView(next: unknown, now: { videoId: string; title: string; author: string; duration: number }, attach: boolean): { list: Obj; autoplay?: Obj } | undefined {
@@ -256,11 +256,11 @@ export function panelView(next: unknown, now: { videoId: string; title: string; 
   return autoplay ? { list: { ...list }, autoplay: { ...autoplay } } : undefined;
 }
 
-// ---- keeping the UI in step with the list (§24.8) ----
+// ---- keeping the UI in step with the list (F-05-AC13) ----
 
 /**
  * What a list edit should look like once reads catch up (removals can take a
- * few seconds to show, §21.4): these videos in it, these entries gone.
+ * few seconds to show, F-05): these videos in it, these entries gone.
  */
 export interface Expect {
   has?: string[];
@@ -342,7 +342,7 @@ export function panelSnapshot(data: unknown, at: number): { playlistId: string; 
   return { playlistId: d.playlistId, snap: { rows, total: Math.max(rows.length, total), at } };
 }
 
-// ---- reading a playlist (§21.4) ----
+// ---- reading a playlist (F-05) ----
 
 const arr = (x: unknown): unknown[] => (Array.isArray(x) ? x : []);
 
@@ -415,7 +415,7 @@ export function listSignature(items: ListItem[]): string {
   return items.map((i) => i.setVideoId || i.videoId).join(',');
 }
 
-// ---- clear all / remove watched (§47), drag out to delete (§48) ----
+// ---- clear all / remove watched (F-06), drag out to delete (F-06) ----
 
 export type ToolOp = 'all' | 'watched';
 
@@ -433,7 +433,7 @@ export function clearNotice(picked: number, failed: number): { key: 'queue.nothi
 }
 
 /**
- * Our marker in the command of a menu item we add to the official ⋮ (§47):
+ * Our marker in the command of a menu item we add to the official ⋮ (F-06):
  * `{ [TOOL_KEY]: { op, listId } }`.
  */
 export const TOOL_KEY = 'ytppQueueTool';
@@ -447,14 +447,14 @@ export function toolOf(cmd: unknown): ToolCommand | undefined {
 
 /**
  * A menu's items with ours taken out, and put back at the bottom when they
- * belong there: the popup and the page reuse menus across lists (§21.3).
+ * belong there: the popup and the page reuse menus across lists (F-05-AC7).
  */
 export function withTools<T>(items: T[], ours: T[], isOurs: (x: T) => boolean): T[] {
   return [...items.filter((x) => !isOurs(x)), ...ours];
 }
 
 /**
- * The page's own reorder request after a drop outside the panel (§48): the
+ * The page's own reorder request after a drop outside the panel (F-06): the
  * entry moved back where it was. Swap that move for a removal; undefined when
  * the request is not that one.
  */
@@ -472,7 +472,7 @@ export function moveToRemove(body: unknown, listId: string, setVideoId: string):
 }
 
 /**
- * The video playing was among the entries just removed (§47, §48): the entries
+ * The video playing was among the entries just removed (F-06): the entries
  * up to and including it, by setVideoId, from the list as it was. What plays
  * after it is then the first entry not among them. Undefined when the entry
  * playing was not removed. `index` picks between duplicates.

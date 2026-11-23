@@ -1,5 +1,5 @@
-// The watch page's small window (§49): when to float, where it goes by
-// default, and timestamp parsing for §36.4. Pure, unit-tested.
+// The watch page's small window (F-08): when to float, where it goes by
+// default, and timestamp parsing for F-08-AC5. Pure, unit-tested.
 
 import type { SavedPos } from './geometry';
 

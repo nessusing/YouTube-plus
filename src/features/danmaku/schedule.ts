@@ -1,4 +1,4 @@
-// The timeline (§51.6): one card at a time, a gap between cards,
+// The timeline (F-12-AC10): one card at a time, a gap between cards,
 // timestamped cards first, then the rest chosen by weighted interval
 // scheduling (dynamic programming), then idle stretches filled with ambient
 // comments. All times are seconds on a STEP_SEC grid.

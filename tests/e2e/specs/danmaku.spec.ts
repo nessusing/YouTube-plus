@@ -260,6 +260,31 @@ test.describe('comment danmaku', () => {
     await page.evaluate(() => document.querySelector('.ytpp-e2e-caption')?.remove());
   });
 
+  test('F-12-AC11 the three styles switch at once: caption card, flying, side panel', async ({ page, open, ctx }) => {
+    await seed(ctx, VIDEOS.a, [{ id: 'f', text: '0:50 the short one that flies across', stamped: true }]);
+    await setDanmaku(ctx, true, { style: 'card' });
+    await openWatch(page, open, VIDEOS.a);
+    await pauseAt(page, 51);
+    await expectCard(page, 'the short one that flies across');
+    const flying = () => page.evaluate(() => [...(document.querySelector('#movie_player .ytpp-dm-fly')?.shadowRoot?.querySelectorAll('.strip') ?? [])].map((e) => e.textContent ?? ''));
+    const panelShown = () => page.evaluate(() => !!document.querySelector('#movie_player .ytpp-dm-panel'));
+
+    // As the settings page saves it: no reload.
+    await setDanmaku(ctx, true, { style: 'fly' });
+    await expect.poll(flying).toEqual([expect.stringContaining('the short one that flies across')]);
+    expect(await card(page)).toBeUndefined();
+    expect(await panelShown()).toBe(false);
+
+    await setDanmaku(ctx, true, { style: 'panel' });
+    await expect.poll(panelShown, { timeout: 20_000 }).toBe(true);
+    expect(await flying()).toEqual([]);
+    expect(await card(page)).toBeUndefined();
+
+    await setDanmaku(ctx, true, { style: 'card' });
+    await expectCard(page, 'the short one that flies across');
+    await expect.poll(panelShown).toBe(false);
+  });
+
   test('F-12-AC9 AI mode uses Gemini\'s confident times; hidden comments never show', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [
       { id: 'ai', text: AI_TEXT, likes: 50 },

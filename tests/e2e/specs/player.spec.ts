@@ -298,3 +298,25 @@ test('F-09-AC1 back to top: shows after scrolling, jumps to the top, hides again
   await expect.poll(() => scrollY(page)).toBe(0);
   await expect.poll(async () => (await btn())?.className).not.toContain('show');
 });
+
+test('F-09-AC2 where back to top and the miniplayer overlap, the miniplayer is on top', async ({ page, open }) => {
+  await open(`/watch?v=${VIDEOS.a}`);
+  await waitForVideo(page, VIDEOS.a);
+  await toMini(page);
+  await page.mouse.move(400, 400);
+  await page.mouse.wheel(0, 1500);
+  const btn = () => inClosedShadow(page, 'ytpp-back-to-top', 'button');
+  await expect.poll(async () => (await btn())?.className).toContain('show');
+  await page.waitForTimeout(300);
+  const b = (await btn())!;
+  const m = (await page.locator('ytd-miniplayer').boundingBox())!;
+  // The overlap of the two, if any.
+  const x0 = Math.max(b.x, m.x), x1 = Math.min(b.x + b.w, m.x + m.width);
+  const y0 = Math.max(b.y, m.y), y1 = Math.min(b.y + b.h, m.y + m.height);
+  expect(x1 > x0 && y1 > y0, `they overlap: button ${JSON.stringify(b)}, miniplayer ${JSON.stringify(m)}`).toBe(true);
+  const onTop = await page.evaluate(([x, y]) => {
+    const hit = document.elementFromPoint(x!, y!);
+    return hit?.closest('ytd-miniplayer') ? 'miniplayer' : hit?.tagName.toLowerCase();
+  }, [(x0 + x1) / 2, (y0 + y1) / 2]);
+  expect(onTop).toBe('miniplayer');
+});

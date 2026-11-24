@@ -32,11 +32,13 @@ const headerMore = (page: Page) => page.locator('yt-page-header-renderer:visible
 /** The ⋮ in the panel's header (beside the watch page). */
 const panelMore = (page: Page) => page.locator('ytd-watch-flexy ytd-playlist-panel-renderer').locator('#overflow-menu ytd-menu-renderer button, #overflow-menu-top-row ytd-menu-renderer button').locator('visible=true').first();
 
-async function openMenu(page: Page, more: Locator): Promise<string[]> {
+/** Open a ⋮ menu; `ours`: whether our two items belong in it (then wait for them). */
+async function openMenu(page: Page, more: Locator, ours = true): Promise<string[]> {
   await more.click();
   await expect(menuItems(page).first()).toBeVisible({ timeout: 10_000 });
-  // Ours go in right as it opens; let the menu settle.
-  await page.waitForTimeout(300);
+  // Ours go in once it opens, sometimes a moment later (seen flaky with a fixed 300 ms wait).
+  if (ours) await expect.poll(async () => (await itemTexts(page)).slice(-2), { timeout: 5000 }).toEqual(OURS);
+  else await page.waitForTimeout(1500); // time enough for them to have gone in, were they wrongly added
   return itemTexts(page);
 }
 
@@ -92,7 +94,7 @@ test.describe('list page', () => {
     await open(`/playlist?list=${other}`);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(3000);
-    const texts = await openMenu(page, headerMore(page));
+    const texts = await openMenu(page, headerMore(page), false);
     for (const o of OURS) expect(texts).not.toContain(o);
   });
 });
@@ -126,7 +128,7 @@ test.describe('panel beside the watch page', () => {
     await open(`/watch?v=${VIDEOS.a}&list=${other}`);
     await waitForVideo(page, VIDEOS.a);
     await expect.poll(async () => (await panelData(page)).playlistId).toBe(other);
-    const texts = await openMenu(page, panelMore(page));
+    const texts = await openMenu(page, panelMore(page), false);
     for (const o of OURS) expect(texts).not.toContain(o);
   });
 });

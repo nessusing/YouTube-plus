@@ -133,8 +133,15 @@ export class TestLists {
           ...items.map((i): ListAction => ({ action: 'ACTION_REMOVE_VIDEO', setVideoId: i.setVideoId })),
           ...videoIds.map((v): ListAction => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: v })),
         ];
-        if (actions.length) await this.edit(this.helper, id, actions);
-        await expect.poll(() => this.videos(id), { timeout: 30_000, message: `filling test list ${label}` }).toEqual(videoIds);
+        // A stale read can name an entry already removed (HTTP 400), and reads can
+        // lag past the wait: both just mean another round (D-022, seen flaky).
+        try {
+          if (actions.length) await this.edit(this.helper, id, actions);
+          await expect.poll(() => this.videos(id), { timeout: 30_000, message: `filling test list ${label}` }).toEqual(videoIds);
+        } catch (e) {
+          if (round === 3) throw e;
+          continue;
+        }
       }
       await new Promise((r) => setTimeout(r, 3000));
       if (same(await this.videos(id))) return;

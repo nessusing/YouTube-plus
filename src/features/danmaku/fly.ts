@@ -8,7 +8,8 @@
 import type { Comment } from './comments';
 import type { DisplayParams } from './params';
 import type { Slot, SlotKind } from './schedule';
-import { estimateLines } from './timing';
+import { AVATAR_EM, CHAR_EM, commentLines } from './timing';
+import { displayWidth } from './text';
 
 export interface FlyItem {
   c: Comment;
@@ -42,7 +43,7 @@ export function flyItems(slots: Slot[], p: DisplayParams): FlyItem[] {
   for (const s of slots) {
     let at = s.start;
     s.items.forEach((c, i) => {
-      if (estimateLines(c.text, p, `${c.author} `) <= p.flyMaxLines) {
+      if (commentLines(c, p) <= p.flyMaxLines) {
         out.push({ c, start: at, cross: lo + (hi - lo) * hash01(c.id), kind: s.kind, conf: s.conf });
       }
       at += s.durs[i] ?? 0;
@@ -104,4 +105,12 @@ export function assignLanes(items: Pick<FlyItem, 'start' | 'cross'>[], widths: n
     inLane[l]!.push({ start: it.start, cross: it.cross, w });
     return l;
   });
+}
+
+/**
+ * A strip's width in px at this font size, estimated for lane planning
+ * (drawing measures): text, padding, member emoji, and the avatar (F-19-AC2).
+ */
+export function estimateFlyWidth(c: Pick<Comment, 'author' | 'text' | 'images' | 'avatar'>, font: number): number {
+  return font * (CHAR_EM * displayWidth(`${c.author} ${c.text}`, 2) + 1.5 + c.images.length + (c.avatar ? AVATAR_EM : 0));
 }

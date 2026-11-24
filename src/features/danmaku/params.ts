@@ -157,7 +157,7 @@ export const DEFAULT_PARAMS: DanmakuParams = {
     prompt: '', batchSize: 100, commentMaxChars: 400, highConf: 0.9,
     relevanceWeight: 2, heatWeight: 1, ambient: true, idleSec: 20, fallback: 'local',
   },
-  cache: { days: 7, mb: 2 },
+  cache: { days: 7, mb: 3 },
 };
 
 /** The prompt in use. */

@@ -2,10 +2,9 @@
 // player from right to left in lanes from the top. Shared by the player
 // overlay and the options page preview; drawn from video time every frame.
 
-import { commentNodes, fontPx, LINE_HEIGHT, sourceLabel } from './card-view';
-import { assignLanes, type FlyItem, flySec, xAt } from './fly';
+import { AVATAR_CSS, commentNodes, fontPx, LINE_HEIGHT, sourceLabel } from './card-view';
+import { assignLanes, estimateFlyWidth, type FlyItem, flySec, xAt } from './fly';
 import type { DisplayParams } from './params';
-import { displayWidth } from './text';
 
 const CSS = `
 :host { all: initial; position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 40; }
@@ -16,15 +15,14 @@ const CSS = `
   padding: 0.2em 0.75em; border-radius: 999px; will-change: transform;
 }
 .handle { opacity: 0.72; font-weight: 500; margin-right: 0.45em; }
-.strip img { height: 1em; width: auto; vertical-align: -0.15em; }
+${AVATAR_CSS}
+.strip img:not(.avatar) { height: 1em; width: auto; vertical-align: -0.15em; }
 .src { margin-left: 0.6em; font-size: 0.7em; opacity: 0.8; }
 `;
 
 /** Space between lanes and between comments in a lane, in em. */
 const LANE_GAP = 0.3;
 const ITEM_GAP = 1.5;
-/** Average width of a Latin character, in em (for lane planning; drawing measures). */
-const CHAR_EM = 0.52;
 
 export interface FlyDrawOptions {
   p: DisplayParams;
@@ -116,7 +114,7 @@ export class FlyView {
   private planFor(items: FlyItem[], width: number, font: number, lanes: number, debug: boolean) {
     const key = `${Math.round(width)}|${font}|${lanes}|${debug}`;
     if (this.plan?.items === items && this.plan.key === key) return this.plan;
-    const est = items.map((it) => font * (CHAR_EM * displayWidth(`${it.c.author} ${it.c.text}`, 2) + 1.5 + it.c.images.length));
+    const est = items.map((it) => estimateFlyWidth(it.c, font));
     const laneOf = assignLanes(items, est, width, lanes, font * ITEM_GAP);
     // Generous: drawing uses real widths, which may be wider than estimated.
     const maxSec = items.reduce((m, it, i) => Math.max(m, flySec(it, est[i]! * 1.5 + font * 4, width)), 0);

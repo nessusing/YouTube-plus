@@ -1,4 +1,4 @@
-// Sample cards for the options page preview (F-12). Fixed comments of
+// Sample cards for the options page preview (F-12, avatars F-19-AC3). Fixed comments of
 // every shape (short, long, CJK, rotating, contents); durations follow the
 // current params, like the real schedule.
 
@@ -7,7 +7,25 @@ import type { Comment } from './comments';
 import type { DanmakuParams } from './params';
 import type { Slot, SlotKind } from './schedule';
 
-const c = (id: string, author: string, text: string, likes = 0): Comment => ({ id: `demo-${id}`, text, author, likes, replies: 0, ageDays: null, stamps: [], images: [], hasLink: false });
+/** Colours for the sample avatars. */
+const AVATAR_BG = ['#5c6bc0', '#26a69a', '#ef6c00', '#ab47bc', '#8d6e63', '#42a5f5', '#d81b60'];
+
+/**
+ * A sample avatar (F-19-AC3): a coloured circle with the handle's first letter,
+ * like YouTube's default avatars; inline, so the settings page needs no network.
+ */
+export function letterAvatar(author: string): string {
+  const letter = [...author.replace(/^@/, '')][0]?.toUpperCase() ?? '?';
+  let h = 0;
+  for (const ch of author) h = (h * 31 + ch.codePointAt(0)!) >>> 0;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="${AVATAR_BG[h % AVATAR_BG.length]}"/>`
+    + `<text x="20" y="27" text-anchor="middle" font-family="Roboto, Arial, sans-serif" font-size="20" fill="#fff">${letter.replace(/[<>&]/g, '')}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+const c = (id: string, author: string, text: string, likes = 0): Comment => ({
+  id: `demo-${id}`, text, author, likes, replies: 0, ageDays: null, stamps: [], images: [], hasLink: false, avatar: letterAvatar(author),
+});
 
 const CARDS: { kind: SlotKind; items: Comment[]; extra?: number; conf?: number }[] = [
   { kind: 'stamp', items: [c('1', '@spacefan', '1:02 Never thought a crater could look this beautiful.')] },

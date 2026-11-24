@@ -26,6 +26,13 @@ export const fontPx = (height: number, p: Pick<DisplayParams, 'fontScale'>): num
 /** The card is at most this share of the player's width. */
 const MAX_WIDTH = 0.8;
 
+/**
+ * The avatar before the handle (F-19-AC1): round, about as tall as a line of
+ * text, top-aligned in the line box so it never makes the line taller. Width
+ * and margin add up to AVATAR_EM (timing.ts).
+ */
+export const AVATAR_CSS = `.avatar { display: inline-block; width: 1.2em; height: 1.2em; margin-right: 0.35em; border-radius: 50%; object-fit: cover; vertical-align: top; position: relative; top: ${(LINE_HEIGHT - 1.2) / 2}em; background: rgba(255, 255, 255, 0.15); }`;
+
 const CSS = `
 :host { all: initial; position: absolute; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; z-index: 40; }
 .card {
@@ -36,7 +43,8 @@ const CSS = `
 .view { overflow: hidden; }
 .text { white-space: pre-line; overflow-wrap: anywhere; transition: transform 300ms ease; }
 .handle { opacity: 0.72; font-weight: 500; margin-right: 0.45em; }
-.text img { height: 1em; width: auto; vertical-align: -0.15em; }
+${AVATAR_CSS}
+.text img:not(.avatar) { height: 1em; width: auto; vertical-align: -0.15em; }
 .corner {
   position: absolute; top: calc(100% + 3px); font-size: max(10px, 0.7em); line-height: 1.5; padding: 0 0.6em; border-radius: 1em;
   background: rgba(8, 8, 8, 0.8); color: #ddd; white-space: nowrap;
@@ -57,9 +65,21 @@ export interface DrawOptions {
   debug?: boolean;
 }
 
-/** The comment as nodes: "@handle" then the text, member emoji as inline images. */
+/**
+ * The comment as nodes: the avatar (F-19-AC1; none without an address, removed
+ * if it fails to load), "@handle", then the text, member emoji as inline images.
+ */
 export function commentNodes(doc: Document, c: Comment): Node[] {
   const out: Node[] = [];
+  if (c.avatar) {
+    const av = doc.createElement('img');
+    av.className = 'avatar';
+    av.alt = '';
+    av.referrerPolicy = 'no-referrer';
+    av.addEventListener('error', () => av.remove());
+    av.src = c.avatar;
+    out.push(av);
+  }
   const handle = doc.createElement('span');
   handle.className = 'handle';
   handle.textContent = c.author;

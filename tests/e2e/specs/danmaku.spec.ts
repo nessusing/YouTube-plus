@@ -16,7 +16,14 @@ interface Seeded {
   likes?: number;
   /** Timestamps written in the text as m:ss. */
   stamped?: boolean;
+  /** The author's avatar (F-19). */
+  avatar?: string;
 }
+
+/** A small round-ish image that needs no network (F-19). */
+const AVATAR_OK = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="#26a69a"/></svg>')}`;
+/** An avatar address that does not load. */
+const AVATAR_BROKEN = 'https://www.youtube.com/ytpp-e2e-missing-avatar.png';
 
 /**
  * Seven estimated lines (refLineWidth 50): 4 × screenSec = 20 s on the card,
@@ -33,7 +40,7 @@ function comment(s: Seeded) {
   const stamps = s.stamped
     ? [...s.text.matchAll(/\b(\d{1,2}):(\d{2})\b/g)].map((m) => ({ sec: Number(m[1]) * 60 + Number(m[2]), start: m.index!, len: m[0].length }))
     : [];
-  return { id: s.id, text: s.text, author: `@e2e-${s.id}`, likes: s.likes ?? 1, replies: 0, ageDays: 10, stamps, images: [], hasLink: false };
+  return { id: s.id, text: s.text, author: `@e2e-${s.id}`, likes: s.likes ?? 1, replies: 0, ageDays: 10, stamps, images: [], hasLink: false, ...(s.avatar ? { avatar: s.avatar } : {}) };
 }
 
 /** A fresh, complete cache entry: run() uses it and fetches nothing. */
@@ -260,6 +267,56 @@ test.describe('comment danmaku', () => {
     await page.evaluate(() => document.querySelector('.ytpp-e2e-caption')?.remove());
   });
 
+  test('F-19-AC1 a round avatar before the handle, on the card and flying; one that fails to load leaves no gap', async ({ page, open, ctx }) => {
+    await seed(ctx, VIDEOS.a, [
+      { id: 'av', text: '0:50 the one with a face next to its name', stamped: true, avatar: AVATAR_OK },
+      { id: 'nf', text: '1:10 this face never loads, so no room for it', stamped: true, avatar: AVATAR_BROKEN },
+    ]);
+    await setDanmaku(ctx, true, { style: 'card' });
+    await openWatch(page, open, VIDEOS.a);
+    /** The avatar and handle of what is shown in `host` (card or strips): geometry and state. */
+    const look = (sel: string, item: string) => page.evaluate(([sel, item]) => {
+      const root = document.querySelector(`#movie_player ${sel}`)?.shadowRoot;
+      const box = root?.querySelector<HTMLElement>(item);
+      if (!box || box.hidden) return undefined;
+      const img = box.querySelector<HTMLImageElement>('img.avatar');
+      const handle = box.querySelector<HTMLElement>('.handle')!;
+      const cs = getComputedStyle(box);
+      const h = handle.getBoundingClientRect();
+      const first = box.querySelector('.text, .strip') ?? box;
+      const textLeft = (first.firstElementChild as HTMLElement | null)?.getBoundingClientRect().left;
+      if (!img) return { img: false, handleFirst: h.left === textLeft };
+      const a = img.getBoundingClientRect();
+      return {
+        img: true, loaded: img.complete && img.naturalWidth > 0, radius: getComputedStyle(img).borderRadius,
+        w: a.width, h: a.height, font: parseFloat(cs.fontSize), line: parseFloat(cs.lineHeight),
+        before: a.right <= h.left + 0.5, sameLine: Math.abs((a.top + a.bottom) / 2 - (h.top + h.bottom) / 2) < parseFloat(cs.lineHeight) / 2,
+      };
+    }, [sel, item] as const);
+
+    await pauseAt(page, 51);
+    await expectCard(page, 'a face next to its name');
+    await expect.poll(async () => (await look('.ytpp-dm-layer', '.card:not(.measure)'))?.loaded).toBe(true);
+    const c = (await look('.ytpp-dm-layer', '.card:not(.measure)'))!;
+    expect(c).toMatchObject({ radius: '50%', before: true, sameLine: true });
+    expect(Math.abs(c.w! - c.h!)).toBeLessThan(1);
+    expect(c.h).toBeGreaterThanOrEqual(c.font!);
+    expect(c.h).toBeLessThanOrEqual(c.line!);
+
+    await pauseAt(page, 71);
+    await expectCard(page, 'this face never loads');
+    await expect.poll(async () => (await look('.ytpp-dm-layer', '.card:not(.measure)'))?.img).toBe(false);
+    expect((await look('.ytpp-dm-layer', '.card:not(.measure)'))!.handleFirst).toBe(true);
+
+    await setDanmaku(ctx, true, { style: 'fly' });
+    await pauseAt(page, 51);
+    await expect.poll(async () => (await look('.ytpp-dm-fly', '.strip'))?.loaded, { timeout: 10_000 }).toBe(true);
+    const f = (await look('.ytpp-dm-fly', '.strip'))!;
+    expect(f).toMatchObject({ radius: '50%', before: true, sameLine: true });
+    expect(f.h).toBeGreaterThanOrEqual(f.font!);
+    expect(f.h).toBeLessThanOrEqual(f.line!);
+  });
+
   test('F-12-AC11 the three styles switch at once: caption card, flying, side panel', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [{ id: 'f', text: '0:50 the short one that flies across', stamped: true }]);
     await setDanmaku(ctx, true, { style: 'card' });
@@ -346,17 +403,19 @@ test.describe('comment danmaku', () => {
     await expect.poll(() => tooltip(page)).toContain('This video has no comments');
   });
 
-  test('F-12-AC4 F-12-AC15 fetches the comments and caches them; the self-check fetches a page', async ({ page, open, ctx }) => {
+  test('F-12-AC4 F-12-AC15 F-19-AC4 fetches the comments and caches them, avatars included; the self-check fetches a page', async ({ page, open, ctx }) => {
     await storageRemove(ctx, 'local', CACHE(VIDEOS.b));
     await setDanmaku(ctx, true);
     await openWatch(page, open, VIDEOS.b);
     // 200 comments for a 4-minute video (minCount), 20 a page.
-    const entry = () => storageGet(ctx, 'local', CACHE(VIDEOS.b)) as Promise<{ complete: boolean; comments: unknown[]; total: number } | undefined>;
+    const entry = () => storageGet(ctx, 'local', CACHE(VIDEOS.b)) as Promise<{ complete: boolean; comments: { avatar?: string }[]; total: number } | undefined>;
     await expect.poll(async () => (await entry())?.complete ?? false, { timeout: 60_000 }).toBe(true);
     const e = (await entry())!;
     expect(e.comments.length).toBeGreaterThanOrEqual(190);
     expect(e.comments.length).toBeLessThanOrEqual(220);
     expect(e.total).toBeGreaterThan(100_000);
+    // F-19-AC4: the cache keeps each author's avatar address.
+    expect(e.comments.filter((c) => /^https:\/\//.test(c.avatar ?? '')).length).toBeGreaterThanOrEqual(e.comments.length * 0.9);
     expect(await tooltip(page)).toMatch(/\d+ comments, \d+ cards · local/);
 
     const sw = await serviceWorker(ctx);

@@ -31,9 +31,9 @@ export interface Comment {
   images: InlineImage[];
   /** A web link or a link to another video. */
   hasLink: boolean;
-  // Only the comments panel uses these (style 'panel'); the danmaku cache leaves them out (lean()).
-  /** The author's avatar. */
+  /** The author's avatar (F-19); missing in comments cached before F-19. */
   avatar?: string;
+  // Only the comments panel uses these (style 'panel'); the danmaku cache leaves them out (lean()).
   /** As YouTube says it, in English: "3 months ago (edited)". */
   published?: string;
   /** 0 for a top-level comment, 1 for a reply, 2 for a reply to a reply. */
@@ -44,9 +44,9 @@ export interface Comment {
   replyToken?: string;
 }
 
-/** Without the fields only the comments panel uses: what the danmaku cache keeps. */
+/** Without the fields only the comments panel uses: what the danmaku cache keeps (the avatar stays, F-19-AC4). */
 export function lean(c: Comment): Comment {
-  const { avatar: _a, published: _p, level: _l, subReplies: _s, replyToken: _r, ...rest } = c;
+  const { published: _p, level: _l, subReplies: _s, replyToken: _r, ...rest } = c;
   return rest;
 }
 

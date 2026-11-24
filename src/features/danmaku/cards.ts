@@ -4,10 +4,10 @@ import type { Comment } from './comments';
 import type { DanmakuParams } from './params';
 import { type Slot } from './schedule';
 import { isToc, stampTimes } from './stamps';
-import { displaySec, STEP_SEC } from './timing';
+import { displaySec, headWidth, STEP_SEC } from './timing';
 
-/** Seconds a comment stays on its card; the "@handle " takes room too. */
-export const durOf = (c: Comment, p: DanmakuParams['display']): number => displaySec(c.text, p, `${c.author} `);
+/** Seconds a comment stays on its card; the avatar and "@handle " take room too (F-19-AC2). */
+export const durOf = (c: Comment, p: DanmakuParams['display']): number => displaySec(c.text, p, headWidth(c, p.cjkWidth));
 
 /**
  * One card per moment, before placement. A table of contents is one card at

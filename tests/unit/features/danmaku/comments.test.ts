@@ -180,10 +180,10 @@ describe('fields for the comments panel (F-12)', () => {
     expect(p.next).toBe('NEXT-REPLIES');
   });
 
-  it('F-12-AC15 lean() drops them for the danmaku cache', () => {
+  it('F-12-AC15 F-19-AC4 lean() drops the panel-only fields for the danmaku cache, keeps the avatar', () => {
     const c = parsePage(page({ entities: [withAvatar('A')], threads: ['A'] }), VID).comments[0]!;
     const l = lean({ ...c, replyToken: 'T', level: 1, subReplies: [c] });
-    expect(l).not.toHaveProperty('avatar');
+    expect(l).toHaveProperty('avatar', 'https://yt3.test/A=s88');
     expect(l).not.toHaveProperty('published');
     expect(l).not.toHaveProperty('replyToken');
     expect(l).not.toHaveProperty('level');

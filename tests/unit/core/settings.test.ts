@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, withDefaults } from '@/core/settings';
+import { DEFAULT_SETTINGS, FEATURES, withDefaults } from '@/core/settings';
 
 describe('withDefaults', () => {
   it('F-01-AC1 returns defaults for nothing stored', () => {
@@ -8,9 +8,15 @@ describe('withDefaults', () => {
 
   it('F-01-AC1 keeps stored values and fills in new keys', () => {
     const s = withDefaults({ features: { queue: false }, player: { backToTop: false } });
-    expect(s.features).toEqual({ tldr: true, queue: false, player: true, danmaku: false });
+    expect(s.features).toEqual({ tldr: true, queue: false, player: true, danmaku: false, thumbs: false });
     expect(s.player.backToTop).toBe(false);
     expect(s.player.miniControls).toBe(true);
+  });
+
+  it('F-22-AC3 moving thumbnails are a feature of their own, off by default', () => {
+    expect(FEATURES).toContain('thumbs');
+    expect(withDefaults(undefined).features.thumbs).toBe(false);
+    expect(withDefaults({ features: { thumbs: true } }).features.thumbs).toBe(true);
   });
 
   it('F-01-AC1 keeps the extension on unless it was turned off', () => {

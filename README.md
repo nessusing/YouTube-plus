@@ -6,6 +6,7 @@ A personal YouTube toolkit Chrome extension (MV3):
 - **Queue** — optionally use one of your playlists as the queue: Add to queue goes into it, a top-bar button plays it, watched videos are removed. It lives in your YouTube account, so it survives tabs and devices.
 - **Player** — miniplayer controls, drag and minimize; the watch-page player shrinks to a small window when you scroll; back-to-top; single-video loop; pop the player out to a desktop window (Document PiP).
 - **Comment danmaku** — comments float over the video at the moment they talk about.
+- **Moving thumbnails** — optionally, the thumbnails on screen all move at once (YouTube's own short animation, or three stills in turn), without a player. Off by default.
 
 Each feature has its own switch. Everything uses the Google account already signed in to the browser.
 
@@ -40,8 +41,9 @@ Load it: chrome://extensions → Developer mode → Load unpacked → `.output/c
 - `src/features/queue/` — native queue or a playlist: Add to queue takeover (MAIN-world script), top-bar play button, remove after watching, list tools
 - `src/features/player/` — miniplayer controls, drag and minimize, small window on scroll, back to top, loop, pop-out
 - `src/features/danmaku/` — comment fetching, timing, card / flying / side-panel views
+- `src/features/thumbs/` — moving thumbnails on list pages
 - `src/entrypoints/` — background, options page, content scripts
 - `tests/unit/` — Vitest; `tests/e2e/` — Playwright on real YouTube
-- `scripts/danmaku/` — measurement scripts for comment danmaku
+- `scripts/danmaku/`, `scripts/thumbs/` — measurement scripts for comment danmaku and moving thumbnails
 
 `scripts/patch-wxt.mjs` works around a WXT bug: it builds a RegExp from the entrypoint path without escaping it, and the `+` in this directory's name breaks the build.

@@ -4,7 +4,7 @@
 
 import { type DanmakuParams, DEFAULT_PARAMS, paramsWithDefaults } from '@/features/danmaku/params';
 
-export type FeatureId = 'tldr' | 'queue' | 'player' | 'danmaku';
+export type FeatureId = 'tldr' | 'queue' | 'player' | 'danmaku' | 'thumbs';
 
 /** UI language = YouTube's (core/youtube-lang.ts); TL;DR output is in each video's own language. */
 export type Lang = 'en' | 'zh';
@@ -13,7 +13,7 @@ export function detectLang(): Lang {
   const l = typeof navigator !== 'undefined' ? navigator.language : 'en';
   return /^zh\b/i.test(l) ? 'zh' : 'en';
 }
-export const FEATURES: FeatureId[] = ['tldr', 'queue', 'player', 'danmaku'];
+export const FEATURES: FeatureId[] = ['tldr', 'queue', 'player', 'danmaku', 'thumbs'];
 
 export interface PlayerSettings {
   miniControls: boolean;
@@ -97,7 +97,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   enabled: true,
   lang: 'en',
-  features: { tldr: true, queue: true, player: true, danmaku: false },
+  features: { tldr: true, queue: true, player: true, danmaku: false, thumbs: false },
   player: { miniControls: true, freeDrag: true, stickyPlayer: true, backToTop: true, loopButton: false, miniMinimize: true, pip: true },
   shortcuts: { pip: 'Shift+I' },
   tldr: { titleCheck: true, account: 0, prefetch: true, perHour: 40, perDay: 200, batchSize: 5 },

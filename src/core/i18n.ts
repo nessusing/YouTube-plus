@@ -303,8 +303,6 @@ const zh = {
   // comment danmaku (F-12)
   'feature.danmaku': '评论弹幕',
   'opt.featureDesc.danmaku': '评论以字幕卡的形式出现在播放器顶部，一次一条（开发中）',
-  'feature.thumbs': '缩略图动起来',
-  'opt.featureDesc.thumbs': '列表页上看得见的缩略图同时动起来，没有声音',
   'opt.dm.title': '播放时显示评论',
   'opt.dm.sub': '播放时在播放器上显示评论，有三种风格可选。带时间戳的评论在那个时间点出现，其余的按下面选的方式放。',
   'opt.dm.style': '风格',
@@ -766,8 +764,6 @@ const en: Record<MsgKey, string> = {
   'opt.notify.previewHint': 'Switches to the YouTube tab used last and shows a sample notification there.',
   'feature.danmaku': 'Danmaku',
   'opt.featureDesc.danmaku': 'Comments show one at a time as caption cards at the top of the player (in development)',
-  'feature.thumbs': 'Moving thumbnails',
-  'opt.featureDesc.thumbs': 'The thumbnails on screen all move at once, without sound',
   'opt.dm.title': 'Comments while you watch',
   'opt.dm.sub': 'Shows comments on the player while you watch, in one of three styles. Timestamped comments show at their moment; the rest are placed as chosen below.',
   'opt.dm.style': 'Style',

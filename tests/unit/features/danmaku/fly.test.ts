@@ -13,13 +13,6 @@ describe('flyItems', () => {
     expect(items.map((i) => [i.c.text, i.start])).toEqual([['g h i', 4], ['a b c', 10], ['d e f', 12]]);
   });
 
-  it('F-12-AC13 leaves out comments longer than flyMaxLines', () => {
-    const long = 'word '.repeat(60); // 300 characters: 6–7 lines at 50 wide
-    const items = flyItems([slot(0, [long, 'short one'], [10, 2])], P);
-    expect(items.map((i) => i.c.text)).toEqual(['short one']);
-    expect(flyItems([slot(0, [long], [10])], { ...P, flyMaxLines: 10 })).toHaveLength(1);
-  });
-
   it('F-12-AC13 gives each comment its own speed in [min, max], the same every time', () => {
     const texts = Array.from({ length: 40 }, (_, i) => `comment number ${i}`);
     const a = flyItems([slot(0, texts, texts.map(() => 1))], P);
@@ -65,10 +58,15 @@ describe('assignLanes', () => {
     expect(assignLanes([{ start: 0, cross: 5 }, { start: 3, cross: 20 }], [200, 100], W, 2, 20)).toEqual([0, 0]);
   });
 
-  it('F-12-AC13 overlaps in the lane that frees up first when every lane is taken', () => {
+  it('F-12-AC13 gives no lane rather than overlap', () => {
     const lanes = assignLanes([{ start: 0, cross: 10 }, { start: 0.5, cross: 10 }, { start: 1, cross: 10 }], [400, 100, 400], W, 2, 20);
-    // Lane 0's comment is in at 4.2 s, lane 1's at 1.7 s.
-    expect(lanes).toEqual([0, 1, 1]);
+    // Lane 0's comment is in at 4.2 s, lane 1's at 1.7 s: nowhere for the third at 1 s.
+    expect(lanes).toEqual([0, 1, -1]);
+  });
+
+  it('F-12-AC13 takes the timeline\'s lane when it is free, another when not', () => {
+    expect(assignLanes([{ start: 0, cross: 10, row: 2 }, { start: 1, cross: 10, row: 2 }], [200, 200], W, 3, 20)).toEqual([2, 0]);
+    expect(assignLanes([{ start: 0, cross: 10, row: 5 }], [200], W, 2, 20)).toEqual([0]);
   });
 
   it('F-12-AC13 reuses a lane once its comments have left the screen', () => {

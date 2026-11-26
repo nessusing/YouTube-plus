@@ -1,24 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { type Candidate, fillIdle, pickBest, placeStamps, replayOver, type Slot } from '@/features/danmaku/schedule';
+import { type Candidate, cardLayout, fillIdle, pickBest, placeStamps, replayOver, type Slot, Tracks } from '@/features/danmaku/schedule';
 import { comment } from './helpers';
 
 const slot = (name: string, start: number, ...durs: number[]): Slot => ({ start, kind: 'stamp', items: durs.map((_, k) => comment(`${name}${k}`)), durs, extra: 0 });
 const cand = (name: string, start: number, dur: number, score: number): Candidate => ({ slot: { ...slot(name, start, dur), kind: 'local' }, score });
 const names = (ss: Slot[]) => ss.map((s) => s.items[0]!.text.replace(/0$/, ''));
-const O = { maxDelaySec: 5, gapSec: 0.5 };
+/** Into one row, as the single card does. */
+const place = (cards: Slot[]) => placeStamps(cards, new Tracks(cardLayout(1, 0.5)), 5);
 
 describe('placeStamps', () => {
   it('F-12-AC6 pushes a card back until the previous one has ended, plus the gap', () => {
-    expect(placeStamps([slot('b', 11, 2), slot('a', 10, 2)], O).map((s) => s.start)).toEqual([10, 12.5]);
+    expect(place([slot('b', 11, 2), slot('a', 10, 2)]).map((s) => s.start)).toEqual([10, 12.5]);
   });
 
   it('F-12-AC6 drops a single comment pushed more than maxDelaySec; a rotating card may wait as long as it lasts', () => {
-    const r = placeStamps([slot('long', 10, 7), slot('single', 12, 2), slot('rot', 12.5, 2, 2, 2)], O);
+    const r = place([slot('long', 10, 7), slot('single', 12, 2), slot('rot', 12.5, 2, 2, 2)]);
     // long ends 17 → free at 17.5: single would wait 5.5 s (> 5), rot 5 s.
     expect(names(r)).toEqual(['long', 'rot']);
-    const r2 = placeStamps([slot('long', 10, 7), slot('rot', 11.5, 2, 2, 2)], O);
+    const r2 = place([slot('long', 10, 7), slot('rot', 11.5, 2, 2, 2)]);
     expect(r2.map((s) => s.start)).toEqual([10, 17.5]); // waits 6 s = its length
-    expect(placeStamps([slot('long', 10, 8), slot('rot', 11.5, 2, 2, 2)], O).length).toBe(1); // 7 s > 6 s
+    expect(place([slot('long', 10, 8), slot('rot', 11.5, 2, 2, 2)]).length).toBe(1); // 7 s > 6 s
   });
 });
 

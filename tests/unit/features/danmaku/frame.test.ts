@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { frameAt, slotAt } from '@/features/danmaku/frame';
+import { frameAt, slotsAt } from '@/features/danmaku/frame';
 import type { Slot } from '@/features/danmaku/schedule';
 import { comment } from './helpers';
 
@@ -31,10 +31,10 @@ describe('frameAt', () => {
   });
 });
 
-describe('slotAt', () => {
-  const slots = [slot(10, 2), slot(20, 3, 3), slot(40, 1)];
-  it('F-12-AC10 finds the card on screen, if any', () => {
-    expect([9.9, 10, 11.9, 12, 25.9, 26, 40.5].map((t) => slotAt(slots, t)?.start)).toEqual([undefined, 10, 10, undefined, 20, undefined, 40]);
-    expect(slotAt([], 5)).toBeUndefined();
+describe('slotsAt', () => {
+  const slots = [slot(10, 2), slot(20, 3, 3), slot(21, 1), slot(40, 1)];
+  it('F-12-AC10 finds the cards on screen, earliest first', () => {
+    expect([9.9, 10, 12, 20, 21.5, 22, 26, 40.5].map((t) => slotsAt(slots, t).map((s) => s.start))).toEqual([[], [10], [], [20], [20, 21], [20], [], [40]]);
+    expect(slotsAt([], 5)).toEqual([]);
   });
 });

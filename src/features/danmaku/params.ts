@@ -2,7 +2,17 @@
 // development the options page exposes most of these; which ones stay for
 // normal users is decided after real use (F-12-AC16).
 
+/** What happens to a comment of more than longLines lines (F-12-AC17). */
+export const LONG_MODES = ['hide', 'truncate', 'scroll'] as const;
+export type LongMode = (typeof LONG_MODES)[number];
+
 export interface DisplayParams {
+  /** Comments on screen at once (F-12-AC10): cards stacked from the top / flying lanes. */
+  cardRows: number;
+  flyRows: number;
+  /** More estimated lines than this is long (F-12-AC17); 0 = nothing is. */
+  longLines: number;
+  longMode: LongMode;
   /** Seconds per screen (two lines) of a long comment. */
   screenSec: number;
   /** Reading time per character: Latin and other scripts / Chinese, Japanese, Korean. */
@@ -24,10 +34,6 @@ export interface DisplayParams {
   /** Flying style (F-12): seconds for a comment's head to cross the player, random per comment in [min, max]. */
   flyMinSec: number;
   flyMaxSec: number;
-  /** Comments longer than this many lines (estimated like a card's) do not fly. */
-  flyMaxLines: number;
-  /** Share of the player's height the flying lanes use, from the top. */
-  flyArea: number;
 }
 
 export interface CommentParams {
@@ -63,9 +69,8 @@ export interface HeatParams {
 }
 
 export interface LocalParams {
-  /** Comments per minute = 1 + log10(total comments), clamped to [perMinuteMin, perMinuteMax]. */
-  perMinuteMin: number;
-  perMinuteMax: number;
+  /** At most this many comments a minute, over the whole video (F-12-AC8); 0 = as many as fit. */
+  maxPerMinute: number;
   windowSec: number;
   /** Weight of the "Most replayed" heat; 0 = spread evenly. */
   replayWeight: number;
@@ -141,15 +146,16 @@ export const DEFAULT_PROMPT = [
 
 export const DEFAULT_PARAMS: DanmakuParams = {
   display: {
+    cardRows: 1, flyRows: 7, longLines: 4, longMode: 'hide',
     screenSec: 5, latinCharSec: 0.068, cjkCharSec: 0.2, minSec: 1.5, gapSec: 0.5, fadeMs: 250,
     fontScale: 1, bgOpacity: 0.75, refLineWidth: 50, cjkWidth: 2, resumeMinSec: 1.5,
-    flyMinSec: 6, flyMaxSec: 10, flyMaxLines: 4, flyArea: 0.5,
+    flyMinSec: 6, flyMaxSec: 10,
   },
   comments: { firstBatch: 100, minCount: 200, perMinute: 15, maxCount: 300, minLength: 12, cjkWeight: 3 },
   stamps: { maxDelaySec: 5, clusterSec: 2, rotateMax: 3, tocMinStamps: 5, tocTitleMax: 60 },
   heat: { likeWeight: 1, replyWeight: 0.5, recencyWeight: 0.1 },
   local: {
-    perMinuteMin: 1, perMinuteMax: 6, windowSec: 30, replayWeight: 1, leadInSec: 5,
+    maxPerMinute: 0, windowSec: 30, replayWeight: 1, leadInSec: 5,
     spoilerWords: ['结尾', '結尾', '最后', '最後', '结局', '結局', '反转', '反轉', 'ending', 'twist', 'the end'],
     spoilerTail: 0.2,
   },
@@ -180,5 +186,6 @@ export function paramsWithDefaults(stored: unknown): DanmakuParams {
     }
   }
   if (!(['local', 'stamps'] as const).includes(out.ai.fallback)) out.ai.fallback = DEFAULT_PARAMS.ai.fallback;
+  if (!LONG_MODES.includes(out.display.longMode)) out.display.longMode = DEFAULT_PARAMS.display.longMode;
   return out;
 }

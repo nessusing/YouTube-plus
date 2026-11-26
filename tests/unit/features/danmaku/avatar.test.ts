@@ -6,10 +6,10 @@ import { durOf } from '@/features/danmaku/cards';
 import { CardView, commentNodes } from '@/features/danmaku/card-view';
 import { lean } from '@/features/danmaku/comments';
 import { demoTimeline } from '@/features/danmaku/demo';
-import { estimateFlyWidth, flyItems } from '@/features/danmaku/fly';
+import { estimateFlyWidth } from '@/features/danmaku/fly';
 import { FlyView } from '@/features/danmaku/fly-view';
 import { DEFAULT_PARAMS } from '@/features/danmaku/params';
-import type { Slot } from '@/features/danmaku/schedule';
+import { fitLong } from '@/features/danmaku/long';
 import { AVATAR_EM, commentLines } from '@/features/danmaku/timing';
 import { comment } from './helpers';
 
@@ -79,11 +79,10 @@ describe('F-19-AC2 the avatar counts in the estimates', () => {
     expect(durOf(comment(two, { author: '@ann', avatar: AV }), P)).toBe(2 * P.screenSec);
   });
 
-  it('F-19-AC2 too long to fly: the avatar can tip a comment over flyMaxLines', () => {
-    const text = 'x'.repeat(P.flyMaxLines * P.refLineWidth - 5);
-    const slot = (c: ReturnType<typeof comment>): Slot => ({ start: 1, kind: 'local', items: [c], durs: [5], extra: 0 });
-    expect(flyItems([slot(comment(text, { id: 'a', author: '@ann' }))], P)).toHaveLength(1);
-    expect(flyItems([slot(comment(text, { id: 'b', author: '@ann', avatar: AV }))], P)).toHaveLength(0);
+  it('F-19-AC2 too long: the avatar can tip a comment over the line limit', () => {
+    const text = 'x'.repeat(P.longLines * P.refLineWidth - 5);
+    expect(fitLong(comment(text, { id: 'a', author: '@ann' }), P, 'fly', false)).toBeDefined();
+    expect(fitLong(comment(text, { id: 'b', author: '@ann', avatar: AV }), P, 'fly', false)).toBeUndefined();
   });
 
   it('F-19-AC2 lane planning: the avatar adds its width to the estimate', () => {

@@ -2,7 +2,7 @@
 // time inside the card, so pausing, seeking and playback speed need nothing
 // special: the timeline is bound to video time.
 
-import { type Slot, slotEnd } from './schedule';
+import { type Slot, slotDur, slotEnd } from './schedule';
 
 export interface Frame {
   /** Which comment of a rotating card. */
@@ -34,8 +34,13 @@ export function frameAt(slot: Slot, t: number, screens: (item: number) => number
   return null;
 }
 
-/** The card showing at video time `t` (slots sorted by start, not overlapping). */
-export function slotAt(slots: Slot[], t: number): Slot | undefined {
+/** The longest card of each timeline, to know how far back to look. */
+const longest = new WeakMap<Slot[], number>();
+
+/** The cards showing at video time `t`, earliest first (slots sorted by start). */
+export function slotsAt(slots: Slot[], t: number): Slot[] {
+  let max = longest.get(slots);
+  if (max === undefined) longest.set(slots, (max = slots.reduce((m, s) => Math.max(m, slotDur(s)), 0)));
   let lo = 0;
   let hi = slots.length;
   while (lo < hi) {
@@ -43,6 +48,7 @@ export function slotAt(slots: Slot[], t: number): Slot | undefined {
     if (slots[mid]!.start <= t) lo = mid + 1;
     else hi = mid;
   }
-  const s = slots[lo - 1];
-  return s && t < slotEnd(s) ? s : undefined;
+  const out: Slot[] = [];
+  for (let i = lo - 1; i >= 0 && slots[i]!.start > t - max; i--) if (t < slotEnd(slots[i]!)) out.push(slots[i]!);
+  return out.reverse();
 }

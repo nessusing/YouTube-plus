@@ -7,14 +7,14 @@
 import type { Logger } from '@/core/log';
 import type { Settings } from '@/core/settings';
 import type { AskResult } from '@/features/tldr/service';
-import { buildPlacementPrompt, parsePlacement, type Placement, withCutoff } from './ai';
+import { buildPlacementPrompt, parsePlacement, type Placement } from './ai';
 import type { VideoInfo } from './bridge';
 import { type CacheEntry, type DanmakuCache, isFresh } from './cache';
 import { type Comment, type HeatSegment, lean } from './comments';
 import { promptOf } from './params';
 import type { MainRpc } from './rpc';
 import type { Slot } from './schedule';
-import { buildTimeline, fetchLimit, type Mode, mergeTimeline, prepareComments } from './timeline';
+import { fetchLimit, layoutOf, type Mode, mergeTimeline, modeOf, planVideo, prepareComments } from './timeline';
 
 export interface SessionDeps {
   rpc: MainRpc;
@@ -46,6 +46,8 @@ export class Session {
   /** When the comments were fetched (kept when only Gemini's results are added). */
   private fetchedAt = Date.now();
   slots: Slot[] = [];
+  /** The style `slots` were laid out for. */
+  private style: 'card' | 'fly' = 'card';
   /** Gemini's verdicts, by comment id. */
   placements = new Map<string, Placement>();
   /** Sent to Gemini and given up on: neither shown nor sent again. */
@@ -75,9 +77,9 @@ export class Session {
 
   /** The mode in use, and why it is not the one chosen. */
   mode(): { mode: Mode; fallback?: AiFailure } {
-    if (this.deps.settings().danmaku.placement === 'local') return { mode: 'local' };
-    if (this.aiFailed) return { mode: this.p.ai.fallback, fallback: this.aiFailed };
-    return { mode: 'ai' };
+    const d = this.deps.settings().danmaku;
+    const mode = modeOf(d, !!this.aiFailed);
+    return d.placement === 'ai' && this.aiFailed ? { mode, fallback: this.aiFailed } : { mode };
   }
 
   async run(): Promise<void> {
@@ -91,6 +93,8 @@ export class Session {
       this.timing.cached = true;
       this.rebuild();
       this.deps.log.debug(`${this.videoId}: ${c.comments.length} comments from the cache`);
+      // An entry from before it kept these: add them for the preview (F-12-AC19).
+      if (!c.title || !c.duration) await this.save();
       void this.placeWithAi();
       return;
     }
@@ -161,15 +165,16 @@ export class Session {
 
   /** Lay out again (more comments, new results, changed settings); only the part not yet played changes. */
   rebuild(): void {
-    const p = this.p;
-    const { mode } = this.mode();
-    const prep = prepareComments(this.comments, p);
-    const placements = mode === 'ai' ? new Map([...this.placements].map(([id, pl]) => [id, withCutoff(pl, p.ai.highConf)])) : undefined;
-    const next = buildTimeline({
-      videoId: this.videoId, duration: this.info.duration, total: this.total || this.comments.length,
-      ...prep, heatmap: this.heatmap, placements,
-    }, mode, p);
-    this.slots = mergeTimeline(this.slots, next, this.now(), p.display.gapSec);
+    const d = this.deps.settings().danmaku;
+    const style = d.style === 'fly' ? 'fly' : 'card';
+    // The two styles share the screen differently: nothing carries over.
+    if (style !== this.style) this.slots = [];
+    this.style = style;
+    const next = planVideo({
+      videoId: this.videoId, duration: this.info.duration, total: this.total, comments: this.comments,
+      heatmap: this.heatmap, placements: this.placements, aiFailed: !!this.aiFailed,
+    }, d).slots;
+    this.slots = mergeTimeline(this.slots, next, this.now(), layoutOf(d.params.display, style));
     this.deps.changed(this);
   }
 
@@ -281,6 +286,7 @@ export class Session {
   private async save(): Promise<void> {
     const e: CacheEntry = {
       t: this.fetchedAt, used: Date.now(), total: this.total, heatmap: this.heatmap, comments: this.comments, complete: this.complete,
+      title: this.info.title, duration: this.info.duration,
       placements: Object.fromEntries(this.placements),
       aiFailed: this.aiFailed === 'no_transcript' ? { reason: 'no_transcript', t: Date.now() } : undefined,
     };

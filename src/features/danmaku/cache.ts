@@ -18,6 +18,9 @@ export interface CacheEntry {
   comments: Comment[];
   /** Fetched up to the limit (or to the end); false: stopped early, fetch again. */
   complete: boolean;
+  /** For the settings page preview (F-12-AC15); missing in older entries. */
+  title?: string;
+  duration?: number;
   /** Gemini's verdict per comment id (AI mode). */
   placements?: Record<string, Placement>;
   /** AI mode could not run for this video (e.g. "no_transcript"), with when. */

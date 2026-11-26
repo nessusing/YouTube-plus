@@ -28,7 +28,8 @@ const AVATAR_BROKEN = 'https://www.youtube.com/ytpp-e2e-missing-avatar.png';
 /**
  * Seven estimated lines (refLineWidth 50): 4 × screenSec = 20 s on the card,
  * 0:20–0:40. On the e2e window's player it wraps to three or more real lines,
- * so the card pages to a second screen in its later half.
+ * so with no long-comment limit (two lines a screen) the card pages to a second
+ * screen in its later half.
  */
 const LONG = '0:20 this is the part everyone waits for, and it still holds up after all these years; the timing of the turn is perfect and the whole crowd knows it is coming before it does. Every time I watch it again I notice something new in the background, a face in the crowd or a small move nobody talks about.';
 const AI_TEXT = 'the way the camera moves right here is something you only notice on the third watch';
@@ -57,7 +58,8 @@ async function setDanmaku(ctx: BrowserContext, on: boolean, patch: Record<string
     settings: {
       ...s,
       features: { ...s.features, danmaku: on },
-      danmaku: { ...s.danmaku, active: true, placement: 'local', debug: true, ...patch },
+      // No long-comment limit unless a test sets one: LONG is longer than the default.
+      danmaku: { ...s.danmaku, active: true, placement: 'local', style: 'card', debug: true, params: { display: { longLines: 0 } }, ...patch },
     },
   });
 }
@@ -342,6 +344,51 @@ test.describe('comment danmaku', () => {
     await expect.poll(panelShown).toBe(false);
   });
 
+  test('F-12-AC6 F-12-AC10 F-12-AC12 three rows: a moment\'s comments stacked at the top, none covering another', async ({ page, open, ctx }) => {
+    await seed(ctx, VIDEOS.a, [
+      { id: 'r1', text: '0:50 the first of three on the same moment', stamped: true, likes: 30 },
+      { id: 'r2', text: '0:50 the second one, a good deal longer than the others so that it surely wraps onto another line of the card on this player', stamped: true, likes: 20 },
+      { id: 'r3', text: '0:50 the third of three on the same moment', stamped: true, likes: 10 },
+    ]);
+    await setDanmaku(ctx, true, { style: 'card', params: { display: { cardRows: 3 } } });
+    await openWatch(page, open, VIDEOS.a);
+    await pauseAt(page, 51);
+    const cards = () => page.evaluate(() => [...(document.querySelector('#movie_player .ytpp-dm-layer')?.shadowRoot?.querySelectorAll<HTMLElement>('.card:not(.measure)') ?? [])]
+      .map((c) => { const r = c.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, text: c.querySelector('.text')!.textContent! }; })
+      .sort((a, b) => a.top - b.top));
+    await expect.poll(async () => (await cards()).length, { timeout: 20_000 }).toBe(3);
+    const c = await cards();
+    expect(c.map((x) => x.text.match(/@e2e-r\d/)![0])).toEqual(['@e2e-r1', '@e2e-r2', '@e2e-r3']);
+    for (let k = 1; k < c.length; k++) expect(c[k]!.top).toBeGreaterThanOrEqual(c[k - 1]!.bottom);
+    const [playerTop, playerH] = await page.evaluate(() => { const r = document.querySelector('#movie_player')!.getBoundingClientRect(); return [r.top, r.height]; });
+    expect(c[0]!.top).toBeGreaterThanOrEqual(playerTop);
+    expect(c.at(-1)!.bottom).toBeLessThan(playerTop + playerH * 0.6);
+
+    // One row: the same three take turns on one card. (What has already shown
+    // keeps its layout, so the video is opened again.)
+    await setDanmaku(ctx, true, { params: { display: { cardRows: 1 } } });
+    await openWatch(page, open, VIDEOS.a);
+    await pauseAt(page, 50.5);
+    await expect.poll(async () => (await cards()).length, { timeout: 20_000 }).toBe(1);
+  });
+
+  test('F-12-AC13 flying lanes on the player: one each, no overlap; the long ones left out by default', async ({ page, open, ctx }) => {
+    await seed(ctx, VIDEOS.a, [
+      { id: 'f1', text: '0:50 first across the player', stamped: true },
+      { id: 'f2', text: '0:50 second across the player', stamped: true },
+      { id: 'f3', text: LONG.replace('0:20', '0:50'), stamped: true },
+    ]);
+    await setDanmaku(ctx, true, { style: 'fly', params: { display: { flyRows: 2 } } });
+    await openWatch(page, open, VIDEOS.a);
+    await pauseAt(page, 53);
+    const strips = () => page.evaluate(() => [...(document.querySelector('#movie_player .ytpp-dm-fly')?.shadowRoot?.querySelectorAll<HTMLElement>('.strip') ?? [])]
+      .map((c) => ({ top: c.getBoundingClientRect().top, text: c.textContent! })));
+    await expect.poll(async () => (await strips()).length, { timeout: 20_000 }).toBe(2);
+    const s = await strips();
+    expect(new Set(s.map((x) => Math.round(x.top))).size).toBe(2);
+    expect(s.map((x) => x.text).join()).not.toContain('everyone waits for');
+  });
+
   test('F-12-AC9 AI mode uses Gemini\'s confident times; hidden comments never show', async ({ page, open, ctx }) => {
     await seed(ctx, VIDEOS.a, [
       { id: 'ai', text: AI_TEXT, likes: 50 },
@@ -408,12 +455,15 @@ test.describe('comment danmaku', () => {
     await setDanmaku(ctx, true);
     await openWatch(page, open, VIDEOS.b);
     // 200 comments for a 4-minute video (minCount), 20 a page.
-    const entry = () => storageGet(ctx, 'local', CACHE(VIDEOS.b)) as Promise<{ complete: boolean; comments: { avatar?: string }[]; total: number } | undefined>;
+    const entry = () => storageGet(ctx, 'local', CACHE(VIDEOS.b)) as Promise<{ complete: boolean; comments: { avatar?: string }[]; total: number; title?: string; duration?: number } | undefined>;
     await expect.poll(async () => (await entry())?.complete ?? false, { timeout: 60_000 }).toBe(true);
     const e = (await entry())!;
     expect(e.comments.length).toBeGreaterThanOrEqual(190);
     expect(e.comments.length).toBeLessThanOrEqual(220);
     expect(e.total).toBeGreaterThan(100_000);
+    // F-12-AC15: the title and length, for the settings page preview.
+    expect(e.title).toBeTruthy();
+    expect(e.duration).toBeGreaterThan(200);
     // F-19-AC4: the cache keeps each author's avatar address.
     expect(e.comments.filter((c) => /^https:\/\//.test(c.avatar ?? '')).length).toBeGreaterThanOrEqual(e.comments.length * 0.9);
     expect(await tooltip(page)).toMatch(/\d+ comments, \d+ cards · local/);

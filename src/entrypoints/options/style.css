@@ -243,6 +243,23 @@ textarea.prompt {
 }
 textarea.prompt:focus { outline: 2px solid var(--link); outline-offset: 0; }
 
+/* Danmaku preview: the video's numbers and timeline, stuck under the masthead (F-12-AC19) */
+.dm-stats { position: sticky; top: 56px; z-index: 8; margin-top: 24px; padding: 10px 0 6px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.dm-stats[hidden] { display: none; }
+.dm-flow { margin: 0; font-weight: 500; }
+.dm-delta { color: var(--fg); }
+.dm-stats .hint { margin: 2px 0 8px; }
+.dm-strip-bars { position: relative; cursor: pointer; background: var(--panel); border-radius: 6px; overflow: hidden; }
+.dm-strip-bars svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--muted); opacity: 0.25; }
+.dm-block { position: absolute; min-width: 2px; box-sizing: border-box; border-radius: 2px; box-shadow: inset -1px 0 var(--panel); background: #3ea6ff; }
+.dm-block.stamp, .dm-block.toc { background: #f5a623; }
+.dm-block.ai { background: #2ba640; }
+.dm-block.ambient { background: #a970ff; }
+.dm-block:hover { filter: brightness(1.35); }
+.dm-strip-head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #f00; pointer-events: none; }
+.dm-strip-read { height: 1.5em; margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
+.dm-player { margin-top: 16px; }
+
 /* Danmaku preview: a mock player (F-12) */
 .dm-preview {
   position: relative;
@@ -372,6 +389,7 @@ select {
   nav button { height: 32px; padding: 0 12px; border-radius: 8px; background: var(--hover); }
   nav button[aria-selected="true"] { background: var(--fg); color: var(--bg); }
   main { padding: 16px 16px 64px; }
+  .dm-stats { top: 100px; }
   .eyebrow { margin-bottom: 20px; }
   .row { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
   .row-label { padding-top: 0; }

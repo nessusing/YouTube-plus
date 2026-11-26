@@ -175,7 +175,8 @@ export async function startDanmaku(): Promise<void> {
       // Off, or between the panel (a feed) and the danmaku styles (a session): start over.
       gen++;
       stopSession();
-    } else if (session && (prev.danmaku.placement !== next.danmaku.placement || JSON.stringify(prev.danmaku.params) !== JSON.stringify(next.danmaku.params))) {
+    } else if (session && (prev.danmaku.placement !== next.danmaku.placement || prev.danmaku.style !== next.danmaku.style
+      || JSON.stringify(prev.danmaku.params) !== JSON.stringify(next.danmaku.params))) {
       session.settingsChanged();
     }
     render();

@@ -33,6 +33,8 @@ export interface Comment {
   hasLink: boolean;
   /** The author's avatar (F-19); missing in comments cached before F-19. */
   avatar?: string;
+  /** Set on the shortened copy the timeline holds of a long comment (F-12-AC17); never cached. */
+  cut?: boolean;
   // Only the comments panel uses these (style 'panel'); the danmaku cache leaves them out (lean()).
   /** As YouTube says it, in English: "3 months ago (edited)". */
   published?: string;

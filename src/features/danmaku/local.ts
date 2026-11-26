@@ -4,8 +4,8 @@
 
 import type { Comment, HeatSegment } from './comments';
 import type { DanmakuParams, LocalParams } from './params';
-import { durOf } from './cards';
-import { type Candidate, replayOver, snap } from './schedule';
+import { replayOver, type Slot, slotDur, snap, type Tracks } from './schedule';
+import { STEP_SEC } from './timing';
 
 /** mulberry32 seeded by a string hash. */
 export function seeded(seed: string): () => number {
@@ -28,9 +28,9 @@ function shuffle<T>(xs: T[], rand: () => number): T[] {
   return xs;
 }
 
-/** Comments per minute = 1 + log10(total comments), clamped. */
-export function perMinute(total: number, p: Pick<LocalParams, 'perMinuteMin' | 'perMinuteMax'>): number {
-  return Math.min(p.perMinuteMax, Math.max(p.perMinuteMin, 1 + Math.log10(Math.max(1, total))));
+/** How many comments to place at most (F-12-AC8): the rate over the video; 0 = no limit. */
+export function localTarget(duration: number, p: Pick<LocalParams, 'maxPerMinute'>): number {
+  return p.maxPerMinute > 0 ? Math.max(1, Math.round((p.maxPerMinute * duration) / 60)) : Infinity;
 }
 
 /** Mentions the ending, a twist…: only for the tail of the video. Latin words match whole. */
@@ -58,40 +58,46 @@ export function apportion(total: number, weights: number[]): number[] {
 export interface LocalInput {
   videoId: string;
   duration: number;
-  /** Comment count from the header (for the per-minute rate). */
-  total: number;
   /** Without timestamps, already filtered; heat in the same order. */
   comments: Comment[];
   heat: number[];
   heatmap: HeatSegment[];
 }
 
+export interface LocalCandidate {
+  /** `start` is the time it would like. */
+  slot: Slot;
+  /** Only for the tail of the video. */
+  spoiler: boolean;
+}
+
 /**
- * Where each comment would go, scored heat × duration for pickBest:
- *  1. how many: perMinute(total) × minutes, at most the comments we have;
- *  2. cut [leadIn, duration) into windows; each gets a share ∝ its length ×
- *     (1 + replayWeight × its "Most replayed" score);
- *  3. hottest first, deal one per window per round, windows in a seeded
- *     order, so the best comments are spread over the whole video; spoilers
- *     only go to windows in the last spoilerTail of the video;
- *  4. a window's comments split it evenly, each at a seeded spot in its part.
+ * The comments in the order to place them, each with the time it would like:
+ *  1. cut [leadIn, duration) into windows; as many comments as the limit allows
+ *     (all without one) are shared out ∝ a window's length × (1 + replayWeight
+ *     × its "Most replayed" score);
+ *  2. hottest first, deal one per window per round, windows in a seeded order,
+ *     so the best comments are spread over the whole video; spoilers only go
+ *     to windows in the last spoilerTail of the video;
+ *  3. a window's comments split it evenly, each at a seeded spot in its part.
+ * Those come first, hottest first; then the rest (they stand in for any that
+ * find no room), at seeded times.
  */
-export function localCandidates(i: LocalInput, p: DanmakuParams): Candidate[] {
+export function localCandidates(i: LocalInput, p: DanmakuParams, make: (c: Comment) => Slot): LocalCandidate[] {
   const lp = p.local;
   const rand = seeded(i.videoId);
-  const count = Math.min(i.comments.length, Math.round(perMinute(i.total, lp) * (i.duration / 60)));
+  const count = Math.min(i.comments.length, localTarget(i.duration, lp));
   const windows: { a: number; b: number }[] = [];
   for (let a = lp.leadInSec; a < i.duration; a += lp.windowSec) windows.push({ a, b: Math.min(i.duration, a + lp.windowSec) });
   if (!count || !windows.length) return [];
   const quota = apportion(count, windows.map((w) => ((w.b - w.a) / lp.windowSec) * (1 + lp.replayWeight * replayOver(i.heatmap, w.a, w.b))));
   const tailFrom = i.duration * (1 - lp.spoilerTail);
 
-  const order = i.comments.map((c, k) => ({ c, heat: i.heat[k] ?? 0 })).sort((a, b) => b.heat - a.heat);
-  const dealt: { c: Comment; heat: number }[][] = windows.map(() => []);
+  const order = i.comments.map((c, k) => ({ c, heat: i.heat[k] ?? 0, spoiler: isSpoiler(c.text, lp.spoilerWords) })).sort((a, b) => b.heat - a.heat);
+  const dealt: (typeof order)[] = windows.map(() => []);
   let rotation: number[] = [];
   for (const item of order) {
-    const spoiler = isSpoiler(item.c.text, lp.spoilerWords);
-    const fits = (w: number) => dealt[w]!.length < quota[w]! && (!spoiler || windows[w]!.b > tailFrom);
+    const fits = (w: number) => dealt[w]!.length < quota[w]! && (!item.spoiler || windows[w]!.b > tailFrom);
     if (!windows.some((_, w) => fits(w))) continue;
     // Next window in this round that fits; a new seeded round when none is left.
     let w = rotation.findIndex(fits);
@@ -103,17 +109,59 @@ export function localCandidates(i: LocalInput, p: DanmakuParams): Candidate[] {
     rotation.splice(w, 1);
   }
 
-  const out: Candidate[] = [];
+  const at = (item: (typeof order)[number], want: number): LocalCandidate => {
+    const slot = make(item.c);
+    if (item.spoiler) want = Math.max(want, tailFrom);
+    slot.start = Math.max(0, snap(Math.min(i.duration - slotDur(slot), want)));
+    return { slot, spoiler: item.spoiler };
+  };
+  const chosen = new Map<Comment, LocalCandidate>();
   windows.forEach((win, w) => {
     const items = dealt[w]!;
     const part = (win.b - win.a) / items.length;
     items.forEach((item, k) => {
-      const dur = durOf(item.c, p.display);
-      let start = win.a + part * k + rand() * Math.max(0, part - dur);
-      if (isSpoiler(item.c.text, lp.spoilerWords)) start = Math.max(start, tailFrom);
-      start = snap(Math.min(i.duration - dur, start));
-      out.push({ slot: { start: Math.max(0, start), kind: 'local', items: [item.c], durs: [dur], extra: 0 }, score: item.heat * dur + 1e-6 });
+      const dur = slotDur(make(item.c));
+      chosen.set(item.c, at(item, win.a + part * k + rand() * Math.max(0, part - dur)));
     });
   });
-  return out;
+  const first = order.flatMap((x) => chosen.get(x.c) ?? []);
+  const rest = order.filter((x) => !chosen.has(x.c))
+    .map((x) => at(x, lp.leadInSec + rand() * Math.max(0, i.duration - lp.leadInSec)));
+  return [...first, ...rest];
+}
+
+export interface PlaceOptions {
+  /** Nothing starts before this. */
+  from: number;
+  duration: number;
+  /** Spoilers start here at the earliest. */
+  tailFrom: number;
+  /** Stop after placing this many. */
+  target: number;
+}
+
+/**
+ * Add the candidates to `tracks` in order (F-12-AC8): each at the free time
+ * nearest to the one it would like; one that fits nowhere is passed over.
+ */
+export function placeLocal(tracks: Tracks, cands: LocalCandidate[], o: PlaceOptions): { slots: Slot[]; noRoom: number; overLimit: number } {
+  const slots: Slot[] = [];
+  let noRoom = 0;
+  let overLimit = 0;
+  for (const { slot, spoiler } of cands) {
+    if (slots.length >= o.target) {
+      overLimit++;
+      continue;
+    }
+    const from = spoiler ? Math.max(o.from, Math.ceil(o.tailFrom / STEP_SEC - 1e-6) * STEP_SEC) : o.from;
+    const spot = tracks.nearest(slot, slot.start, from, o.duration - slotDur(slot));
+    if (!spot) {
+      noRoom++;
+      continue;
+    }
+    const placed = { ...slot, ...spot };
+    tracks.add(placed);
+    slots.push(placed);
+  }
+  return { slots, noRoom, overLimit };
 }

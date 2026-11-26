@@ -1,11 +1,14 @@
 // Sample cards for the options page preview (F-12, avatars F-19-AC3). Fixed comments of
-// every shape (short, long, CJK, rotating, contents); durations follow the
+// every shape (short, long, CJK, rotating, contents); laid out with the
 // current params, like the real schedule.
 
 import { durOf } from './cards';
 import type { Comment } from './comments';
+import { flyMetrics } from './fly';
+import { fitLong, type TimelineStyle } from './long';
 import type { DanmakuParams } from './params';
-import type { Slot, SlotKind } from './schedule';
+import { type Slot, type SlotKind, slotEnd, Tracks } from './schedule';
+import { layoutOf } from './timeline';
 
 /** Colours for the sample avatars. */
 const AVATAR_BG = ['#5c6bc0', '#26a69a', '#ef6c00', '#ab47bc', '#8d6e63', '#42a5f5', '#d81b60'];
@@ -45,14 +48,32 @@ const CARDS: { kind: SlotKind; items: Comment[]; extra?: number; conf?: number }
   { kind: 'toc', items: [c('6', '@channel', '0:00 开场\n1:20 第一组：豌豆迫击炮\n3:05 第二组：西西弗斯\n5:40 决赛\n8:12 结果')] },
 ];
 
-/** The sample cards one after another, from 1 s, with the gap between; and the loop length. */
-export function demoTimeline(p: DanmakuParams): { slots: Slot[]; length: number } {
+/**
+ * The sample cards as soon as there is room from 1 s, in the style's rows and
+ * under the long-comment rule; and the loop length.
+ */
+export function demoTimeline(p: DanmakuParams, style: TimelineStyle = 'card'): { slots: Slot[]; length: number } {
+  const d = p.display;
+  const tracks = new Tracks(layoutOf(d, style));
   const slots: Slot[] = [];
-  let at = 1;
+  const add = (s: Slot) => {
+    const spot = tracks.nearest(s, 1, 1, Infinity)!;
+    const placed = { ...s, ...spot };
+    tracks.add(placed);
+    slots.push(placed);
+  };
   for (const card of CARDS) {
-    const durs = card.items.map((x) => durOf(x, p.display));
-    slots.push({ start: at, kind: card.kind, items: card.items, durs, extra: card.extra ?? 0, conf: card.conf });
-    at += durs.reduce((a, b) => a + b, 0) + p.display.gapSec;
+    const items = card.items.flatMap((x) => fitLong(x, d, style, card.kind === 'toc') ?? []);
+    if (!items.length) continue;
+    const base = { start: 1, kind: card.kind, extra: card.extra ?? 0, conf: card.conf };
+    if (style === 'card') add({ ...base, items, durs: items.map((x) => durOf(x, d)) });
+    else {
+      for (const x of items) {
+        const fly = flyMetrics(x, d);
+        add({ ...base, items: [x], durs: [(1 + fly.w) * fly.cross], fly });
+      }
+    }
   }
-  return { slots, length: at + 1.5 };
+  slots.sort((a, b) => a.start - b.start);
+  return { slots, length: Math.max(0, ...slots.map(slotEnd)) + 1.5 };
 }

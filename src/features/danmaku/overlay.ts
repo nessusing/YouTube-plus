@@ -1,6 +1,6 @@
-// The layer over the player (F-12-AC12): one caption-style card at a
-// time, drawn from the video's time every frame, so pausing, seeking back and
-// playback speed need nothing special. Hidden in the miniplayer, popped out
+// The layer over the player (F-12-AC12): the caption-style cards, drawn
+// from the video's time every frame, so pausing, seeking back and playback
+// speed need nothing special. Hidden in the miniplayer, popped out
 // (F-11), during ads and off the watch page. At the top of the player (F-12-AC12):
 // below the title bar while it shows, below the captions when they sit in the
 // upper half. Styles (F-12): the card, comments flying across (same comments,
@@ -11,7 +11,7 @@ import { CardView } from './card-view';
 import type { CommentFeed } from './feed';
 import { flyItems, type FlyItem } from './fly';
 import { FlyView } from './fly-view';
-import { slotAt } from './frame';
+import { slotsAt } from './frame';
 import { CommentPanel } from './panel';
 import type { DisplayParams } from './params';
 import { type Slot, slotEnd } from './schedule';
@@ -89,10 +89,10 @@ export function overlay(): Overlay {
   };
   let raf = 0;
   let lastT = -1;
-  /** After a seek into a card with too little of it left: not shown (F-12-AC12). */
-  let skipped: Slot | undefined;
+  /** After a seek into cards with too little of them left: not shown (F-12-AC12). */
+  const skipped = new Set<Slot>();
 
-  const hideCard = () => view.draw(undefined, 0, { p: display!, width: 0, height: 0, top: 0 });
+  const hideCard = () => { if (display) view.draw([], { p: display, width: 0, height: 0, top: 0 }); };
 
   const frame = () => {
     raf = requestAnimationFrame(frame);
@@ -131,13 +131,15 @@ export function overlay(): Overlay {
     }
     fly.clear();
     if (view.host.parentElement !== player) player.append(view.host);
-    const slot = slotAt(slots, t);
-    if (Math.abs(t - lastT) > 1 && slot && slotEnd(slot) - t < display.resumeMinSec) skipped = slot;
-    if (slot !== skipped) skipped = undefined;
+    const on = slotsAt(slots, t);
+    if (Math.abs(t - lastT) > 1) {
+      skipped.clear();
+      for (const slot of on) if (slotEnd(slot) - t < display.resumeMinSec) skipped.add(slot);
+    }
     lastT = t;
     const pr = player.getBoundingClientRect();
-    const shown = slot && slot !== skipped ? slot : undefined;
-    view.draw(shown, shown ? t - shown.start : 0, { p: display, width: pr.width, height: pr.height, top: topOf(player, pr), debug });
+    const shown = on.filter((slot) => !skipped.has(slot)).map((slot) => ({ slot, t: t - slot.start }));
+    view.draw(shown, { p: display, width: pr.width, height: pr.height, top: topOf(player, pr), debug });
   };
 
   return {
@@ -158,7 +160,6 @@ export function overlay(): Overlay {
     setSlots(id, s) {
       videoId = id;
       slots = s;
-      skipped = undefined;
     },
     setDisplay(p, d, s) {
       display = p;

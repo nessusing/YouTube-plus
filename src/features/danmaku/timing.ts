@@ -8,6 +8,8 @@ import { displayWidth, isCjk } from './text';
 
 /** Average width of a Latin character, in em (estimates; drawing measures). */
 export const CHAR_EM = 0.52;
+/** Font size relative to the player's height, about YouTube's own captions. */
+export const FONT_PER_HEIGHT = 0.034;
 /** Room the avatar takes before the handle, in em: the image and its margin (F-19-AC2). */
 export const AVATAR_EM = 1.2 + 0.35;
 

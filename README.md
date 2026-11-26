@@ -38,6 +38,10 @@ Paste this into the AI assistant you already use:
 
 For development, point your coding agent at [AGENTS.md](AGENTS.md).
 
+## License
+
+[MIT](LICENSE)
+
 ## Disclaimer
 
 Unofficial, and not affiliated with YouTube or Google. It relies on undocumented YouTube and Gemini web interfaces, which can break at any time and may put your account at risk. Use at your own risk.

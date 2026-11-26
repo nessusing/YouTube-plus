@@ -1,6 +1,7 @@
 {
   "name": "youtube-plus",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "description": "YouTube+: a YouTube toolkit extension (TL;DR, queue, player)",
   "type": "module",

@@ -2,9 +2,9 @@
 
 A Chrome extension (MV3) with a few tools for YouTube. No API key: it uses the Google account already signed in to your browser.
 
-![Comments flying over the video in three lanes](docs/images/danmaku.jpg)
+![Comments flying over the video in three lanes](docs/images/danmaku.png)
 
-![The player shrinks to a corner window when you scroll down](docs/images/miniplayer-scroll.jpg)
+![The player shrinks to a corner window when you scroll down](docs/images/miniplayer-scroll.png)
 
 ## Features
 
@@ -46,4 +46,4 @@ For development, point your coding agent at [AGENTS.md](AGENTS.md).
 
 Unofficial, and not affiliated with YouTube or Google. It relies on undocumented YouTube and Gemini web interfaces, which can break at any time and may put your account at risk. Use at your own risk.
 
-Screenshots show *Big Buck Bunny*, © Blender Foundation, [CC BY 3.0](https://peach.blender.org/about/). The comments in them are made up.
+Videos, thumbnails and comments shown in the screenshots belong to their respective owners and are not covered by the MIT license.

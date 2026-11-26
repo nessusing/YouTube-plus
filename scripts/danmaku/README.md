@@ -11,9 +11,9 @@
 
 流程：`pull.mjs` 生成 prompt → 贴进 gemini.google.com 新对话 → 回答贴进 `answer.txt` → `score.mjs`。
 
-`data/` 里是 2026-11-22 那几次的输入和回答，结论见 docs/research/2026-11-22-评论弹幕实测.md 和 docs/specs/F-12-评论弹幕.md：
+2026-11-22 实测过下面几个视频（输入和回答含他人评论原文，放在 `data/`，不进仓库），结论见 docs/research/2026-11-22-评论弹幕实测.md 和 docs/specs/F-12-评论弹幕.md：
 
-| 目录 | 视频 | prompt |
+| 代号 | 视频 | prompt |
 |---|---|---|
 | `apollo-v1` | E7uGvsT_nnM（英文，13 分钟） | 第一版 |
 | `apollo-v2` | 同上 | 第二版（定义置信度各档） |

@@ -1,49 +1,45 @@
 # YouTube+
 
-A personal YouTube toolkit Chrome extension (MV3):
+A Chrome extension (MV3) with a few tools for YouTube. No API key: it uses the Google account already signed in to your browser.
 
-- **TL;DR** — an icon on every thumbnail; click it for key points written by Gemini (via the signed-in Gemini web app, no API key).
-- **Queue** — optionally use one of your playlists as the queue: Add to queue goes into it, a top-bar button plays it, watched videos are removed. It lives in your YouTube account, so it survives tabs and devices.
-- **Player** — miniplayer controls, drag and minimize; the watch-page player shrinks to a small window when you scroll; back-to-top; single-video loop; pop the player out to a desktop window (Document PiP).
-- **Comment danmaku** — comments float over the video at the moment they talk about.
-- **Moving thumbnails** — optionally, the thumbnails on screen all move at once (YouTube's own short animation, or three stills in turn), without a player. Off by default.
+![Comments flying over the video in three lanes](docs/images/danmaku.jpg)
 
-Each feature has its own switch. Everything uses the Google account already signed in to the browser.
+![The player shrinks to a corner window when you scroll down](docs/images/miniplayer-scroll.jpg)
 
-## Docs
+## Features
 
-The docs are in Chinese and follow the devflow layout — start at [AGENTS.md](AGENTS.md):
+- **TL;DR** — an icon on every thumbnail opens Gemini's key points and says whether the title is honest.
+- **Comment danmaku** — comments appear over the video at the moment they talk about, as caption cards, flying lines or a side panel. Off by default.
+- **Queue** — use one of your own playlists as the queue, so it survives tabs and devices; watched videos can be removed.
+- **Player** — the watch-page player shrinks to a corner window as you scroll; the miniplayer gets controls, free dragging, minimize and a desktop pop-out; back-to-top and single-video loop.
 
-- [docs/VISION.md](docs/VISION.md) — goals, non-goals, constraints
-- [docs/SPEC.md](docs/SPEC.md) — features (`F-xx`) and acceptance criteria, split into [docs/specs/](docs/specs/); also maps the old `§n` section numbers still used in code comments
-- [docs/TASKS.md](docs/TASKS.md) — status board
-- [docs/DECISIONS.md](docs/DECISIONS.md) — decision log
-- [docs/PRIVACY.md](docs/PRIVACY.md) — private data register
+Click the toolbar icon for settings. Each feature has its own switch, and the interface (English or Chinese) follows YouTube's language.
 
-## Develop
+## Install
+
+Tested with Node.js 22.
 
 ```sh
-npm install      # also patches WXT (scripts/patch-wxt.mjs) and generates types
-npm run dev      # dev build with reload
-npm run build    # production build in .output/chrome-mv3
-npm test         # unit and controller tests (Vitest)
-npm run typecheck
-npm run e2e:login && npm run test:e2e   # end-to-end on real YouTube (Playwright, signed-in profile)
-npm run icons    # re-rasterize the icon from docs/icon-drafts/d.svg
+git clone https://github.com/nessusing/YouTube-plus.git
+cd YouTube-plus
+npm install
+npm run build
 ```
 
-Load it: chrome://extensions → Developer mode → Load unpacked → `.output/chrome-mv3`. Then refresh any YouTube tabs that were already open.
+Open `chrome://extensions`, turn on Developer mode, click **Load unpacked** and choose `.output/chrome-mv3`. Then refresh any open YouTube tabs.
 
-## Layout
+TL;DR and AI-timed danmaku also need you to be signed in to [Gemini](https://gemini.google.com), with Gemini Apps Activity and the YouTube app turned on. TL;DR prepares summaries ahead of time; you can turn that off in settings.
 
-- `src/core/` — settings, log, self-check, storage usage, page notifications, language
-- `src/features/tldr/` — Gemini web client, job queue, cache (service worker); thumbnail icons and tooltip (content script)
-- `src/features/queue/` — native queue or a playlist: Add to queue takeover (MAIN-world script), top-bar play button, remove after watching, list tools
-- `src/features/player/` — miniplayer controls, drag and minimize, small window on scroll, back to top, loop, pop-out
-- `src/features/danmaku/` — comment fetching, timing, card / flying / side-panel views
-- `src/features/thumbs/` — moving thumbnails on list pages
-- `src/entrypoints/` — background, options page, content scripts
-- `tests/unit/` — Vitest; `tests/e2e/` — Playwright on real YouTube
-- `scripts/danmaku/`, `scripts/thumbs/` — measurement scripts for comment danmaku and moving thumbnails
+## Ask your AI how to use it
 
-`scripts/patch-wxt.mjs` works around a WXT bug: it builds a RegExp from the entrypoint path without escaping it, and the `+` in this directory's name breaks the build.
+Paste this into the AI assistant you already use:
+
+> Read https://github.com/nessusing/YouTube-plus — the README first, then `docs/SPEC.md` and `docs/specs/` (written in Chinese). Then, in my language, help me install it and explain how to use each feature, one step at a time.
+
+For development, point your coding agent at [AGENTS.md](AGENTS.md).
+
+## Disclaimer
+
+Unofficial, and not affiliated with YouTube or Google. It relies on undocumented YouTube and Gemini web interfaces, which can break at any time and may put your account at risk. Use at your own risk.
+
+Screenshots show *Big Buck Bunny*, © Blender Foundation, [CC BY 3.0](https://peach.blender.org/about/). The comments in them are made up.

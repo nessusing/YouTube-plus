@@ -7,3 +7,5 @@ tests/e2e/.out/
 .env.*
 !.env.example
 config.local.*
+# comment dumps pulled from YouTube (D-032)
+scripts/danmaku/data/

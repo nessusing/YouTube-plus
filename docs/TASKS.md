@@ -9,6 +9,10 @@
 - Q-01 行数的两个设置要不要只显示当前风格用得上的那个，并改标签（「字幕卡：同时最多几条」「飞过：分几条车道」）？｜为什么问：用户一开始没看懂两者的区别；影响 F-12-AC16｜当前假设：保持现状
 
 ## 🚧 开发中
+- **内存泄漏**（2026-11-25 code review 发现，D-030）
+  - thumbs.content.ts: `startThumbs()` 返回的 cleanup 函数未被调用 → IntersectionObserver / MutationObserver 和事件监听器永不清理 → 长期使用内存泄漏
+  - thumbs-main.content.ts: 同样的 cleanup 未调用问题
+  - 影响：F-22 缩略图功能，需立即修复
 - F-03 bug：批量回答像 JSON 却没解析出来（原 P17）　base: eaa1aa6
   - [x] 按括号配对解析，坏的对象单独算缺（f69adfc）
   - [ ] 解析失败时把模型的完整回答记进日志（只记回答，不记请求）

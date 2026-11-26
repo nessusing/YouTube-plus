@@ -211,3 +211,17 @@
 决定：F-23 要做到画面流畅连续、内容够多；不再走少量画面轮换的路子。F-22 暂保持现状（默认关）。
 原因：用户反馈：可轮换的画面太少（3、4 张），看不出什么；这样卡顿的播放会让人有眩晕感。
 影响：F-22、F-23
+
+## D-030 · 2026-11-25 · 整体 code review：发现内存泄漏，性能中高水平
+状态：发现
+背景：2026-11-25 对整个项目做全面 code review（high 难度）。
+发现：
+- **重要**：内存泄漏 2 个
+  - thumbs.content.ts: `startThumbs()` 返回的 cleanup 函数未被调用 → IntersectionObserver / MutationObserver 和事件监听器永不清理
+  - thumbs-main.content.ts: `startThumbsMain()` 返回的 cleanup 函数未被调用
+  - 影响：F-22 缩略图功能，长期使用会累积内存占用
+- **预存在**：弹幕模块（frame.ts、schedule.ts）的 WeakMap 缓存在某些场景可能返回 stale 数据
+- **细节**：设置对象结构安全性 nit
+- **整体**：测试覆盖优秀（543 条 L1/L2 + 98 条 L4），代码组织清晰，弹幕模块最复杂（3,732 行 / 31 文件）
+决定：F-22 cleanup 内存泄漏需立即修复；弹幕模块的缓存问题纳入 F-23 调研（性能敏感）。
+影响：F-22（修复优先），F-23（性能基准），后续复杂 feature 推荐 Opus + xhigh effort

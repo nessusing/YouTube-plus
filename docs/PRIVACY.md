@@ -11,7 +11,7 @@
 ## 仓库外的
 | 数据 | 存放位置 | 配置项 | 代码中使用处 |
 |---|---|---|---|
-| e2e 用的 Google 账号登录态（Chromium profile） | `~/.cache/ytpp-e2e-profile` | 环境变量 `YTPP_E2E_PROFILE` | tests/e2e/support/env.ts、tests/e2e/tools/login.mjs |
+| e2e 用的 Google 账号登录态（Chromium profile） | `~/.cache/ytpp-e2e-profile` | 环境变量 `YTPP_E2E_PROFILE` | tests/e2e/support/env.ts、tests/e2e/tools/login.mjs、scripts/thumbs/ |
 
 ## 扩展运行时碰到的用户数据（不进仓库，上架时要在隐私说明里写）
 - 读 `SAPISID` cookie，用来给 Gemini 请求签名；不存、不记日志。
